@@ -1,0 +1,659 @@
+{
+  "$defs": {
+    "AppImage": {
+      "description": "One published image of one flavour of one release.",
+      "properties": {
+        "appImageId": {
+          "description": "A unique id for this image.",
+          "title": "Appimageid",
+          "type": "string"
+        },
+        "flavourName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The flavour the image was built from.",
+          "title": "Flavourname"
+        },
+        "image": {
+          "$ref": "#/$defs/DockerImage"
+        },
+        "inspection": {
+          "$ref": "#/$defs/Inspection"
+        },
+        "manifest": {
+          "$ref": "#/$defs/AppManifest"
+        },
+        "selectors": {
+          "description": "Where the image may be placed.",
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "cpu": "#/$defs/CpuSelector",
+                "cuda": "#/$defs/CudaSelector",
+                "label": "#/$defs/LabelSelector",
+                "oneapi": "#/$defs/OneApiSelector",
+                "ram": "#/$defs/RamSelector",
+                "rocm": "#/$defs/RocmSelector"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/CpuSelector"
+              },
+              {
+                "$ref": "#/$defs/RamSelector"
+              },
+              {
+                "$ref": "#/$defs/CudaSelector"
+              },
+              {
+                "$ref": "#/$defs/RocmSelector"
+              },
+              {
+                "$ref": "#/$defs/OneApiSelector"
+              },
+              {
+                "$ref": "#/$defs/LabelSelector"
+              }
+            ]
+          },
+          "title": "Selectors",
+          "type": "array"
+        }
+      },
+      "required": [
+        "appImageId",
+        "manifest",
+        "inspection",
+        "image"
+      ],
+      "title": "AppImage",
+      "type": "object"
+    },
+    "AppManifest": {
+      "description": "The identity of one released version of an app.",
+      "properties": {
+        "author": {
+          "default": "unknown",
+          "description": "Who publishes the app.",
+          "title": "Author",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the app is, in a sentence or two.",
+          "title": "Description"
+        },
+        "entrypoint": {
+          "default": "app",
+          "description": "The target (`module[:attr]`) the image runs to find the app.",
+          "title": "Entrypoint",
+          "type": "string"
+        },
+        "identifier": {
+          "description": "The globally unique identifier of the app.",
+          "title": "Identifier",
+          "type": "string"
+        },
+        "logo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A URL to the app's logo.",
+          "title": "Logo"
+        },
+        "scopes": {
+          "description": "The scopes the app requests from the user.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Scopes",
+          "type": "array"
+        },
+        "version": {
+          "description": "The version of this release.",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "identifier",
+        "version"
+      ],
+      "title": "AppManifest",
+      "type": "object"
+    },
+    "CpuSelector": {
+      "additionalProperties": false,
+      "description": "CPU requirements of the flavour.",
+      "properties": {
+        "arch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The CPU architecture the image is built for (docker platform / kubernetes.io/arch values, e.g. 'amd64', 'arm64').",
+          "title": "Arch"
+        },
+        "frequency": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum CPU frequency required, in MHz.",
+          "title": "Frequency"
+        },
+        "kind": {
+          "const": "cpu",
+          "default": "cpu",
+          "title": "Kind",
+          "type": "string"
+        },
+        "minCount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum number of CPU cores required.",
+          "title": "Mincount"
+        },
+        "required": {
+          "default": true,
+          "description": "If true, a backend failing this selector must not run the flavour (hard constraint). If false, the selector is a preference scored by `weight`.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "weight": {
+          "default": 1,
+          "description": "Scoring weight of a preferred (non-required) selector; deployers prefer candidates with the highest sum of satisfied weights.",
+          "title": "Weight",
+          "type": "integer"
+        }
+      },
+      "title": "CpuSelector",
+      "type": "object"
+    },
+    "CudaSelector": {
+      "additionalProperties": false,
+      "description": "Requires a CUDA-capable (NVIDIA) GPU.",
+      "properties": {
+        "computeCapability": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum CUDA compute capability required (e.g. '8.6') \u2014 NVIDIA's standard placement key.",
+          "title": "Computecapability"
+        },
+        "count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The number of GPUs required (a Docker device-reservation count; unset lets the deployer decide).",
+          "title": "Count"
+        },
+        "cudaCores": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Deprecated: the minimum number of CUDA cores. Prefer computeCapability and memory.",
+          "title": "Cudacores"
+        },
+        "cudaVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum CUDA (driver/runtime) version required.",
+          "title": "Cudaversion"
+        },
+        "kind": {
+          "const": "cuda",
+          "default": "cuda",
+          "title": "Kind",
+          "type": "string"
+        },
+        "memory": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum GPU memory (VRAM) required, in MB.",
+          "title": "Memory"
+        },
+        "required": {
+          "default": true,
+          "description": "If true, a backend failing this selector must not run the flavour (hard constraint). If false, the selector is a preference scored by `weight`.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "weight": {
+          "default": 1,
+          "description": "Scoring weight of a preferred (non-required) selector; deployers prefer candidates with the highest sum of satisfied weights.",
+          "title": "Weight",
+          "type": "integer"
+        }
+      },
+      "title": "CudaSelector",
+      "type": "object"
+    },
+    "DockerImage": {
+      "description": "Where a built image was pushed, and when it was built.",
+      "properties": {
+        "buildAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When the image was built.",
+          "title": "Buildat"
+        },
+        "imageString": {
+          "description": "The pullable image reference.",
+          "title": "Imagestring",
+          "type": "string"
+        }
+      },
+      "required": [
+        "imageString"
+      ],
+      "title": "DockerImage",
+      "type": "object"
+    },
+    "Inspection": {
+      "description": "The declaration an app image makes, plus the services it requires.\n\nThe *envelope* is this spec's. The entries of ``implementations``, ``states``,\n``locks`` and ``bloks`` are rekuest's action language (an ``ImplementationInput``,\n``StateImplementationInput``, ``LockImplementationInput`` and\n``BlokImplementationInput`` each) and are carried here as JSON: the producer builds\nthem with ``rekuest.protocol`` and every consumer validates them with its own\nrekuest models. That keeps this package free of rekuest while leaving exactly one\nowner per layer.",
+      "properties": {
+        "bloks": {
+          "description": "rekuest `BlokImplementationInput`s.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Bloks",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the app is, as its agent declares it.",
+          "title": "Description"
+        },
+        "implementations": {
+          "description": "rekuest `ImplementationInput`s.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Implementations",
+          "type": "array"
+        },
+        "locks": {
+          "description": "rekuest `LockImplementationInput`s.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Locks",
+          "type": "array"
+        },
+        "requirements": {
+          "description": "The services the app needs.",
+          "items": {
+            "$ref": "#/$defs/Requirement"
+          },
+          "title": "Requirements",
+          "type": "array"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The uncompressed size of the image, in bytes.",
+          "title": "Size"
+        },
+        "states": {
+          "description": "rekuest `StateImplementationInput`s.",
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "States",
+          "type": "array"
+        }
+      },
+      "title": "Inspection",
+      "type": "object"
+    },
+    "LabelSelector": {
+      "additionalProperties": false,
+      "description": "Requires the backend resource to carry a qualifier: the nodeSelector analog.",
+      "properties": {
+        "key": {
+          "description": "The qualifier key the backend resource must carry.",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "label",
+          "default": "label",
+          "title": "Kind",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "description": "If true, a backend failing this selector must not run the flavour (hard constraint). If false, the selector is a preference scored by `weight`.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The value the qualifier must have; null means the key merely has to exist.",
+          "title": "Value"
+        },
+        "weight": {
+          "default": 1,
+          "description": "Scoring weight of a preferred (non-required) selector; deployers prefer candidates with the highest sum of satisfied weights.",
+          "title": "Weight",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "title": "LabelSelector",
+      "type": "object"
+    },
+    "OneApiSelector": {
+      "additionalProperties": false,
+      "description": "Requires a oneAPI-capable (Intel) accelerator.",
+      "properties": {
+        "kind": {
+          "const": "oneapi",
+          "default": "oneapi",
+          "title": "Kind",
+          "type": "string"
+        },
+        "oneapiVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum oneAPI version required.",
+          "title": "Oneapiversion"
+        },
+        "required": {
+          "default": true,
+          "description": "If true, a backend failing this selector must not run the flavour (hard constraint). If false, the selector is a preference scored by `weight`.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "weight": {
+          "default": 1,
+          "description": "Scoring weight of a preferred (non-required) selector; deployers prefer candidates with the highest sum of satisfied weights.",
+          "title": "Weight",
+          "type": "integer"
+        }
+      },
+      "title": "OneApiSelector",
+      "type": "object"
+    },
+    "RamSelector": {
+      "additionalProperties": false,
+      "description": "System-memory requirements of the flavour.",
+      "properties": {
+        "kind": {
+          "const": "ram",
+          "default": "ram",
+          "title": "Kind",
+          "type": "string"
+        },
+        "min": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum amount of system memory required, in MB.",
+          "title": "Min"
+        },
+        "required": {
+          "default": true,
+          "description": "If true, a backend failing this selector must not run the flavour (hard constraint). If false, the selector is a preference scored by `weight`.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "weight": {
+          "default": 1,
+          "description": "Scoring weight of a preferred (non-required) selector; deployers prefer candidates with the highest sum of satisfied weights.",
+          "title": "Weight",
+          "type": "integer"
+        }
+      },
+      "title": "RamSelector",
+      "type": "object"
+    },
+    "Requirement": {
+      "description": "A service instance the app needs, filled in by the platform at login.\n\nA requirement is never a hardware constraint: those are selectors.",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why the app needs the service, shown to the user.",
+          "title": "Description"
+        },
+        "key": {
+          "description": "The key the app looks the service up by.",
+          "title": "Key",
+          "type": "string"
+        },
+        "optional": {
+          "default": false,
+          "description": "Whether the app still works when no instance of the service is available.",
+          "title": "Optional",
+          "type": "boolean"
+        },
+        "service": {
+          "description": "The service type that fills the key, in reverse-domain form (e.g. 'live.arkitekt.mikro').",
+          "title": "Service",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "service"
+      ],
+      "title": "Requirement",
+      "type": "object"
+    },
+    "RocmSelector": {
+      "additionalProperties": false,
+      "description": "Requires a ROCm-capable (AMD) GPU.",
+      "properties": {
+        "apiThing": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "An additional ROCm capability qualifier.",
+          "title": "Apithing"
+        },
+        "apiVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum ROCm API version required.",
+          "title": "Apiversion"
+        },
+        "kind": {
+          "const": "rocm",
+          "default": "rocm",
+          "title": "Kind",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "description": "If true, a backend failing this selector must not run the flavour (hard constraint). If false, the selector is a preference scored by `weight`.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "weight": {
+          "default": 1,
+          "description": "Scoring weight of a preferred (non-required) selector; deployers prefer candidates with the highest sum of satisfied weights.",
+          "title": "Weight",
+          "type": "integer"
+        }
+      },
+      "title": "RocmSelector",
+      "type": "object"
+    }
+  },
+  "description": "The whole ``deployments.yaml``.\n\nIts top-level keys have always been snake_case; the keys inside an app image have\nalways been camelCase. Both are kept as they are, so a file written before this\nspec existed reads unchanged.",
+  "properties": {
+    "app_images": {
+      "items": {
+        "$ref": "#/$defs/AppImage"
+      },
+      "title": "App Images",
+      "type": "array"
+    },
+    "latest_app_image": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Latest App Image"
+    },
+    "spec_version": {
+      "const": 1,
+      "default": 1,
+      "description": "The version of this spec the file follows.",
+      "title": "Spec Version",
+      "type": "integer"
+    }
+  },
+  "title": "DeploymentsFile",
+  "type": "object"
+}

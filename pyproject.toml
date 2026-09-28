@@ -1,0 +1,103 @@
+[project]
+name = "arkitekt-spec"
+dynamic = ["version"]
+description = "the wire format of an Arkitekt app: manifest, requirements, inspection, hardware selectors and deployments.yaml"
+authors = [{ name = "jhnnsrs", email = "jhnnsrs@gmail.com" }]
+requires-python = ">=3.11"
+readme = "README.md"
+license = "MIT"
+# The spec is shared by producers (arkitekt's plugin CLI) and consumers (the kabinet
+# server), so it depends on nothing either side would not already have. In particular
+# it does NOT depend on rekuest: the action language inside an inspection is rekuest's,
+# and travels here as JSON that each side validates with its own rekuest models.
+dependencies = [
+    "pydantic>=2.11",
+    "pyyaml>=6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "python-semantic-release>=9.21.0",
+    "ruff>0.11",
+    "basedpyright>=1.21",
+    "types-pyyaml>=6",
+]
+
+[tool.hatch.build.targets.sdist]
+include = ["arkitekt_spec"]
+
+[tool.hatch.build.targets.wheel]
+include = ["arkitekt_spec"]
+
+[tool.basedpyright]
+include = ["arkitekt_spec"]
+exclude = ["**/__pycache__", "tests"]
+typeCheckingMode = "strict"
+# The opaque action-language lists are `dict[str, Any]` by design.
+reportAny = false
+reportExplicitAny = false
+
+[tool.ruff.lint]
+extend-select = ["ANN", "D1"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN001", "ANN201", "ANN202", "ANN206", "D1"]
+
+[tool.ruff]
+line-length = 100
+exclude = [".git", ".mypy_cache", ".ruff_cache", ".venv", "__pypackages__", "build", "dist", "venv"]
+
+[tool.semantic_release]
+# No version_toml/version_variables: the release version lives only in the git
+# tag, which hatch-vcs reads at build time. CI runs the version command with
+# `commit: false`, so PSR tags HEAD and creates the GitHub Release without
+# pushing a bump commit to the branch.
+#
+# The semantic-release GitHub Action runs in a Docker container without uv, so
+# install it first. PSR builds *before* it tags, so hatch-vcs is told the new
+# version explicitly ($NEW_VERSION is injected by PSR) instead of deriving a
+# `.devN+g...` local version that PyPI would reject.
+build_command = """
+    python -m pip install 'uv>=0.7.12'
+    export SETUPTOOLS_SCM_PRETEND_VERSION="$NEW_VERSION"
+    uv build
+"""
+
+# main -> stable X.Y.Z. next -> prereleases X.Y.Z-rc.N. N.x -> maintenance.
+[tool.semantic_release.branches.main]
+match = "main"
+prerelease = false
+
+[tool.semantic_release.branches.next]
+match = "next"
+prerelease = true
+prerelease_token = "rc"
+
+# Maintenance branches (1.x, 2.x, ...) cut stable patch/minor releases for an
+# older major after a new major has shipped from main.
+[tool.semantic_release.branches.maintenance]
+match = '^\d+\.x$'
+prerelease = false
+
+# Keep the changelog focused on user-facing changes. These patterns only filter
+# what's rendered -- they do not affect version bumps.
+[tool.semantic_release.changelog]
+exclude_commit_patterns = [
+    '^chore(?:\([^)]*\))?: ',
+    '^ci(?:\([^)]*\))?: ',
+    '^build(?:\([^)]*\))?: ',
+    '^style(?:\([^)]*\))?: ',
+    '^test(?:\([^)]*\))?: ',
+    '^Merge ',
+]
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+# The version is derived from the nearest git tag (vX.Y.Z); nothing in the
+# tree is bumped on release. Shallow CI clones see no tag and get the fallback.
+[tool.hatch.version]
+source = "vcs"
+fallback-version = "0.0.0"

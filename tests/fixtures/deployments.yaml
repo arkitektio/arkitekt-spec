@@ -1,0 +1,71 @@
+app_images:
+- appImageId: 3f0c9a4b1e2d4c5f8a7b6c5d4e3f2a1b
+  flavourName: vanilla
+  image:
+    buildAt: '2026-09-28T12:00:00'
+    imageString: jhnnsrs/starmist:0.1.0-vanilla
+  inspection:
+    bloks: []
+    description: StarDist nucleus segmentation with the pretrained 2D models
+    implementations:
+    - definition:
+        args:
+        - description: The fluorescence image to segment
+          effects: []
+          identifier: '@mikro/lens'
+          key: image
+          kind: STRUCTURE
+          nullable: false
+          requires:
+          - key: '@mikro/n_space_axes'
+            operator: EQUALS
+            value: 2
+          validators: []
+        collections:
+        - segmentation
+        description: Segments nuclei in a single-channel fluorescence image.
+        isDev: false
+        isTestFor: []
+        key: predict_flou2
+        kind: FUNCTION
+        name: Segment Fluorescent Nuclei
+        portGroups: []
+        returns:
+        - effects: []
+          identifier: '@mikro/lens'
+          key: return0
+          kind: STRUCTURE
+          nullable: false
+        stateful: false
+        version: '1'
+      dependencies: []
+      interface: predict_flou2
+      locks: []
+      needsToken: true
+    locks: []
+    requirements:
+    - description: Where the user's images and their metadata live
+      key: mikro
+      optional: false
+      service: live.arkitekt.mikro
+    - description: Where this app's actions are offered and assigned
+      key: rekuest
+      optional: false
+      service: live.arkitekt.rekuest
+    size: 11834567890
+    states: []
+  manifest:
+    author: jhnnsrs
+    description: StarDist nucleus segmentation with the pretrained 2D models
+    entrypoint: app
+    identifier: starmist
+    scopes:
+    - read
+    version: 0.1.0
+  selectors:
+  - computeCapability: '7.0'
+    kind: cuda
+    required: true
+    weight: 1
+latest_app_image: 3f0c9a4b1e2d4c5f8a7b6c5d4e3f2a1b
+spec_version: 1

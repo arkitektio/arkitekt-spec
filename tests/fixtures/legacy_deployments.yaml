@@ -1,0 +1,93 @@
+app_images:
+- appImageId: da60d36f7c1d48e69136699f4fcc901e
+  flavourName: vanilla
+  image:
+    buildAt: '2025-08-22T17:55:39.019884'
+    imageString: jhnnsrs/ome:0.1.9-vanilla
+  inspection:
+    implementations:
+    - definition:
+        args:
+        - description: The File to be converted
+          effects: []
+          identifier: '@mikro/file'
+          key: file
+          kind: STRUCTURE
+          label: file
+          nullable: false
+          validators: []
+          widget:
+            kind: SEARCH
+            query: "query SearchFiles($search: String, $values: [ID!], $pagination: OffsetPaginationInput)\
+              \ {\n  options: files(\n    filters: {search: $search, ids: $values}\n    pagination: $pagination\n\
+              \  ) {\n    value: id\n    label: name\n    __typename\n  }\n}"
+            ward: mikro
+        - description: The Stage in which to put the Image. Defaults to None.
+          effects: []
+          identifier: '@mikro/stage'
+          key: stage
+          kind: STRUCTURE
+          label: stage
+          nullable: true
+          validators: []
+          widget:
+            kind: SEARCH
+            query: "query SearchStages($search: String, $values: [ID!], $pagination: OffsetPaginationInput)\
+              \ {\n  options: stages(\n    filters: {search: $search, ids: $values}\n    pagination: $pagination\n\
+              \  ) {\n    value: id\n    label: name\n    __typename\n  }\n}"
+            ward: mikro
+        collections: []
+        description: Converts an Omero File in a set of Mikrodata
+        isDev: false
+        isTestFor: []
+        key: convert_omero
+        kind: FUNCTION
+        name: Convert Omero
+        portGroups: []
+        returns:
+        - children:
+          - effects: []
+            identifier: '@mikro/image'
+            key: '...'
+            kind: STRUCTURE
+            nullable: false
+          description: The created series in this file
+          effects: []
+          key: return0
+          kind: LIST
+          label: return0
+          nullable: false
+        stateful: false
+        version: '1'
+      dependencies: []
+      interface: convert_omero_file
+    requirements:
+    - description: An instance of ArkitektNext Datalayer to make requests to the user's data
+      key: datalayer
+      optional: true
+      service: live.arkitekt.s3
+    - description: An instance of ArkitektNext Lok to authenticate the user
+      key: lok
+      optional: false
+      service: live.arkitekt.lok
+    - description: An instance of ArkitektNext Mikro to make requests to the user's data
+      key: mikro
+      optional: true
+      service: live.arkitekt.mikro
+    - description: An instance of ArkitektNext Rekuest to assign to actions
+      key: rekuest
+      optional: false
+      service: live.arkitekt.rekuest
+    size: 1482598149
+    locks: []
+    states: []
+    bloks: []
+  manifest:
+    author: jhnnsrs
+    entrypoint: app
+    identifier: ome
+    scopes:
+    - read
+    version: 0.1.9
+  selectors: []
+latest_app_image: da60d36f7c1d48e69136699f4fcc901e
