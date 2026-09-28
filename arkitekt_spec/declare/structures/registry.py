@@ -1150,7 +1150,12 @@ class StructureRegistry(BaseModel):
             # A plain ``typing.Protocol`` (a declared dependency, typically) cannot
             # be an ``issubclass`` target, and no service returns one.
             return False
-        return any(issubclass(returned, cls) for returned in self.clients.values())
+        try:
+            return any(issubclass(returned, cls) for returned in self.clients.values())
+        except TypeError:
+            # Neither can a runtime-checkable one with data members (``Task``'s
+            # ``id``): it is matched by isinstance only, and is no client either.
+            return False
 
     def copy_maps(self) -> "StructureRegistry":
         """Copy this registry's maps, sharing their entries.
