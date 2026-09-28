@@ -54,6 +54,14 @@ MediaLike = str
 """A reference to uploaded media (a store key or URL)."""
 
 
+def coerce_id(value: Any) -> str:  # noqa: ANN401 -- ints and objects with an id, too
+    """An object id as a string: a str, an int, or anything carrying an ``id``."""
+    coerced = _coerce_id(value)
+    if not isinstance(coerced, str):
+        raise TypeError(f"Cannot use {value!r} as an ID: expected a str, an int, or an object with an id")
+    return coerced
+
+
 def validate_identifier(value: str) -> str:
     """Check a structure identifier (``@package/key``) outside a pydantic field."""
     return _check_identifier(value)
