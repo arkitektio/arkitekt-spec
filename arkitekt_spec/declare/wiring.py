@@ -7,12 +7,16 @@ the server the app itself logged into. Reading those is declaration; resolving t
 (the fakts client) happens when a runtime builds the service.
 """
 
+import ipaddress
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
 from arkitekt_spec.manifest import Requirement
+
+#: The tailnet's address range: a host in it is only reachable over the mesh.
+_TAILNET = ipaddress.IPv4Network("100.64.0.0/10")
 
 #: The class attribute a client of the platform's configuration service sets, so
 #: that a service parameter typed with it receives the whole client.
@@ -47,6 +51,27 @@ class Alias(BaseModel):
     """Whether this alias is reachable from outside the deployment's own
     network. Informational: the server decides which aliases to hand out,
     the client just tries them in order."""
+    kind: str | None = None
+    """How the server reaches the instance: ``"absolute"``, ``"relative"`` or
+    ``"mesh"`` (only reachable over the deployment's tailnet). Older servers
+    do not send it; see :meth:`is_mesh`."""
+    proxy: str | None = Field(default=None, exclude=True)
+    """The HTTP proxy this alias is reached through (the mesh node's local
+    proxy), set by the fakts client when it resolves the alias. Never sent or
+    cached."""
+
+    def is_mesh(self) -> bool:
+        """Whether this alias is only reachable over the mesh.
+
+        The server says so with ``kind``; for servers that do not send it, a
+        host in the tailnet range 100.64.0.0/10 is taken to mean the same.
+        """
+        if self.kind is not None:
+            return self.kind == "mesh"
+        try:
+            return ipaddress.IPv4Address(self.host) in _TAILNET
+        except ValueError:
+            return False
 
     @property
     def challenge_path(self) -> str:
