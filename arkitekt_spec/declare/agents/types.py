@@ -29,10 +29,19 @@ class BoundApp(Protocol):
     arkitekt's Runtime is one; a test can pass anything that answers.
     """
 
-    services: Mapping[str, Any]
-    clients: Mapping[str, Any]
+    # Read-only: a mutable protocol attribute is invariant, so a runtime exposing
+    # these as properties (or as a plain dict) could never satisfy it.
+    @property
+    def services(self) -> Mapping[str, Any]:
+        """The service names the app declares, to what declares them."""
+        ...
 
-    def get(self, key: type[T]) -> T | None:
+    @property
+    def clients(self) -> Mapping[str, Any]:
+        """The app's built clients, by service name."""
+        ...
+
+    def get(self, key: type[T], /) -> T | None:
         """The app's client of class ``key``, or ``None``."""
         ...
 
