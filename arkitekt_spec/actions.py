@@ -17,6 +17,16 @@ from typing import Annotated, Any, Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
+from arkitekt_spec.rules import (
+    AgentRules,
+    BlokRules,
+    DefinitionRules,
+    EffectRules,
+    PortRules,
+    SliderRules,
+    StateChoiceRules,
+    ValidatorRules,
+)
 from arkitekt_spec.scalars import (
     JSONSerializable,
     SearchQuery,
@@ -342,7 +352,7 @@ class SearchAssignWidgetInput(ActionModel):
     )
 
 
-class SliderAssignWidgetInput(ActionModel):
+class SliderAssignWidgetInput(SliderRules, ActionModel):
     """A numeric slider for INT, FLOAT and QUANTITY ports."""
 
     kind: Literal["SLIDER"] = Field(default="SLIDER")
@@ -366,7 +376,7 @@ class SliderAssignWidgetInput(ActionModel):
     )
 
 
-class StateChoiceAssignWidgetInput(ActionModel):
+class StateChoiceAssignWidgetInput(StateChoiceRules, ActionModel):
     """A choice over entries of an agent's state."""
 
     kind: Literal["STATE_CHOICE"] = Field(default="STATE_CHOICE")
@@ -676,7 +686,7 @@ class AgentProbeInput(ActionModel):
     )
 
 
-class ArgPortInput(ActionModel):
+class ArgPortInput(PortRules, ActionModel):
     """A Port is a single input or output of an action, identified by its `key` and typed by its `kind`.
 
     STRUCTURE, MEMORY_STRUCTURE and INTERFACE ports carry an `identifier` of the form `@package/key`
@@ -764,7 +774,7 @@ AssignWidgetInput = Annotated[
 ]
 
 
-class BlokImplementationInput(ActionModel):
+class BlokImplementationInput(BlokRules, ActionModel):
     """Which locks does the agent provide in general"""
 
     key: str = Field(description="The key of this Blok implementation.")
@@ -885,7 +895,7 @@ class ComponentPropInput(ActionModel):
     )
 
 
-class DefinitionInput(ActionModel):
+class DefinitionInput(DefinitionRules, ActionModel):
     """A definition
 
     Definitions are the building implementation for Actions and provide the
@@ -1008,7 +1018,7 @@ class DynamicValueInput(ActionModel):
     )
 
 
-class EffectInput(ActionModel):
+class EffectInput(EffectRules, ActionModel):
     """
     An effect is a way to modify a port based on a condition. For example,
     you could have an effect that hides the port if another port meets a condition,
@@ -1049,7 +1059,7 @@ class EffectInput(ActionModel):
     )
 
 
-class ImplementAgentInput(ActionModel):
+class ImplementAgentInput(AgentRules, ActionModel):
     """Implement an agent with the given implementations, states and locks. This will create the agent if it doesn't exist and update it if it does exist."""
 
     name: str | None = Field(
@@ -1278,7 +1288,7 @@ class RequiresInput(ActionModel):
     )
 
 
-class ReturnPortInput(ActionModel):
+class ReturnPortInput(PortRules, ActionModel):
     """A Port is a single input or output of an action, identified by its `key` and typed by its `kind`.
 
     STRUCTURE, MEMORY_STRUCTURE and INTERFACE ports carry an `identifier` of the form `@package/key`
@@ -1534,7 +1544,7 @@ class UtilCallInput(ActionModel):
     )
 
 
-class ValidatorInput(ActionModel):
+class ValidatorInput(ValidatorRules, ActionModel):
     """
     A validator for a port. `call` is a pure blok UtilCall evaluated client-side against the
     catalog; it must return a boolean meaning 'valid'. Other ports the call references must be
