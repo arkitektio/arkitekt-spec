@@ -72,7 +72,13 @@ def test_a_local_task_refuses_to_call_asynchronously() -> None:
         async for _ in task.aiterate(Target(), 1):
             pass
 
-    with pytest.raises(NoCallerError):
-        asyncio.run(call())
-    with pytest.raises(NoCallerError):
-        asyncio.run(iterate())
+    async def call_raw() -> None:
+        await task.acall_raw({"x": 1}, action=Target())
+
+    async def iterate_raw() -> None:
+        async for _ in task.aiterate_raw({"x": 1}, action=Target()):
+            pass
+
+    for refused in (call, iterate, call_raw, iterate_raw):
+        with pytest.raises(NoCallerError):
+            asyncio.run(refused())

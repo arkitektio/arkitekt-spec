@@ -17,8 +17,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from arkitekt_spec.declare.agents.errors import NoCallerError
+from arkitekt_spec.declare.structures.types import JSONSerializable
 from arkitekt_spec.declare.targets import CallTarget, ImplementationTarget
+from arkitekt_spec.scalars import ActionHash
 
 logger = logging.getLogger("arkitekt.task")
 
@@ -34,6 +38,22 @@ class LogLevel(str, Enum):
     ERROR = "ERROR"
     WARN = "WARN"
     CRITICAL = "CRITICAL"
+
+
+class HookKind(str, Enum):
+    """When a server-side hook runs, relative to the task it is attached to."""
+
+    CLEANUP = "CLEANUP"
+    INIT = "INIT"
+    __str__ = str.__str__
+
+
+class HookInput(BaseModel):
+    """An action the server runs at a lifecycle point of a task (its ``kind``)."""
+
+    kind: HookKind = Field(description="When the hook runs.")
+    hash: ActionHash = Field(description="The hash of the action that is the hook.")
+    model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True)
 
 
 @dataclass
@@ -126,6 +146,7 @@ class Task(Protocol):
         target: CallTarget | ImplementationTarget,
         *args: Any,  # the action's own arguments
         reference: str | None = None,
+        hooks: list[HookInput] | None = None,
         capture: bool = False,
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
@@ -159,12 +180,54 @@ class Task(Protocol):
         target: CallTarget | ImplementationTarget,
         *args: Any,  # the action's own arguments
         reference: str | None = None,
+        hooks: list[HookInput] | None = None,
         capture: bool = False,
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
         **kwargs: Any,  # ditto, by keyword
     ) -> AsyncIterator[Any]:
         """Stream a generator action's yields as a child of this task.
+
+        Raises:
+            NoCallerError: If nothing routes this task's calls.
+        """
+        ...
+
+    async def acall_raw(
+        self,
+        kwargs: dict[str, JSONSerializable] | None = None,
+        *,
+        action: CallTarget | None = None,
+        implementation: ImplementationTarget | None = None,
+        reference: str | None = None,
+        hooks: list[HookInput] | None = None,
+        capture: bool = False,
+        escalate_to_interrupt: bool = False,
+        cancel_timeout: float | None = None,
+    ) -> Any:  # the backend's raw payload
+        """Call with already-serialized arguments, as a child of this task.
+
+        Nothing is shrunk or expanded: ``kwargs`` goes out as it is, and what comes
+        back is the backend's payload.
+
+        Raises:
+            NoCallerError: If nothing routes this task's calls.
+        """
+        ...
+
+    def aiterate_raw(
+        self,
+        kwargs: dict[str, JSONSerializable] | None = None,
+        *,
+        action: CallTarget | None = None,
+        implementation: ImplementationTarget | None = None,
+        reference: str | None = None,
+        hooks: list[HookInput] | None = None,
+        capture: bool = False,
+        escalate_to_interrupt: bool = False,
+        cancel_timeout: float | None = None,
+    ) -> AsyncIterator[Any]:
+        """Stream with already-serialized arguments, as a child of this task.
 
         Raises:
             NoCallerError: If nothing routes this task's calls.
@@ -256,6 +319,7 @@ class LocalTask:
         target: CallTarget | ImplementationTarget,
         *args: Any,
         reference: str | None = None,
+        hooks: list[HookInput] | None = None,
         capture: bool = False,
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
@@ -286,6 +350,7 @@ class LocalTask:
         target: CallTarget | ImplementationTarget,
         *args: Any,
         reference: str | None = None,
+        hooks: list[HookInput] | None = None,
         capture: bool = False,
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
@@ -298,6 +363,45 @@ class LocalTask:
         """
         raise _no_caller(self.id)
         yield  # an async generator, like every task's aiterate
+
+    async def acall_raw(
+        self,
+        kwargs: dict[str, JSONSerializable] | None = None,
+        *,
+        action: CallTarget | None = None,
+        implementation: ImplementationTarget | None = None,
+        reference: str | None = None,
+        hooks: list[HookInput] | None = None,
+        capture: bool = False,
+        escalate_to_interrupt: bool = False,
+        cancel_timeout: float | None = None,
+    ) -> Any:
+        """Refuse: a local task cannot call.
+
+        Raises:
+            NoCallerError: Always.
+        """
+        raise _no_caller(self.id)
+
+    async def aiterate_raw(
+        self,
+        kwargs: dict[str, JSONSerializable] | None = None,
+        *,
+        action: CallTarget | None = None,
+        implementation: ImplementationTarget | None = None,
+        reference: str | None = None,
+        hooks: list[HookInput] | None = None,
+        capture: bool = False,
+        escalate_to_interrupt: bool = False,
+        cancel_timeout: float | None = None,
+    ) -> AsyncIterator[Any]:
+        """Refuse: a local task cannot call.
+
+        Raises:
+            NoCallerError: Always.
+        """
+        raise _no_caller(self.id)
+        yield  # an async generator, like every task's aiterate_raw
 
 
 def _level(level: LogLevel | str) -> int:
@@ -319,4 +423,13 @@ if TYPE_CHECKING:  # the type checker proves LocalTask is a Task
         return task
 
 
-__all__ = ["TASK_MARKER", "AssignmentHook", "LocalTask", "LogLevel", "Task", "is_task"]
+__all__ = [
+    "TASK_MARKER",
+    "AssignmentHook",
+    "HookInput",
+    "HookKind",
+    "LocalTask",
+    "LogLevel",
+    "Task",
+    "is_task",
+]
