@@ -8,7 +8,8 @@ helper that carries a description, a label and validators to the port.
 
 import inspect
 import re
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import MISSING, dataclass, field
 from typing import Any, TypeVar, get_type_hints
 
 from fieldz import Field, fields  # type: ignore
@@ -20,39 +21,51 @@ T = TypeVar("T", bound=type[Any])
 
 
 def model_field(
-    *args: Any,
+    *,
+    default: Any = MISSING,
+    default_factory: Callable[[], Any] | Any = MISSING,
+    init: bool = True,
+    repr: bool = True,
+    compare: bool = True,
+    kw_only: bool | Any = MISSING,
     description: str | None = None,
     validators: list[ValidatorInput] | None = None,
     label: str | None = None,
-    **kwargs: Any,
-) -> Any:
-    """Create a dataclass field enriched with rekuest model metadata.
+) -> Any:  # a dataclass field, typed as the value it stands in for
+    """A model field that carries a description, a label and validators to the port.
 
-    The helper delegates to :func:`dataclasses.field` while attaching metadata
-    that is later consumed by model inspection to build argument labels,
-    descriptions, and validators.
+    The dataclass field of a model (``@app.model``), and the field specifier type
+    checkers see for it: ``default``/``default_factory``/``init``/``kw_only`` mean what
+    they mean to :func:`dataclasses.field`.
 
     Args:
-        *args: Positional arguments forwarded to :func:`dataclasses.field`.
+        default: The field's default value.
+        default_factory: Builds the default, for mutable defaults.
+        init: Whether the field is a constructor parameter.
+        repr: Whether the field appears in the model's repr.
+        compare: Whether the field takes part in equality.
+        kw_only: Whether the field is keyword-only in the constructor.
         description: Human-readable description used in generated definitions.
-        validators: Optional validator definitions for the field.
-        label: Optional display label for UI rendering.
-        **kwargs: Keyword arguments forwarded to :func:`dataclasses.field`.
+        validators: Validators the port applies to the field.
+        label: Display label for UI rendering.
 
     Returns:
-        A dataclass field with rekuest-specific metadata attached.
+        The dataclass field.
 
     Examples:
         Define a model field with UI metadata::
 
-            threshold = model_field(default=0.5, description="Confidence cutoff")
+            threshold: float = model_field(default=0.5, description="Confidence cutoff")
     """
-
-    return field(
-        *args,
+    return field(  # type: ignore[call-overload]
+        default=default,
+        default_factory=default_factory,
+        init=init,
+        repr=repr,
+        compare=compare,
+        kw_only=kw_only,
         metadata={"description": description, "validators": validators, "label": label},
-        **kwargs,
-    )  # type: ignore
+    )
 
 
 def ensure_model_dataclass(cls: T) -> T:

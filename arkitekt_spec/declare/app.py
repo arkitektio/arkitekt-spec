@@ -8,7 +8,16 @@ and structure registries.
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any, Literal, ParamSpec, TypeVar
+from typing import (
+    TYPE_CHECKING,
+    Annotated,
+    Any,
+    Literal,
+    ParamSpec,
+    TypeVar,
+    dataclass_transform,
+    overload,
+)
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, SkipValidation
 
@@ -52,6 +61,7 @@ from arkitekt_spec.declare.protocol.types import AnyState
 from arkitekt_spec.declare.provider import Provider, declare_provider
 from arkitekt_spec.declare.service import Service, declare_service
 from arkitekt_spec.declare.structures.errors import StructureRegistryError
+from arkitekt_spec.declare.structures.model import model_field
 from arkitekt_spec.declare.structures.registry import StructureRegistry
 from arkitekt_spec.declare.structures.types import (
     ExpanderT,
@@ -935,6 +945,28 @@ class AppRegistry(BaseModel):
     # ------------------------------------------------------------------ #
     # Decorators                                                         #
     # ------------------------------------------------------------------ #
+    @overload
+    def state(
+        self,
+        cls: type[T],
+        /,
+        *,
+        name: str | None = None,
+        required_locks: list[str] | None = None,
+        publish_interval: float = 0.1,
+    ) -> type[T]: ...
+
+    @overload
+    def state(
+        self,
+        /,
+        *,
+        name: str | None = None,
+        required_locks: list[str] | None = None,
+        publish_interval: float = 0.1,
+    ) -> Callable[[type[T]], type[T]]: ...
+
+    @dataclass_transform(field_specifiers=(model_field,))
     def state(
         self,
         *args: type[T],
@@ -942,7 +974,7 @@ class AppRegistry(BaseModel):
         required_locks: list[str] | None = None,
         publish_interval: float = 0.1,
     ) -> type[T] | Callable[[type[T]], type[T]]:
-        """Register a class as a stateful entity.
+        """Register a class as a stateful entity (it becomes a dataclass).
 
         Takes everything the underlying decorator does; they used to drift, and a
         state declaring ``required_locks`` through this method lost them silently.
@@ -1161,6 +1193,22 @@ class AppRegistry(BaseModel):
                 f"but was given a {type(value).__name__}."
             )
 
+    @overload
+    def model(
+        self,
+        cls: type[T],
+        /,
+        *,
+        identifier: str | None = None,
+        description: str | None = None,
+    ) -> type[T]: ...
+
+    @overload
+    def model(
+        self, /, *, identifier: str | None = None, description: str | None = None
+    ) -> Callable[[type[T]], type[T]]: ...
+
+    @dataclass_transform(field_specifiers=(model_field,))
     def model(
         self,
         *args: type[T],

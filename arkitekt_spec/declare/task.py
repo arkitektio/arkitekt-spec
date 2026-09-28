@@ -1,12 +1,24 @@
 """The injectable task: what an action writes as ``task: Task``.
 
-The declaration only needs to recognise the parameter, so it is not a port; the
-runtime that executes the action (rekuest's agent, a server-mode runtime) hands in
-its own implementation. That implementation sets :data:`TASK_MARKER` on its class.
+:class:`Task` is everything an action may do with the task it runs as: know who it
+runs for, report logs and progress, stop at pause points, and call other actions as
+its children. The declaration only needs to recognise the parameter (it is injected,
+not a port); the runtime that executes the action hands in its own implementation,
+which sets :data:`TASK_MARKER` on its class.
+
+An action called directly, with no runtime behind it, takes :meth:`Task.local`: a
+:class:`LocalTask` that logs, never pauses, and refuses calls with
+:class:`~arkitekt_spec.declare.agents.errors.NoCallerError`.
 """
 
 import logging
-from typing import Any, ClassVar, Protocol, runtime_checkable
+from collections.abc import AsyncIterator, Awaitable, Callable, Generator
+from dataclasses import dataclass
+from enum import Enum
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
+
+from arkitekt_spec.declare.agents.errors import NoCallerError
+from arkitekt_spec.declare.targets import CallTarget, ImplementationTarget
 
 logger = logging.getLogger("arkitekt.task")
 
@@ -14,89 +26,281 @@ TASK_MARKER = "__arkitekt_task__"
 """The class attribute that makes a parameter receive the running task."""
 
 
+class LogLevel(str, Enum):
+    """How loud a task's log line is."""
+
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    ERROR = "ERROR"
+    WARN = "WARN"
+    CRITICAL = "CRITICAL"
+
+
+@dataclass
+class AssignmentHook:
+    """Code a task runs when its assignment receives a message of ``kind``.
+
+    ``kind`` is ``"pause"`` or ``"unpause"``; ``hook`` is awaited with the message
+    (e.g. to stop a device when the user pauses the task).
+    """
+
+    id: str
+    kind: str
+    hook: Callable[[Any], Awaitable[None]]
+
+
 @runtime_checkable
 class Task(Protocol):
-    """The task an action is running as: its identity, and how it reports progress."""
+    """The task an action runs as: who it is for, what it reports, what it calls."""
 
     __arkitekt_task__: ClassVar[bool] = True
 
     @property
     def id(self) -> str:
+        """The task's id."""
         ...
 
-    def log(self, message: str, level: Any = ...) -> None:
+    @property
+    def user(self) -> str:
+        """The user the task runs for."""
         ...
 
-    def progress(self, percent: int, message: str | None = None) -> None:
+    @property
+    def org(self) -> str:
+        """The organization the task runs in."""
         ...
 
-    async def alog(self, message: str, level: Any = ...) -> None:
+    @property
+    def token(self) -> str | None:
+        """The task's provenance token, if it has one."""
         ...
 
-    async def aprogress(self, percent: int, message: str | None = None) -> None:
+    # -- reporting -------------------------------------------------------- #
+
+    def log(self, message: str, level: LogLevel = ...) -> None:
+        """Log ``message`` under this task."""
+        ...
+
+    async def alog(self, message: str, level: LogLevel = ...) -> None:
+        """Log ``message`` under this task."""
+        ...
+
+    def progress(self, percentage: int, message: str | None = None) -> None:
+        """Report how far the task is, in percent."""
+        ...
+
+    async def aprogress(self, percentage: int, message: str | None = None) -> None:
+        """Report how far the task is, in percent."""
+        ...
+
+    def pausepoint(self) -> None:
+        """Pause here if the task was asked to."""
+        ...
+
+    async def apausepoint(self) -> None:
+        """Pause here if the task was asked to."""
+        ...
+
+    def install_hook(self, hook: AssignmentHook) -> None:
+        """Run ``hook`` when the task's assignment receives a message of its kind."""
+        ...
+
+    # -- calling ---------------------------------------------------------- #
+
+    def call(
+        self,
+        target: CallTarget | ImplementationTarget,
+        *args: Any,  # the action's own arguments
+        **kwargs: Any,  # ditto, by keyword
+    ) -> Any:  # whatever the action returns
+        """Call an action as a child of this task, blocking for its result.
+
+        Raises:
+            NoCallerError: If nothing routes this task's calls (a local task, a
+                served app).
+        """
+        ...
+
+    async def acall(
+        self,
+        target: CallTarget | ImplementationTarget,
+        *args: Any,  # the action's own arguments
+        reference: str | None = None,
+        capture: bool = False,
+        escalate_to_interrupt: bool = False,
+        cancel_timeout: float | None = None,
+        **kwargs: Any,  # ditto, by keyword
+    ) -> Any:  # whatever the action returns
+        """Call an action as a child of this task.
+
+        ``target`` is an already-fetched ``Action`` or ``Implementation``: a task knows
+        no client, so it cannot look one up.
+
+        Raises:
+            NoCallerError: If nothing routes this task's calls.
+        """
+        ...
+
+    def iterate(
+        self,
+        target: CallTarget | ImplementationTarget,
+        *args: Any,  # the action's own arguments
+        **kwargs: Any,  # ditto, by keyword
+    ) -> Generator[Any, None, None]:
+        """Stream a generator action's yields as a child of this task, blocking between them.
+
+        Raises:
+            NoCallerError: If nothing routes this task's calls.
+        """
+        ...
+
+    def aiterate(
+        self,
+        target: CallTarget | ImplementationTarget,
+        *args: Any,  # the action's own arguments
+        reference: str | None = None,
+        capture: bool = False,
+        escalate_to_interrupt: bool = False,
+        cancel_timeout: float | None = None,
+        **kwargs: Any,  # ditto, by keyword
+    ) -> AsyncIterator[Any]:
+        """Stream a generator action's yields as a child of this task.
+
+        Raises:
+            NoCallerError: If nothing routes this task's calls.
+        """
         ...
 
     @classmethod
-    def local(cls, id: str = "local", user: str = "local", org: str = "local") -> "LocalTask":
+    def local(cls, id: str = "local", user: str = "local", org: str = "local") -> "Task":
         """A task for calling an action directly, with no runtime behind it.
 
-        ``segment(image, task=Task.local(), mikro=mikro)``: logs and progress go to
-        the ``arkitekt.task`` logger, pause points return at once, and there is no
-        assignment, agent or token -- so clients handed out for it attribute nothing.
+        ``segment(image, task=Task.local(), mikro=mikro)``: logs and progress go to the
+        ``arkitekt.task`` logger, pause points return at once, and calls raise
+        :class:`~arkitekt_spec.declare.agents.errors.NoCallerError`.
         """
         return LocalTask(id=id, user=user, org=org)
 
 
-class LocalTask:
-    """The task of an action called directly: it only logs.
+def _no_caller(task_id: str) -> NoCallerError:
+    return NoCallerError(
+        f"Task {task_id!r} is local: it runs for no agent, so a call made through it has "
+        "nothing to route it and nothing to be a child of. Run the app (arkitekt.run) to "
+        "call as a child, or call through a client -- rekuest.call(action, ...) -- which "
+        "makes a root."
+    )
 
-    Calling other actions needs a runtime (an agent to route through), which a
-    local call does not have.
-    """
+
+class LocalTask:
+    """The task of an action called directly: it logs, never pauses, and cannot call."""
 
     __arkitekt_task__: ClassVar[bool] = True
 
-    assignment = None
-    agent = None
-    token = None
+    token: str | None = None
 
     def __init__(self, id: str = "local", user: str = "local", org: str = "local") -> None:
         """Make a local task, tagged ``id`` in its logs."""
         self.id = id
         self.user = user
         self.org = org
+        self.hooks: list[AssignmentHook] = []
 
     @classmethod
     def local(cls, id: str = "local", user: str = "local", org: str = "local") -> "LocalTask":
         """Another local task (every task type answers ``local()``)."""
         return cls(id=id, user=user, org=org)
 
-    def log(self, message: str, level: Any = None) -> None:
+    def log(self, message: str, level: LogLevel = LogLevel.INFO) -> None:
         """Log ``message`` under this task."""
         logger.log(_level(level), "[%s] %s", self.id, message)
 
-    def progress(self, percent: int, message: str | None = None) -> None:
+    async def alog(self, message: str, level: LogLevel = LogLevel.INFO) -> None:
+        """Log ``message`` under this task."""
+        self.log(message, level)
+
+    def progress(self, percentage: int, message: str | None = None) -> None:
         """Report progress, as a log line."""
-        logger.info("[%s] %s%% %s", self.id, int(percent), message or "")
+        logger.info("[%s] %s%% %s", self.id, int(percentage), message or "")
+
+    async def aprogress(self, percentage: int, message: str | None = None) -> None:
+        """Report progress, as a log line."""
+        self.progress(percentage, message)
 
     def pausepoint(self) -> None:
         """Nothing pauses a local call."""
         return
 
-    async def alog(self, message: str, level: Any = None) -> None:
-        """Log ``message`` under this task."""
-        self.log(message, level)
-
-    async def aprogress(self, percent: int, message: str | None = None) -> None:
-        """Report progress, as a log line."""
-        self.progress(percent, message)
-
     async def apausepoint(self) -> None:
         """Nothing pauses a local call."""
         return
 
+    def install_hook(self, hook: AssignmentHook) -> None:
+        """Keep the hook; nothing pauses a local task, so it never runs."""
+        self.hooks.append(hook)
 
-def _level(level: Any) -> int:
+    def call(
+        self,
+        target: CallTarget | ImplementationTarget,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        """Refuse: a local task cannot call.
+
+        Raises:
+            NoCallerError: Always.
+        """
+        raise _no_caller(self.id)
+
+    async def acall(
+        self,
+        target: CallTarget | ImplementationTarget,
+        *args: Any,
+        reference: str | None = None,
+        capture: bool = False,
+        escalate_to_interrupt: bool = False,
+        cancel_timeout: float | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """Refuse: a local task cannot call.
+
+        Raises:
+            NoCallerError: Always.
+        """
+        raise _no_caller(self.id)
+
+    def iterate(
+        self,
+        target: CallTarget | ImplementationTarget,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Generator[Any, None, None]:
+        """Refuse: a local task cannot call.
+
+        Raises:
+            NoCallerError: Always.
+        """
+        raise _no_caller(self.id)
+
+    async def aiterate(
+        self,
+        target: CallTarget | ImplementationTarget,
+        *args: Any,
+        reference: str | None = None,
+        capture: bool = False,
+        escalate_to_interrupt: bool = False,
+        cancel_timeout: float | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[Any]:
+        """Refuse: a local task cannot call.
+
+        Raises:
+            NoCallerError: Always.
+        """
+        raise _no_caller(self.id)
+        yield  # an async generator, like every task's aiterate
+
+
+def _level(level: LogLevel | str) -> int:
     name = str(getattr(level, "value", level) or "INFO").upper()
     return logging.getLevelNamesMapping().get(name, logging.INFO)
 
@@ -109,4 +313,10 @@ def is_task(obj: object) -> bool:
     return isinstance(cls, type) and getattr(cls, TASK_MARKER, False) is True
 
 
-__all__ = ["TASK_MARKER", "LocalTask", "Task", "is_task"]
+if TYPE_CHECKING:  # the type checker proves LocalTask is a Task
+
+    def _local_task_is_a_task(task: LocalTask) -> Task:
+        return task
+
+
+__all__ = ["TASK_MARKER", "AssignmentHook", "LocalTask", "LogLevel", "Task", "is_task"]
