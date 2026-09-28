@@ -134,6 +134,11 @@ def get_non_null_variants(cls: Any) -> list[Any]:
     return [arg for arg in get_args(cls) if arg is not type(None)]
 
 
+def _is_uninformative(cls: TypeAnnotation) -> bool:
+    """Whether an annotation says nothing about a value's kind (``Any``/``object``)"""
+    return cls is Any or cls is object
+
+
 def is_bool(cls: TypeAnnotation) -> bool:
     """Check if a class is a bool"""
     if inspect.isclass(cls):
@@ -387,9 +392,7 @@ def _convert_object_to_port(
 
     if is_list(cls):
         child = recurse(get_list_value_cls(cls), "...", nullable=False)
-        return make(
-            PortKind.LIST, children=(child,), default=default if default else None
-        )
+        return make(PortKind.LIST, children=(child,), default=default)
 
     if is_union(cls):
         children = [
@@ -421,16 +424,22 @@ def _convert_object_to_port(
         # string/int default isn't mistaken for a plain STRING/INT port.
         return registry.get_port_for_cls(cls, key, direction, **registry_kwargs)
 
+    # The annotation decides the kind; the default's type only stands in for an
+    # annotation that says nothing (``x: float = 1`` is a FLOAT, not an INT).
+    primitive_cls = (
+        type(default) if _is_uninformative(cls) and default is not None else cls
+    )
+
     # bool is a subclass of int, so it must be checked first.
-    if is_bool(cls) or (default is not None and isinstance(default, bool)):
+    if is_bool(primitive_cls):
         return make(PortKind.BOOL)
-    if is_int(cls) or (default is not None and isinstance(default, int)):
+    if is_int(primitive_cls):
         return make(PortKind.INT)
-    if is_float(cls) or (default is not None and isinstance(default, float)):
+    if is_float(primitive_cls):
         return make(PortKind.FLOAT)
-    if is_datetime(cls) or (default is not None and isinstance(default, dt.datetime)):
+    if is_datetime(primitive_cls):
         return make(PortKind.DATE)
-    if is_str(cls) or (default is not None and isinstance(default, str)):
+    if is_str(primitive_cls):
         return make(PortKind.STRING)
 
     if is_pint_quantity(cls):

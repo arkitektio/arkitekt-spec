@@ -10,7 +10,7 @@ parser over those markers and accumulates the result into a single
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from arkitekt_spec.actions import (
@@ -202,7 +202,16 @@ def extract_annotations(
     Returns:
         The populated :class:`PortAnnotations` accumulator.
     """
-    acc = base or PortAnnotations()
+    # Parsers append to the list fields, so they must not be the caller's lists.
+    acc = (
+        replace(
+            base,
+            validators=list(base.validators or []),
+            effects=list(base.effects or []),
+        )
+        if base is not None
+        else PortAnnotations()
+    )
 
     for parser in parsers:
         acc = parser(annotations, acc)
