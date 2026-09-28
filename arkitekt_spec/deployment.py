@@ -4,7 +4,6 @@ import datetime
 from collections.abc import Mapping
 from typing import Any, Literal
 
-import yaml
 from pydantic import Field
 
 from arkitekt_spec.base import WireModel
@@ -60,6 +59,8 @@ class DeploymentsFile(WireModel):
 
 def load_deployments(source: str | Mapping[str, Any] | None) -> DeploymentsFile:
     """Parse a deployments file from its YAML text or an already-parsed mapping."""
+    import yaml  # only the file helpers need it: importing the spec does not
+
     data: Any = yaml.safe_load(source) if isinstance(source, str) else source
     if data is None:
         return DeploymentsFile()
@@ -68,5 +69,7 @@ def load_deployments(source: str | Mapping[str, Any] | None) -> DeploymentsFile:
 
 def dump_deployments(deployments: DeploymentsFile) -> str:
     """Render a deployments file the one way it is written to disk."""
+    import yaml
+
     data: Any = deployments.model_dump(mode="json", by_alias=True, exclude_none=True)
     return yaml.safe_dump(data, sort_keys=True)
