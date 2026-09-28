@@ -6,13 +6,18 @@ authors = [{ name = "jhnnsrs", email = "jhnnsrs@gmail.com" }]
 requires-python = ">=3.11"
 readme = "README.md"
 license = "MIT"
-# The spec is shared by producers (arkitekt's plugin CLI) and consumers (the kabinet
-# server), so it depends on nothing either side would not already have. In particular
-# it does NOT depend on rekuest: the action language inside an inspection is rekuest's,
-# and travels here as JSON that each side validates with its own rekuest models.
+# The spec is what an app is declared with and what every party reads: SDKs, the
+# runtimes (arkitekt, rekuest) and the servers depend on it. So it depends on none of
+# them -- no rekuest, rath, koil or fakts -- only on small pure-python packages.
+# graphql-core is optional: with it installed, search queries get their full shape check.
 dependencies = [
     "pydantic>=2.11",
     "pyyaml>=6",
+    # The declaration layer (arkitekt_spec.declare) reads function signatures and
+    # docstrings; these three are small and pure python.
+    "docstring-parser>=0.11",
+    "inflection>=0.5.1",
+    "fieldz>=0.0.2",
 ]
 
 [dependency-groups]
@@ -22,6 +27,8 @@ dev = [
     "ruff>0.11",
     "basedpyright>=1.21",
     "types-pyyaml>=6",
+    "graphql-core>=3.3.0",
+    "pytest-asyncio>=1.4.0",
 ]
 
 [tool.hatch.build.targets.sdist]
@@ -33,7 +40,10 @@ include = ["arkitekt_spec"]
 [tool.basedpyright]
 include = ["arkitekt_spec"]
 exclude = ["**/__pycache__", "tests"]
-typeCheckingMode = "strict"
+# The wire format is held to strict; the declaration layer (moved from rekuest, which
+# checked it in standard mode) to standard -- see `strict` below.
+typeCheckingMode = "standard"
+strict = ["arkitekt_spec/*.py"]
 # The opaque action-language lists are `dict[str, Any]` by design.
 reportAny = false
 reportExplicitAny = false
@@ -42,7 +52,12 @@ reportExplicitAny = false
 extend-select = ["ANN", "D1"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["ANN001", "ANN201", "ANN202", "ANN206", "D1"]
+"tests/*" = ["ANN001", "ANN201", "ANN202", "ANN206", "ANN401", "D1"]
+# The declaration layer introspects arbitrary user functions, so `Any` is its
+# vocabulary; its docstring coverage is rekuest's, where it came from.
+"arkitekt_spec/declare/**" = [
+    "ANN401", "D1", "BLE001", "TRY004", "SIM102", "SIM103", "RUF012", "C408", "PLR1704", "LOG015",
+]
 
 [tool.ruff]
 line-length = 100

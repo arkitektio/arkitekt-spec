@@ -1,4 +1,4 @@
-"""An app, declared once: the document every runtime and registry reads.
+"""An app
 
 An app is declared in code once, and that declaration leaves the process in several
 shapes, each read by a different party:
