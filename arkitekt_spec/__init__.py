@@ -3,6 +3,7 @@
 One definition of what an app is, shared by everything that produces or consumes it:
 arkitekt's plugin CLI writes it, and the kabinet server reads it.
 
+- :class:`AppDeclaration`: an app, declared once; every other shape is a projection of it.
 - :class:`AppManifest` and :class:`Requirement`: who the app is, what services it needs.
 - :class:`Inspection`: what the app declares, in the action language of :mod:`.actions`.
 - :data:`Selector`: where a flavour of it may run.
@@ -15,6 +16,7 @@ from pydantic import TypeAdapter
 
 from arkitekt_spec import actions
 from arkitekt_spec.actions import definition_hash
+from arkitekt_spec.declaration import AppDeclaration
 from arkitekt_spec.deployment import (
     DEPLOYMENTS_PATH,
     SPEC_VERSION,
@@ -60,6 +62,7 @@ __all__ = [
     "SELECTOR_KINDS",
     "SPEC_VERSION",
     "UNKNOWN_AUTHOR",
+    "AppDeclaration",
     "AppImage",
     "AppManifest",
     "BaseSelector",
