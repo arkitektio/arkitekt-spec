@@ -4,7 +4,7 @@ One definition of what an app is, shared by everything that produces or consumes
 arkitekt's plugin CLI writes it, and the kabinet server reads it.
 
 - :class:`AppManifest` and :class:`Requirement`: who the app is, what services it needs.
-- :class:`Inspection`: what the app declares (rekuest's action language, carried as JSON).
+- :class:`Inspection`: what the app declares, in the action language of :mod:`.actions`.
 - :data:`Selector`: where a flavour of it may run.
 - :class:`DeploymentsFile`: ``.arkitekt/deployments.yaml``, the images a repo publishes.
 """
@@ -13,6 +13,8 @@ from typing import Any
 
 from pydantic import TypeAdapter
 
+from arkitekt_spec import actions
+from arkitekt_spec.actions import definition_hash
 from arkitekt_spec.deployment import (
     DEPLOYMENTS_PATH,
     SPEC_VERSION,
@@ -22,7 +24,7 @@ from arkitekt_spec.deployment import (
     dump_deployments,
     load_deployments,
 )
-from arkitekt_spec.inspection import ActionLanguageEntry, Inspection
+from arkitekt_spec.inspection import Inspection
 from arkitekt_spec.manifest import (
     DEFAULT_ENTRYPOINT,
     UNKNOWN_AUTHOR,
@@ -58,7 +60,6 @@ __all__ = [
     "SELECTOR_KINDS",
     "SPEC_VERSION",
     "UNKNOWN_AUTHOR",
-    "ActionLanguageEntry",
     "AppImage",
     "AppManifest",
     "BaseSelector",
@@ -73,6 +74,8 @@ __all__ = [
     "Requirement",
     "RocmSelector",
     "Selector",
+    "actions",
+    "definition_hash",
     "dump_deployments",
     "json_schema",
     "load_deployments",

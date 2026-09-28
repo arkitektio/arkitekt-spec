@@ -9,6 +9,7 @@ app_images:
     description: StarDist nucleus segmentation with the pretrained 2D models
     implementations:
     - definition:
+        allowProbe: false
         args:
         - description: The fluorescence image to segment
           effects: []
@@ -21,15 +22,18 @@ app_images:
             operator: EQUALS
             value: 2
           validators: []
+        catalogs: []
         collections:
         - segmentation
         description: Segments nuclei in a single-channel fluorescence image.
+        idempotent: false
         isDev: false
         isTestFor: []
         key: predict_flou2
         kind: FUNCTION
         name: Segment Fluorescent Nuclei
         portGroups: []
+        pure: false
         returns:
         - effects: []
           identifier: '@mikro/lens'
@@ -39,6 +43,7 @@ app_images:
         stateful: false
         version: '1'
       dependencies: []
+      effect: NONE
       interface: predict_flou2
       locks: []
       needsToken: true

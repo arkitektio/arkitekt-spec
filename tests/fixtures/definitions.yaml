@@ -1,0 +1,330 @@
+definitions:
+- source: legacy fixture (camelCase, kabinet-dumped)
+  implementation:
+    definition:
+      args:
+      - description: The File to be converted
+        effects: []
+        identifier: '@mikro/file'
+        key: file
+        kind: STRUCTURE
+        label: file
+        nullable: false
+        validators: []
+        widget:
+          kind: SEARCH
+          query: "query SearchFiles($search: String, $values: [ID!], $pagination:\
+            \ OffsetPaginationInput) {\n  options: files(\n    filters: {search: $search,\
+            \ ids: $values}\n    pagination: $pagination\n  ) {\n    value: id\n \
+            \   label: name\n    __typename\n  }\n}"
+          ward: mikro
+      - description: The Stage in which to put the Image. Defaults to None.
+        effects: []
+        identifier: '@mikro/stage'
+        key: stage
+        kind: STRUCTURE
+        label: stage
+        nullable: true
+        validators: []
+        widget:
+          kind: SEARCH
+          query: "query SearchStages($search: String, $values: [ID!], $pagination:\
+            \ OffsetPaginationInput) {\n  options: stages(\n    filters: {search:\
+            \ $search, ids: $values}\n    pagination: $pagination\n  ) {\n    value:\
+            \ id\n    label: name\n    __typename\n  }\n}"
+          ward: mikro
+      collections: []
+      description: Converts an Omero File in a set of Mikrodata
+      isDev: false
+      isTestFor: []
+      key: convert_omero
+      kind: FUNCTION
+      name: Convert Omero
+      portGroups: []
+      returns:
+      - children:
+        - effects: []
+          identifier: '@mikro/image'
+          key: '...'
+          kind: STRUCTURE
+          nullable: false
+        description: The created series in this file
+        effects: []
+        key: return0
+        kind: LIST
+        label: return0
+        nullable: false
+      stateful: false
+      version: '1'
+    dependencies: []
+    interface: convert_omero_file
+  server_hash: 5676bdcf6638fe0938e189377575537c24e028685b8596d3f2f70876f6fdd99c
+- source: golden fixture (camelCase, exclude_none)
+  implementation:
+    definition:
+      args:
+      - description: The fluorescence image to segment
+        effects: []
+        identifier: '@mikro/lens'
+        key: image
+        kind: STRUCTURE
+        nullable: false
+        requires:
+        - key: '@mikro/n_space_axes'
+          operator: EQUALS
+          value: 2
+        validators: []
+      collections:
+      - segmentation
+      description: Segments nuclei in a single-channel fluorescence image.
+      isDev: false
+      isTestFor: []
+      key: predict_flou2
+      kind: FUNCTION
+      name: Segment Fluorescent Nuclei
+      portGroups: []
+      returns:
+      - effects: []
+        identifier: '@mikro/lens'
+        key: return0
+        kind: STRUCTURE
+        nullable: false
+      stateful: false
+      version: '1'
+    dependencies: []
+    interface: predict_flou2
+    locks: []
+    needsToken: true
+  server_hash: 081c3fb1d1395ef9371aa56021c3ea80bb5ddf32171b15df47fde91cccb92d14
+- source: starmist inspect all from PyPI arkitekt 3.2.0 (snake_case, explicit nulls)
+  implementation:
+    definition:
+      allow_probe: null
+      args:
+      - children: null
+        choices: null
+        default: null
+        description: The fluorescence image to segment
+        dimension: null
+        effects: []
+        identifier: '@mikro/lens'
+        key: image
+        kind: STRUCTURE
+        label: null
+        nullable: false
+        proposed_units: null
+        reference_unit: null
+        requires:
+        - key: '@mikro/n_space_axes'
+          operator: EQUALS
+          value: 2
+        - key: '@mikro/n_channels'
+          operator: LTE
+          value: 1
+        - key: '@mikro/n_timepoints'
+          operator: LTE
+          value: 1
+        validators: []
+        widget: null
+      - children: null
+        choices: null
+        default: null
+        description: Probability threshold (model default if unset)
+        dimension: null
+        effects: []
+        identifier: null
+        key: prob_thresh
+        kind: FLOAT
+        label: null
+        nullable: true
+        proposed_units: null
+        reference_unit: null
+        requires: null
+        validators: []
+        widget: null
+      - children: null
+        choices: null
+        default: null
+        description: Overlap threshold (model default if unset)
+        dimension: null
+        effects: []
+        identifier: null
+        key: nms_thresh
+        kind: FLOAT
+        label: null
+        nullable: true
+        proposed_units: null
+        reference_unit: null
+        requires: null
+        validators: []
+        widget: null
+      catalogs: null
+      collections:
+      - segmentation
+      - prediction
+      - nuclei
+      description: 'Segments nuclei in a single-channel fluorescence image with the
+        pretrained
+
+
+        StarDist 2D_versatile_fluo model.'
+      idempotent: null
+      is_dev: false
+      is_test_for: []
+      key: predict_flou2
+      kind: FUNCTION
+      name: Segment Fluorescent Nuclei
+      port_groups: []
+      pure: null
+      returns:
+      - children: null
+        choices: null
+        description: null
+        dimension: null
+        effects: []
+        identifier: '@mikro/lens'
+        key: return0
+        kind: STRUCTURE
+        label: null
+        nullable: false
+        proposed_units: null
+        provides:
+        - key: '@mikro/n_space_axes'
+          operator: EQUALS
+          value: 2
+        - key: '@mikro/value_kind'
+          operator: EQUALS
+          value: categorical
+        reference_unit: null
+        widget: null
+      stateful: false
+      version: '1'
+    dependencies: []
+    effect: null
+    instance_id: null
+    interface: predict_flou2
+    locks: []
+    manipulates: []
+    needs_token: true
+    optimistics: []
+    params: null
+    provenance_audience: null
+    tracks: []
+  server_hash: 6b1bb50e2bd3c8d0c605280be8915abc4fd7d0cfc90e68ba60ba6455a43291e8
+- source: starmist inspect all from PyPI arkitekt 3.2.0 (snake_case, explicit nulls)
+  implementation:
+    definition:
+      allow_probe: null
+      args:
+      - children: null
+        choices: null
+        default: null
+        description: The H&E image to segment
+        dimension: null
+        effects: []
+        identifier: '@mikro/lens'
+        key: image
+        kind: STRUCTURE
+        label: null
+        nullable: false
+        proposed_units: null
+        reference_unit: null
+        requires:
+        - key: '@mikro/n_space_axes'
+          operator: EQUALS
+          value: 2
+        - key: '@mikro/n_channel_axes'
+          operator: EQUALS
+          value: 1
+        - key: '@mikro/n_channels'
+          operator: EQUALS
+          value: 3
+        - key: '@mikro/n_timepoints'
+          operator: LTE
+          value: 1
+        validators: []
+        widget: null
+      - children: null
+        choices: null
+        default: null
+        description: Probability threshold (model default if unset)
+        dimension: null
+        effects: []
+        identifier: null
+        key: prob_thresh
+        kind: FLOAT
+        label: null
+        nullable: true
+        proposed_units: null
+        reference_unit: null
+        requires: null
+        validators: []
+        widget: null
+      - children: null
+        choices: null
+        default: null
+        description: Overlap threshold (model default if unset)
+        dimension: null
+        effects: []
+        identifier: null
+        key: nms_thresh
+        kind: FLOAT
+        label: null
+        nullable: true
+        proposed_units: null
+        reference_unit: null
+        requires: null
+        validators: []
+        widget: null
+      catalogs: null
+      collections:
+      - segmentation
+      - prediction
+      - nuclei
+      description: 'Segments nuclei in an RGB H&E brightfield image with the pretrained
+
+
+        StarDist 2D_versatile_he model.'
+      idempotent: null
+      is_dev: false
+      is_test_for: []
+      key: predict_stardist_he
+      kind: FUNCTION
+      name: Segment H&E Nuclei
+      port_groups: []
+      pure: null
+      returns:
+      - children: null
+        choices: null
+        description: null
+        dimension: null
+        effects: []
+        identifier: '@mikro/lens'
+        key: return0
+        kind: STRUCTURE
+        label: null
+        nullable: false
+        proposed_units: null
+        provides:
+        - key: '@mikro/n_space_axes'
+          operator: EQUALS
+          value: 2
+        - key: '@mikro/value_kind'
+          operator: EQUALS
+          value: categorical
+        reference_unit: null
+        widget: null
+      stateful: false
+      version: '1'
+    dependencies: []
+    effect: null
+    instance_id: null
+    interface: predict_stardist_he
+    locks: []
+    manipulates: []
+    needs_token: true
+    optimistics: []
+    params: null
+    provenance_audience: null
+    tracks: []
+  server_hash: 49fa84ec1c5b45e7603794f499665a476f176a3900f7d40010bd6ab630d4e86e

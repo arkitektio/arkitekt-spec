@@ -1,26 +1,24 @@
 """What an app declares, as found by running ``arkitekt inspect all`` on its image."""
 
-from typing import Any
-
 from pydantic import Field
 
+from arkitekt_spec.actions import (
+    BlokImplementationInput,
+    ImplementationInput,
+    LockImplementationInput,
+    StateImplementationInput,
+)
 from arkitekt_spec.base import WireModel
 from arkitekt_spec.manifest import Requirement
-
-#: One entry of rekuest's action language, carried verbatim.
-ActionLanguageEntry = dict[str, Any]
 
 
 class Inspection(WireModel):
     """The declaration an app image makes, plus the services it requires.
 
-    The *envelope* is this spec's. The entries of ``implementations``, ``states``,
-    ``locks`` and ``bloks`` are rekuest's action language (an ``ImplementationInput``,
-    ``StateImplementationInput``, ``LockImplementationInput`` and
-    ``BlokImplementationInput`` each) and are carried here as JSON: the producer builds
-    them with ``rekuest.protocol`` and every consumer validates them with its own
-    rekuest models. That keeps this package free of rekuest while leaving exactly one
-    owner per layer.
+    The envelope reads across versions (unknown keys ignored, see
+    :class:`~arkitekt_spec.base.WireModel`). The entries are the action language of
+    :mod:`arkitekt_spec.actions`, which refuses unknown keys: a malformed definition
+    fails where it is read rather than being stored half-understood.
     """
 
     size: int | None = Field(
@@ -32,15 +30,7 @@ class Inspection(WireModel):
     requirements: list[Requirement] = Field(
         default_factory=list, description="The services the app needs."
     )
-    implementations: list[ActionLanguageEntry] = Field(
-        default_factory=list, description="rekuest `ImplementationInput`s."
-    )
-    states: list[ActionLanguageEntry] = Field(
-        default_factory=list, description="rekuest `StateImplementationInput`s."
-    )
-    locks: list[ActionLanguageEntry] = Field(
-        default_factory=list, description="rekuest `LockImplementationInput`s."
-    )
-    bloks: list[ActionLanguageEntry] = Field(
-        default_factory=list, description="rekuest `BlokImplementationInput`s."
-    )
+    implementations: list[ImplementationInput] = Field(default_factory=list)
+    states: list[StateImplementationInput] = Field(default_factory=list)
+    locks: list[LockImplementationInput] = Field(default_factory=list)
+    bloks: list[BlokImplementationInput] = Field(default_factory=list)

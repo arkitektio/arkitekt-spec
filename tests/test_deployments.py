@@ -19,9 +19,15 @@ from arkitekt_spec import (
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def test_golden_file_round_trips_byte_for_byte():
+def test_golden_file_is_in_canonical_form():
+    """The golden file is exactly what the spec writes: loading and dumping it is a no-op."""
     text = (FIXTURES / "deployments.yaml").read_text()
     assert dump_deployments(load_deployments(text)) == text
+
+
+def test_the_legacy_file_canonicalises_stably():
+    once = dump_deployments(load_deployments((FIXTURES / "legacy_deployments.yaml").read_text()))
+    assert dump_deployments(load_deployments(once)) == once
 
 
 def test_golden_file_reads_every_envelope_field():
@@ -44,14 +50,15 @@ def test_a_file_written_before_the_spec_still_loads():
     assert image.manifest.identifier == "ome"
     assert image.manifest.description is None
     assert image.inspection.description is None
-    assert image.inspection.implementations[0]["definition"]["key"] == "convert_omero"
+    assert image.inspection.implementations[0].definition.key == "convert_omero"
     assert image.selectors == []
 
 
-def test_the_action_language_is_carried_verbatim():
-    text = (FIXTURES / "legacy_deployments.yaml").read_text()
-    raw = load_deployments(text).app_images[0].inspection.implementations[0]
-    assert raw["definition"]["isDev"] is False  # camelCase untouched: not ours to rename
+def test_the_action_language_is_typed_and_reads_both_spellings():
+    legacy = load_deployments((FIXTURES / "legacy_deployments.yaml").read_text())
+    definition = legacy.app_images[0].inspection.implementations[0].definition
+    assert definition.key == "convert_omero"
+    assert definition.is_dev is False  # read from camelCase `isDev`
 
 
 def test_an_unknown_envelope_key_is_ignored_not_refused():
