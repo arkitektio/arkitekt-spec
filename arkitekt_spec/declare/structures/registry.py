@@ -12,6 +12,7 @@ from typing import (
     TypeVar,
     cast,
     dataclass_transform,
+    get_origin,
     get_type_hints,
 )
 
@@ -421,9 +422,15 @@ class StructureRegistry(BaseModel):
         """Find the fullfilled type registered for a class, or ``None``.
 
         Unlike :meth:`get_fullfilled_type_for_cls` this neither derives an enum
-        nor raises.
+        nor raises. A parameterised annotation (``NDArray[np.float64]``,
+        ``Box[int]``) finds what its origin class was registered as.
         """
-        return self.cls_fullfilled_type_map.get(cls)
+        found = self.cls_fullfilled_type_map.get(cls)
+        if found is None:
+            origin = get_origin(cls)
+            if isinstance(origin, type):
+                found = self.cls_fullfilled_type_map.get(origin)
+        return found
 
     def derive_enum(self, cls: type[Any]) -> FullFilledType:
         """Derive an enum port from an ``Enum`` subclass or a ``Literal[...]``.
