@@ -663,7 +663,7 @@ def prepare_definition(
             continue
 
         assign_widget = widgets.pop(key, None)
-        port_effects = effects.pop(key, [])
+        its_effects = effects.pop(key, [])
         return_widget = return_widgets.pop(key, None)
         item_validators = validators.pop(key, [])
         default = value.default if value.default != inspect.Parameter.empty else None
@@ -689,7 +689,7 @@ def prepare_definition(
                     assign_widget=assign_widget,
                     return_widget=return_widget,
                     default=default,
-                    effects=port_effects,
+                    effects=its_effects,
                     nullable=value.default != inspect.Parameter.empty,
                     description=doc_param_description_map.pop(key, None),
                     label=doc_param_label_map.pop(key, None),
@@ -714,7 +714,7 @@ def prepare_definition(
             key = f"return{index}"
             return_widget = return_widgets.pop(key, None)
             assign_widget = widgets.pop(key, None)
-            port_effects = effects.pop(key, [])
+            its_effects = effects.pop(key, [])
 
             returns.append(
                 convert_object_to_returnport(
@@ -722,7 +722,7 @@ def prepare_definition(
                     key,
                     structure_registry,
                     return_widget=return_widget,
-                    effects=port_effects,
+                    effects=its_effects,
                     description=doc_param_description_map.pop(key, None),
                     label=doc_param_label_map.pop(key, None),
                     assign_widget=assign_widget,
@@ -748,7 +748,7 @@ def prepare_definition(
                     key = f"return{index}"
                     return_widget = return_widgets.pop(key, None)
                     assign_widget = widgets.pop(key, None)
-                    port_effects = effects.pop(key, [])
+                    its_effects = effects.pop(key, [])
 
                     returns.append(
                         convert_object_to_returnport(
@@ -756,7 +756,7 @@ def prepare_definition(
                             key,
                             structure_registry,
                             return_widget=return_widget,
-                            effects=port_effects,
+                            effects=its_effects,
                             description=doc_param_description_map.pop(key, None),
                             label=doc_param_label_map.pop(key, None),
                             assign_widget=assign_widget,
@@ -766,14 +766,14 @@ def prepare_definition(
                 key = "return0"
                 return_widget = return_widgets.pop(key, None)
                 assign_widget = widgets.pop(key, None)
-                port_effects = effects.pop(key, [])
+                its_effects = effects.pop(key, [])
                 returns.append(
                     convert_object_to_returnport(
                         function_outs_annotation,
                         "return0",
                         structure_registry,
                         assign_widget=assign_widget,
-                        effects=port_effects,
+                        effects=its_effects,
                         description=doc_param_description_map.pop(key, None),
                         label=doc_param_label_map.pop(key, None),
                         return_widget=return_widget,
