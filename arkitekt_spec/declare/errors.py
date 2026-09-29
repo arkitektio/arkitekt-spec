@@ -16,6 +16,50 @@ class ErrorCallError(RekuestError):
 
 
 
+class AgentLost(RekuestError):
+    """The agent running a call died while it ran. Not a failure: how it ended is unknown.
+
+    Raised at the call, for whoever made it to decide: send it again, go on without it,
+    or ask a person (``task.hold``). What is known comes with it:
+
+    Attributes:
+        started: Whether the task was ever picked up. If not, nothing ran, and sending it
+            again is always safe.
+        last_progress: The last progress it reported, if any.
+        effects: What running it again would do to the world (the implementation's
+            claim, ``"UNKNOWN"`` when it made none). Information, not a rule.
+        task: The id of the lost task.
+    """
+
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        started: bool = True,
+        last_progress: int | None = None,
+        effects: str | None = None,
+        task: str | None = None,
+    ) -> None:
+        super().__init__(message or "The agent running this call died while it ran.")
+        self.started = started
+        self.last_progress = last_progress
+        self.effects = effects or "UNKNOWN"
+        self.task = task
+
+    @classmethod
+    def from_details(cls, details: dict | None, *, message: str | None = None, task: str | None = None) -> "AgentLost":
+        """Build it from what the server recorded on the LOST event."""
+        details = details or {}
+        return cls(
+            details.get("reason") or message,
+            started=bool(details.get("started", True)),
+            last_progress=details.get("last_progress"),
+            effects=details.get("effects"),
+            task=task,
+        )
+
+
+
 class RootOnlyCallError(RekuestError):
     """Raised when a call is made through the client while a task is running.
 
