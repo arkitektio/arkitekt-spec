@@ -9,9 +9,9 @@ the server the app itself logged into. Reading those is declaration; resolving t
 
 import ipaddress
 from dataclasses import dataclass
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, Self, runtime_checkable
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from arkitekt_spec.manifest import Requirement
 
@@ -26,6 +26,36 @@ FAKTS_MARKER = "__arkitekt_fakts__"
 def is_fakts_client(annotation: Any) -> bool:
     """Whether a parameter annotation asks for the whole configuration client."""
     return isinstance(annotation, type) and getattr(annotation, FAKTS_MARKER, False) is True
+
+
+class MeshError(Exception):
+    """A mesh alias cannot be reached the way it was asked to be."""
+
+
+class TurnInfo(BaseModel):
+    """One ICE server entry for a WebRTC client: a mesh node's TURN relay on
+    127.0.0.1, whose relayed traffic goes over the mesh."""
+
+    urls: list[str]
+    username: str
+    credential: str
+
+
+class MeshNode(Protocol):
+    """The running mesh node a mesh alias is reached through.
+
+    The fakts client runs one and hands it to the aliases it resolves over the
+    mesh (see :meth:`Alias.through_mesh`), so whoever holds such an alias can
+    reach it by more than HTTP.
+    """
+
+    async def forward(self, host: str, port: int) -> str:
+        """A local ``127.0.0.1:P`` forwarding TCP to ``host:port`` on the mesh."""
+        ...
+
+    async def turn(self) -> TurnInfo:
+        """The node's TURN relay, as an ICE server."""
+        ...
 
 
 class Alias(BaseModel):
@@ -59,6 +89,60 @@ class Alias(BaseModel):
     """The HTTP proxy this alias is reached through (the mesh node's local
     proxy), set by the fakts client when it resolves the alias. Never sent or
     cached."""
+    _mesh: MeshNode | None = PrivateAttr(default=None)
+    """The mesh node this process reaches the alias through, if it runs one
+    (not for an external proxy). Never sent or cached."""
+
+    def through_mesh(self, proxy: str, node: MeshNode | None = None) -> Self:
+        """A copy of this alias, reached through the mesh: over the HTTP
+        ``proxy``, and through ``node`` for anything else (:meth:`aforward`,
+        :meth:`aturn`) when this process runs the node.
+
+        What the fakts client returns for a mesh alias it resolved; the alias it
+        was resolved from (the cached one) is left as it is.
+        """
+        routed = self.model_copy(update={"proxy": proxy})
+        routed._mesh = node
+        return routed
+
+    def _mesh_node(self, what: str) -> MeshNode:
+        if self._mesh is not None:
+            return self._mesh
+        if not self.is_mesh():
+            raise MeshError(f"alias {self.id} ({self.host}) is not on the mesh; it has no {what}")
+        raise MeshError(
+            f"alias {self.id} was not resolved through a mesh node this process runs, "
+            f"so it has no {what}: turn the mesh on (ARKITEKT_MESH=1) rather than "
+            "reaching it through an external proxy (ARKITEKT_MESH_PROXY)"
+        )
+
+    async def aforward(self, port: int | None = None) -> str:
+        """A local ``127.0.0.1:P`` that forwards TCP to this mesh alias.
+
+        For clients that cannot use the HTTP proxy (e.g. LiveKit's signaling
+        websocket). ``port`` defaults to the alias' port, then 443 or 80.
+
+        Raises:
+            MeshError: If the alias is not reached through a mesh node of this
+                process.
+        """
+        node = self._mesh_node("TCP forward")
+        return await node.forward(self.host, port or self.port or (443 if self.ssl else 80))
+
+    async def aturn(self) -> TurnInfo:
+        """The TURN relay of the mesh node this alias is reached through, as an
+        ICE server for a WebRTC client.
+
+        WebRTC media (e.g. LiveKit) cannot use the HTTP proxy. Configured with
+        only this ICE server and a relay-only transport policy, the client sends
+        everything through the relay on 127.0.0.1, which relays it over the mesh
+        to this alias.
+
+        Raises:
+            MeshError: If the alias is not reached through a mesh node of this
+                process.
+        """
+        return await self._mesh_node("TURN relay").turn()
 
     def is_mesh(self) -> bool:
         """Whether this alias is only reachable over the mesh.
