@@ -1,6 +1,7 @@
 """An action can be called directly, with a task that only logs."""
 
 import asyncio
+import time
 import logging
 
 import pytest
@@ -82,3 +83,19 @@ def test_a_local_task_refuses_to_call_asynchronously() -> None:
     for refused in (call, iterate, call_raw, iterate_raw):
         with pytest.raises(NoCallerError):
             asyncio.run(refused())
+
+
+def test_a_local_task_takes_effects_without_recording_them() -> None:
+    task = Task.local()
+    before = time.time()
+    assert before <= task.now() <= time.time()
+    assert len(task.random(4)) == 8 and int(task.random(4), 16) >= 0
+    task.sleep(0.001)
+
+    async def effects() -> tuple[float, str]:
+        await task.asleep(0.001)
+        return await task.anow(), await task.arandom(2)
+
+    now, drawn = asyncio.run(effects())
+    assert now >= before and len(drawn) == 4
+    assert isinstance(task, Task), "still the spec's Task"

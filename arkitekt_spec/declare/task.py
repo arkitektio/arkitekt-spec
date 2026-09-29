@@ -11,7 +11,10 @@ An action called directly, with no runtime behind it, takes :meth:`Task.local`: 
 :class:`~arkitekt_spec.declare.agents.errors.NoCallerError`.
 """
 
+import asyncio
 import logging
+import secrets
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Generator
 from dataclasses import dataclass
 from enum import Enum
@@ -123,6 +126,35 @@ class Task(Protocol):
 
     def install_hook(self, hook: AssignmentHook) -> None:
         """Run ``hook`` when the task's assignment receives a message of its kind."""
+        ...
+
+    # -- effects ---------------------------------------------------------- #
+    # A value the task takes from outside itself. The running task records each
+    # one (an ``EFFECT`` in its history) so that a replay can return the same
+    # value instead of taking a new one.
+
+    def now(self) -> float:
+        """The current time, in epoch seconds, recorded as the task's effect."""
+        ...
+
+    async def anow(self) -> float:
+        """The current time, in epoch seconds, recorded as the task's effect."""
+        ...
+
+    def random(self, n: int = 16) -> str:
+        """``n`` random bytes, as hex, recorded as the task's effect."""
+        ...
+
+    async def arandom(self, n: int = 16) -> str:
+        """``n`` random bytes, as hex, recorded as the task's effect."""
+        ...
+
+    def sleep(self, seconds: float) -> None:
+        """Sleep for ``seconds``: the deadline is recorded, then slept until."""
+        ...
+
+    async def asleep(self, seconds: float) -> None:
+        """Sleep for ``seconds``: the deadline is recorded, then slept until."""
         ...
 
     # -- calling ---------------------------------------------------------- #
@@ -300,6 +332,30 @@ class LocalTask:
     def install_hook(self, hook: AssignmentHook) -> None:
         """Keep the hook; nothing pauses a local task, so it never runs."""
         self.hooks.append(hook)
+
+    def now(self) -> float:
+        """The current time; nothing records it."""
+        return time.time()
+
+    async def anow(self) -> float:
+        """The current time; nothing records it."""
+        return self.now()
+
+    def random(self, n: int = 16) -> str:
+        """``n`` random bytes, as hex; nothing records them."""
+        return secrets.token_hex(n)
+
+    async def arandom(self, n: int = 16) -> str:
+        """``n`` random bytes, as hex; nothing records them."""
+        return self.random(n)
+
+    def sleep(self, seconds: float) -> None:
+        """Sleep for ``seconds``."""
+        time.sleep(max(0.0, seconds))
+
+    async def asleep(self, seconds: float) -> None:
+        """Sleep for ``seconds``."""
+        await asyncio.sleep(max(0.0, seconds))
 
     def call(
         self,
