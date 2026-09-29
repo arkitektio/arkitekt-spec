@@ -222,7 +222,7 @@ def declare_implementation(
     widgets: dict[str, AssignWidgetInput] | None = None,
     collections: list[str] | None = None,
     port_groups: list[PortGroupInput] | None = None,
-    effects: dict[str, list[EffectInput]] | None = None,
+    port_effects: dict[str, list[EffectInput]] | None = None,
     is_test_for: list[TestTargetInput] | None = None,
     validators: dict[str, list[ValidatorInput]] | None = None,
     structure_registry: StructureRegistry | None = None,
@@ -253,7 +253,7 @@ def declare_implementation(
     widgets: dict[str, AssignWidgetInput] | None = None,
     collections: list[str] | None = None,
     port_groups: list[PortGroupInput] | None = None,
-    effects: dict[str, list[EffectInput]] | None = None,
+    port_effects: dict[str, list[EffectInput]] | None = None,
     is_test_for: list[TestTargetInput] | None = None,
     validators: dict[str, list[ValidatorInput]] | None = None,
     structure_registry: StructureRegistry | None = None,
@@ -283,7 +283,7 @@ def declare_implementation(
     widgets: dict[str, AssignWidgetInput] | None = None,
     collections: list[str] | None = None,
     port_groups: list[PortGroupInput] | None = None,
-    effects: dict[str, list[EffectInput]] | None = None,
+    port_effects: dict[str, list[EffectInput]] | None = None,
     is_test_for: list[TestTargetInput] | None = None,
     optimistics: list[OptimisticCoercible] | None = None,
     validators: dict[str, list[ValidatorInput]] | None = None,
@@ -333,7 +333,7 @@ def declare_implementation(
         widgets (Optional[Dict[str, AssignWidgetInput]]): Widgets per argument.
         collections (Optional[List[str]]): Organizational groupings.
         port_groups (Optional[List[PortGroupInput]]): Port group assignments.
-        effects (Optional[Dict[str, List[EffectInput]]]): Effects per port.
+        port_effects (Optional[Dict[str, List[EffectInput]]]): UI effects per port.
         is_test_for (Optional[List[TestTargetInput]]): Actions this function is a
             test for, each identified by hash or by (app, key, version).
         validators (Optional[Dict[str, List[ValidatorInput]]]): Input validation
@@ -362,7 +362,7 @@ def declare_implementation(
         description=description,
         interface=interface,
         widgets=widgets,
-        effects=effects,
+        port_effects=port_effects,
         validators=validators,
         collections=collections,
         port_groups=port_groups,

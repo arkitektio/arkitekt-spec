@@ -539,7 +539,7 @@ def prepare_definition(
     structure_registry: StructureRegistry,
     widgets: AssignWidgetMap | None = None,
     return_widgets: ReturnWidgetMap | None = None,
-    effects: EffectsMap | None = None,
+    port_effects: EffectsMap | None = None,
     port_groups: list[PortGroupInput] | None = None,
     allow_empty_doc: bool = True,
     collections: list[str] | None = None,
@@ -581,7 +581,7 @@ def prepare_definition(
     # Per-port maps are consumed (popped) below; copy so the caller's dicts
     # survive the call.
     widgets = dict(widgets or {})
-    effects = dict(effects or {})
+    effects = dict(port_effects or {})
     validators = dict(validators or {})
     return_widgets = dict(return_widgets or {})
     omitkeys = omitkeys or []

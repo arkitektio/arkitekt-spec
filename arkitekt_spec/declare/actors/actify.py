@@ -87,7 +87,7 @@ def prepare_definition_from_config(
         collections=config.collections,
         stateful=stateful,
         validators=config.validators,
-        effects=config.effects,
+        port_effects=config.port_effects,
         is_test_for=config.is_test_for,
         name=config.name,
         description=config.description,

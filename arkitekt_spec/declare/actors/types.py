@@ -157,7 +157,7 @@ class RegisterConfig:
     The fields fall into two groups:
 
     * **definition-shaping** — unpacked by the actifier into ``prepare_definition``:
-      ``name``, ``description``, ``widgets``, ``return_widgets``, ``effects``,
+      ``name``, ``description``, ``widgets``, ``return_widgets``, ``port_effects``,
       ``validators``, ``collections``, ``port_groups``,
       ``is_test_for``, ``stateful``, ``version``, ``key``.
     * **implementation/actor-shaping** — used by the actifier's actor build and by
@@ -173,7 +173,7 @@ class RegisterConfig:
     interface: str | None = None
     widgets: AssignWidgetMap | None = None
     return_widgets: ReturnWidgetMap | None = None
-    effects: EffectsMap | None = None
+    port_effects: EffectsMap | None = None
     validators: dict[str, list[ValidatorInput]] | None = None
     collections: list[str] | None = None
     port_groups: list[PortGroupInput] | None = None

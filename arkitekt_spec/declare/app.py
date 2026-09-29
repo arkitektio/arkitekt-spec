@@ -1293,7 +1293,7 @@ class AppRegistry(BaseModel):
         widgets: dict[str, AssignWidgetInput] | None = None,
         collections: list[str] | None = None,
         port_groups: list[PortGroupInput] | None = None,
-        effects: dict[str, list[EffectInput]] | None = None,
+        port_effects: dict[str, list[EffectInput]] | None = None,
         is_test_for: list[TestTargetInput] | None = None,
         validators: dict[str, list[ValidatorInput]] | None = None,
         optimistics: list[OptimisticCoercible] | None = None,
@@ -1330,7 +1330,7 @@ class AppRegistry(BaseModel):
             widgets: Widgets per argument.
             collections: Collections the action is grouped into.
             port_groups: Port group assignments.
-            effects: Effects per port.
+            port_effects: UI effects per port (hide, disable, … as its values change).
             is_test_for: Actions this one tests.
             validators: Input validation rules per argument.
             optimistics: Optimistic outputs.
@@ -1361,7 +1361,7 @@ class AppRegistry(BaseModel):
             widgets=widgets,
             collections=collections,
             port_groups=port_groups,
-            effects=effects,
+            port_effects=port_effects,
             is_test_for=is_test_for,
             validators=validators,
             optimistics=optimistics,
