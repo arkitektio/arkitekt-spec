@@ -181,7 +181,7 @@ def is_none_type(cls: TypeAnnotation) -> bool:
 
 
 def is_generator_type(cls: TypeAnnotation) -> bool:
-    """Check if a class is a generator type"""
+    """Check if a class is a generator type: what a streaming action yields through."""
     if get_origin(cls) in (
         types.GeneratorType,
         typing.Generator,
@@ -189,6 +189,8 @@ def is_generator_type(cls: TypeAnnotation) -> bool:
         types.AsyncGeneratorType,
         collections.abc.Generator,  # type: ignore
         collections.abc.AsyncGenerator,  # type: ignore
+        collections.abc.Iterator,  # type: ignore
+        collections.abc.AsyncIterator,  # type: ignore
     ):
         return True
     else:
@@ -703,6 +705,9 @@ def prepare_definition(
             ) from e
 
     function_outs_annotation = type_hints.get("return", None)
+    # A protocol method is a stub (``...``), never a generator function: its return
+    # annotation is the only thing that says the remote action streams.
+    is_generator = is_generator or is_generator_type(function_outs_annotation)
 
     if return_annotations:
         for index, cls in enumerate(return_annotations):
