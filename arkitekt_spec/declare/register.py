@@ -49,11 +49,11 @@ from arkitekt_spec.declare.coercible_types import (
     OptimisticCoercible,
 )
 from arkitekt_spec.declare.definition.checks import check_implementation
-from arkitekt_spec.declare.definition.errors import DefinitionError
 from arkitekt_spec.declare.definition.define import (
     dependency_to_dependency_input,
 )
 from arkitekt_spec.declare.definition.dependencies import build_action_dependency_input
+from arkitekt_spec.declare.definition.errors import DefinitionError
 from arkitekt_spec.declare.definition.utils import interface_name
 from arkitekt_spec.declare.protocol.types import AnyFunction
 from arkitekt_spec.declare.structures.registry import StructureRegistry

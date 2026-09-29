@@ -12,6 +12,7 @@ An action called directly, with no runtime behind it, takes :meth:`Task.local`: 
 """
 
 import asyncio
+import inspect
 import logging
 import secrets
 import time
@@ -23,6 +24,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field
 
 from arkitekt_spec.declare.agents.errors import NoCallerError
+from arkitekt_spec.declare.errors import AgentLost
 from arkitekt_spec.declare.structures.types import JSONSerializable
 from arkitekt_spec.declare.targets import CallTarget, ImplementationTarget
 from arkitekt_spec.scalars import ActionHash
@@ -155,6 +157,40 @@ class Task(Protocol):
 
     async def asleep(self, seconds: float) -> None:
         """Sleep for ``seconds``: the deadline is recorded, then slept until."""
+        ...
+
+    def record(self, fn: Callable[[], Any], key: str | None = None) -> Any:
+        """Take a value from outside the task through ``fn``, recorded so a resumed
+        workflow gets the same one back instead of calling ``fn`` again. JSON only."""
+        ...
+
+    async def arecord(self, fn: Callable[[], Any], key: str | None = None) -> Any:
+        """Take a value from outside the task through ``fn`` (awaited if it is a
+        coroutine function), recorded so a resumed workflow gets the same one back."""
+        ...
+
+    # -- deciding about a lost step ---------------------------------------- #
+
+    def retry(self, call: Callable[..., Any], *args: Any, attempts: int = 3, if_started: bool = False, **kwargs: Any) -> Any:
+        """Call ``call(*args, **kwargs)``, again when its agent is lost (``AgentLost``).
+
+        Only when that is safe: when the lost step never started, or when you say so with
+        ``if_started=True``. Anything else is re-raised: that decision is yours.
+        """
+        ...
+
+    async def aretry(self, call: Callable[..., Any], *args: Any, attempts: int = 3, if_started: bool = False, **kwargs: Any) -> Any:
+        """:meth:`retry`, awaiting ``call``."""
+        ...
+
+    def hold(self, message: str, *, lost: AgentLost | None = None) -> None:
+        """Wait for a person: the task pauses with ``message`` until someone resumes it
+        (it carries on after the hold) or cancels it. ``lost`` puts what is known about a
+        lost step (its effects, last progress) in front of whoever decides."""
+        ...
+
+    async def ahold(self, message: str, *, lost: AgentLost | None = None) -> None:
+        """:meth:`hold`, awaited."""
         ...
 
     # -- calling ---------------------------------------------------------- #
@@ -357,6 +393,31 @@ class LocalTask:
         """Sleep for ``seconds``."""
         await asyncio.sleep(max(0.0, seconds))
 
+    def record(self, fn: Callable[[], Any], key: str | None = None) -> Any:
+        """``fn()``; nothing records it."""
+        return fn()
+
+    async def arecord(self, fn: Callable[[], Any], key: str | None = None) -> Any:
+        """``fn()``, awaited if it is a coroutine function; nothing records it."""
+        value = fn()
+        return await value if inspect.isawaitable(value) else value
+
+    def retry(self, call: Callable[..., Any], *args: Any, attempts: int = 3, if_started: bool = False, **kwargs: Any) -> Any:
+        """Call it, again when its agent is lost and that is safe (see :meth:`Task.retry`)."""
+        return retry(call, *args, attempts=attempts, if_started=if_started, **kwargs)
+
+    async def aretry(self, call: Callable[..., Any], *args: Any, attempts: int = 3, if_started: bool = False, **kwargs: Any) -> Any:
+        """Await it, again when its agent is lost and that is safe (see :meth:`Task.retry`)."""
+        return await aretry(call, *args, attempts=attempts, if_started=if_started, **kwargs)
+
+    def hold(self, message: str, *, lost: AgentLost | None = None) -> None:
+        """Nobody decides for a local task: it logs ``message`` and carries on, as if resumed."""
+        logger.log(logging.WARNING, "hold (a local task carries on): %s", message)
+
+    async def ahold(self, message: str, *, lost: AgentLost | None = None) -> None:
+        """Nobody decides for a local task: it logs ``message`` and carries on, as if resumed."""
+        self.hold(message, lost=lost)
+
     def call(
         self,
         target: CallTarget | ImplementationTarget,
@@ -458,6 +519,38 @@ class LocalTask:
         """
         raise _no_caller(self.id)
         yield  # an async generator, like every task's aiterate_raw
+
+
+def _should_retry(lost: "AgentLost", attempt: int, attempts: int, if_started: bool) -> bool:
+    return attempt < attempts and (not lost.started or if_started)
+
+
+def retry(call: Callable[..., Any], *args: Any, attempts: int = 3, if_started: bool = False, **kwargs: Any) -> Any:
+    """Call ``call(*args, **kwargs)``, again when its agent is lost and that is safe.
+
+    Safe means the lost step never started, or ``if_started=True``: you know running it
+    again is fine. What running it again would do (``AgentLost.effects``) is information
+    for you, never this function's decision. Other exceptions are not retried.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            return call(*args, **kwargs)
+        except AgentLost as lost:
+            if not _should_retry(lost, attempt, attempts, if_started):
+                raise
+    raise AssertionError("unreachable: the last attempt returns or raises")
+
+
+async def aretry(call: Callable[..., Any], *args: Any, attempts: int = 3, if_started: bool = False, **kwargs: Any) -> Any:
+    """:func:`retry`, awaiting ``call``."""
+    for attempt in range(1, attempts + 1):
+        try:
+            value = call(*args, **kwargs)
+            return await value if inspect.isawaitable(value) else value
+        except AgentLost as lost:
+            if not _should_retry(lost, attempt, attempts, if_started):
+                raise
+    raise AssertionError("unreachable: the last attempt returns or raises")
 
 
 def _level(level: LogLevel | str) -> int:

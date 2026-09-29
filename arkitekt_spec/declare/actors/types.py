@@ -11,9 +11,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 from arkitekt_spec.actions import (
+    DefinitionInput,
     Effects,
     Execution,
-    DefinitionInput,
     PortGroupInput,
     TestTargetInput,
     TrackInput,

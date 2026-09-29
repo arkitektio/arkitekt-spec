@@ -16,6 +16,22 @@ class ErrorCallError(RekuestError):
 
 
 
+class NonDeterministicWorkflow(RekuestError):
+    """A resumed workflow took a different path than the run it resumes.
+
+    A workflow is resumed by running its code again against what the first run recorded;
+    that only works if the code takes the same path. Here it asked for a value of one
+    kind where the first run recorded another, or called a different action under the
+    same call key. Outside values belong in ``task.record(...)`` or a call.
+    """
+
+
+
+class NotAWorkflowError(RekuestError):
+    """A plain action called another action. Only a workflow may: ``@app.workflow``."""
+
+
+
 class AgentLost(RekuestError):
     """The agent running a call died while it ran. Not a failure: how it ended is unknown.
 
