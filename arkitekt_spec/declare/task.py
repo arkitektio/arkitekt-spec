@@ -12,6 +12,7 @@ An action called directly, with no runtime behind it, takes :meth:`Task.local`: 
 """
 
 import asyncio
+import contextlib
 import inspect
 import logging
 import secrets
@@ -33,6 +34,19 @@ logger = logging.getLogger("arkitekt.task")
 
 TASK_MARKER = "__arkitekt_task__"
 """The class attribute that makes a parameter receive the running task."""
+
+
+@dataclass(frozen=True)
+class StateRef:
+    """A dependency's state, named by the workflow (``handler.plate`` on a dependency proxy).
+
+    What ``task.guard`` watches: it names the state, it does not hold its value.
+    """
+
+    dependency: str
+    """The dependency's key: the workflow's parameter."""
+    state: str
+    """The state's attribute on the dependency's protocol."""
 
 
 class LogLevel(str, Enum):
@@ -181,6 +195,19 @@ class Task(Protocol):
 
     async def aretry(self, call: Callable[..., Any], *args: Any, attempts: int = 3, if_started: bool = False, **kwargs: Any) -> Any:
         """:meth:`retry`, awaiting ``call``."""
+        ...
+
+    def guard(self, state: StateRef, *paths: str) -> "contextlib.AbstractContextManager[None]":
+        """Watch a dependency's state (the ``paths`` of it, or all of it) across a resume.
+
+        On a resumed run, entering the guard raises ``StateChanged`` if anything other than
+        this workflow's own calls changed it since the first run entered, or its agent
+        restarted and set it up again.
+        """
+        ...
+
+    def aguard(self, state: StateRef, *paths: str) -> "contextlib.AbstractAsyncContextManager[None]":
+        """:meth:`guard`, entered with ``async with``."""
         ...
 
     def hold(self, message: str, *, lost: AgentLost | None = None) -> None:
@@ -409,6 +436,16 @@ class LocalTask:
     async def aretry(self, call: Callable[..., Any], *args: Any, attempts: int = 3, if_started: bool = False, **kwargs: Any) -> Any:
         """Await it, again when its agent is lost and that is safe (see :meth:`Task.retry`)."""
         return await aretry(call, *args, attempts=attempts, if_started=if_started, **kwargs)
+
+    @contextlib.contextmanager
+    def guard(self, state: StateRef, *paths: str) -> Generator[None, None, None]:
+        """A local task is never resumed: nothing to watch."""
+        yield
+
+    @contextlib.asynccontextmanager
+    async def aguard(self, state: StateRef, *paths: str) -> AsyncIterator[None]:
+        """A local task is never resumed: nothing to watch."""
+        yield
 
     def hold(self, message: str, *, lost: AgentLost | None = None) -> None:
         """Nobody decides for a local task: it logs ``message`` and carries on, as if resumed."""

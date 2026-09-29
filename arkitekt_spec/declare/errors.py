@@ -27,6 +27,13 @@ class NonDeterministicWorkflow(RekuestError):
 
 
 
+class StateChanged(RekuestError):
+    """A guarded state changed while the workflow was down: something other than its own
+    calls changed it, or its agent restarted and set it up again. ``task.guard`` raises it
+    when a resumed workflow enters the guard again."""
+
+
+
 class NotAWorkflowError(RekuestError):
     """A plain action called another action. Only a workflow may: ``@app.workflow``."""
 
