@@ -67,7 +67,8 @@ def test_a_parameter_annotated_with_a_declared_protocol_is_a_dependency_not_a_po
     registry = app_knowing_sample_as("@a/sample")
     registry.declare(app="lab")(Lab)
 
-    @registry.register
+    # A workflow: only a workflow may call another app's actions.
+    @registry.register_workflow
     def use(lab: Lab, n: int) -> int:
         """Use the lab."""
         return n

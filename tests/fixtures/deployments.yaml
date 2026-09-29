@@ -43,7 +43,8 @@ app_images:
         stateful: false
         version: '1'
       dependencies: []
-      effect: NONE
+      effects: UNKNOWN
+      execution: PLAIN
       interface: predict_flou2
       locks: []
       needsToken: true

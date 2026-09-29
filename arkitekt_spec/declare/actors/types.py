@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 from arkitekt_spec.actions import (
+    Effects,
+    Execution,
     DefinitionInput,
     PortGroupInput,
     TestTargetInput,
@@ -163,6 +165,7 @@ class RegisterConfig:
     * **implementation/actor-shaping** — used by the actifier's actor build and by
       ``register_func`` when constructing the ``ImplementationInput``:
       ``optimistics``, ``locks``, ``tracks``, ``manipulates``, ``in_process``,
+      ``effects``, ``execution``,
       ``bypass_shrink``, ``bypass_expand``, ``auto_locks``, ``concurrency``,
       ``policy``.
     """
@@ -194,6 +197,10 @@ class RegisterConfig:
     auto_locks: bool = True
     concurrency: Literal["parallel", "serial"] = "serial"
     policy: DisconnectPolicy = KEEP
+    effects: Effects | None = None
+    """What running it again would do to the world; None takes the app's default."""
+    execution: Execution = Execution.PLAIN
+    """WORKFLOW may call other actions and is resumed after a crash; PLAIN may not."""
 
 
 @runtime_checkable

@@ -27,7 +27,18 @@ def test_an_explicit_null_means_the_default():
     implementation = ImplementationInput.model_validate(raw)
 
     assert implementation.definition.pure is False
-    assert implementation.effect == "NONE"
+    assert implementation.effects == "UNKNOWN"
+
+
+def test_an_older_physical_effect_class_reads_as_irreversible():
+    """Manifests written before ``effects`` carry ``effect``; PHYSICAL meant the same."""
+    starmist = next(v for v in VECTORS if "starmist" in v["source"])
+    raw = {**starmist["implementation"], "effect": "PHYSICAL"}
+
+    implementation = ImplementationInput.model_validate(raw)
+
+    assert implementation.effects == "IRREVERSIBLE"
+    assert "effect" not in implementation.model_dump(by_alias=True)
 
 
 def test_a_null_for_a_nullable_field_stays_null():

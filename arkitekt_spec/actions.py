@@ -118,11 +118,21 @@ class DescriptorOperator(str, Enum):
     __str__ = str.__str__
 
 
-class EffectClass(str, Enum):
-    """The effect class of an implementation — declared by the implementation, never the caller. NONE work is freely retryable/reclaimable; PHYSICAL work touches the real world (no UPSERT), so an ambiguous failure is terminal and must not be retried."""
+class Effects(str, Enum):
+    """What running an implementation again would do to the world. Purely informational: it is shown to whoever decides about a lost task (an ``AgentLost``, a hold), and never drives what the server does."""
 
     NONE = "NONE"
-    PHYSICAL = "PHYSICAL"
+    REPEATABLE = "REPEATABLE"
+    UNKNOWN = "UNKNOWN"
+    IRREVERSIBLE = "IRREVERSIBLE"
+    __str__ = str.__str__
+
+
+class Execution(str, Enum):
+    """How an implementation runs. A WORKFLOW may call other actions and is resumed from its journal when its agent dies; a PLAIN implementation may not call other actions, and a task of it whose agent dies ends LOST."""
+
+    PLAIN = "PLAIN"
+    WORKFLOW = "WORKFLOW"
     __str__ = str.__str__
 
 
@@ -1148,11 +1158,39 @@ class ImplementationInput(ActionModel):
         default=None,
         description="The downstream service(s) the provenance token should be scoped to (the token's `aud`). If omitted, Rekuest derives the audience from the structures the assignment acts on.",
     )
-    effect: Annotated[EffectClass, GraphQLDefault("NONE")] = Field(
-        default=EffectClass.NONE,
-        description="The effect class of this implementation. NONE work is freely retryable/reclaimable; PHYSICAL work touches the real world and an ambiguous failure is terminal (never retried). Declared by the implementation here — never by the caller.",
+    effects: Annotated[Effects, GraphQLDefault("UNKNOWN")] = Field(
+        default=Effects.UNKNOWN,
+        description="What running this implementation again would do to the world. Informational only: shown to whoever decides about a lost task.",
     )
-    "The effect class of this implementation. NONE work is freely retryable/reclaimable; PHYSICAL work touches the real world and an ambiguous failure is terminal (never retried). Declared by the implementation here — never by the caller.\nDefault: NONE"
+    "What running this implementation again would do to the world. Informational only: shown to whoever decides about a lost task.\nDefault: UNKNOWN"
+    execution: Annotated[Execution, GraphQLDefault("PLAIN")] = Field(
+        default=Execution.PLAIN,
+        description="How this implementation runs: a WORKFLOW may call other actions and is resumed when its agent dies; a PLAIN one may not call other actions.",
+    )
+    "How this implementation runs: a WORKFLOW may call other actions and is resumed when its agent dies; a PLAIN one may not call other actions.\nDefault: PLAIN"
+    code_hash: str | None = Field(
+        validation_alias=AliasChoices("code_hash", "codeHash"),
+        serialization_alias="codeHash",
+        default=None,
+        description="A hash of the implementation's code. A workflow is only resumed by an implementation with the same hash.",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _read_an_older_effect_class(cls, data: Any) -> Any:  # noqa: ANN401
+        """Read the ``effect`` (NONE/PHYSICAL) that manifests written before ``effects`` carry.
+
+        Stored app manifests still have it, and ``extra="forbid"`` would refuse them.
+        PHYSICAL said the same as IRREVERSIBLE; NONE claimed nothing, so it becomes the
+        default. Only read: nothing writes ``effect`` any more.
+        """
+        if not isinstance(data, dict) or "effect" not in data:
+            return data
+        items: dict[str, Any] = dict(data)  # pyright: ignore[reportUnknownArgumentType]
+        effect = items.pop("effect")
+        if effect == "PHYSICAL" and "effects" not in items:
+            items["effects"] = Effects.IRREVERSIBLE
+        return items
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )

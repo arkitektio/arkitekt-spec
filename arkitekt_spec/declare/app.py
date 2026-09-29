@@ -27,6 +27,8 @@ from arkitekt_spec.actions import (
     BlokImplementationInput,
     ComponentNodeInput,
     EffectInput,
+    Effects,
+    Execution,
     ImplementAgentInput,
     ImplementationInput,
     LockDefinitionInput,
@@ -142,6 +144,8 @@ class AppRegistry(BaseModel):
         dict[str, DeclaredImplementation], SkipValidation
     ] = Field(default_factory=dict, exclude=True)
     """What a runtime builds each implementation's actor from, by interface."""
+    default_effects: Effects = Effects.UNKNOWN
+    """What running an action again would do, for actions that make no claim of their own."""
 
     # --- states (formerly StateRegistry) ---
     states: dict[str, StateImplementationInput] = Field(
@@ -1304,6 +1308,8 @@ class AppRegistry(BaseModel):
         policy: DisconnectPolicy = KEEP,
         version: str | None = None,
         catalogs: list[str] | None = None,
+        effects: Effects | None = None,
+        execution: Execution = Execution.PLAIN,
     ) -> "WrappedFunction[P, R]":
         """Register a function as an action, as a plain call rather than a decorator.
 
@@ -1342,6 +1348,10 @@ class AppRegistry(BaseModel):
                 disconnects.
             version: Version of the definition.
             catalogs: Catalogs the action is listed in.
+            effects: What running it again would do to the world. Informational;
+                None takes the app's default.
+            execution: ``Execution.WORKFLOW`` to call other actions and be resumed
+                after a crash (see :meth:`register_workflow`).
 
         Returns:
             The function, still callable as itself.
@@ -1372,7 +1382,25 @@ class AppRegistry(BaseModel):
             policy=policy,
             version=version,
             catalogs=catalogs,
+            effects=effects,
+            execution=execution,
         )
+
+    def register_workflow(
+        self,
+        func: Callable[P, R],
+        /,
+        **kwargs: Any,
+    ) -> "WrappedFunction[P, R]":
+        """Register a function as a workflow: an action that may call other actions.
+
+        Called like any action. When its agent dies it is resumed, not lost: calls
+        it already made return their recorded results, and values it took through
+        the task (``task.now()``, ``task.record(...)``) come back the same. So its
+        code must be deterministic. Takes the keyword arguments of
+        :meth:`register_action`.
+        """
+        return self.register_action(func, execution=Execution.WORKFLOW, **kwargs)
 
     def register(
         self,

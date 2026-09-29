@@ -1,5 +1,6 @@
 """Register a function or actor with the definition registry."""
 
+import hashlib
 import inspect
 import warnings
 from collections.abc import Callable
@@ -24,6 +25,8 @@ from arkitekt_spec.actions import (
     AssignWidgetInput,
     DefinitionInput,
     EffectInput,
+    Effects,
+    Execution,
     ImplementationInput,
     OptimisticInput,
     PortGroupInput,
@@ -46,6 +49,7 @@ from arkitekt_spec.declare.coercible_types import (
     OptimisticCoercible,
 )
 from arkitekt_spec.declare.definition.checks import check_implementation
+from arkitekt_spec.declare.definition.errors import DefinitionError
 from arkitekt_spec.declare.definition.define import (
     dependency_to_dependency_input,
 )
@@ -122,6 +126,22 @@ def _warn_if_cancel_cannot_stop(function: AnyFunction, config: RegisterConfig) -
         )
 
 
+def code_hash_of(function_or_actor: AnyFunction) -> str | None:
+    """A hash of what the implementation runs: its source, else its bytecode.
+
+    A workflow is only resumed by an implementation with the same hash, so an edit
+    between a crash and the resume can't replay a journal onto different code.
+    """
+    try:
+        code = inspect.getsource(function_or_actor).encode()
+    except (OSError, TypeError):
+        raw = getattr(getattr(function_or_actor, "__code__", None), "co_code", None)
+        if raw is None:
+            return None
+        code = raw
+    return hashlib.sha256(code).hexdigest()
+
+
 def register_func(
     function_or_actor: AnyFunction,
     structure_registry: StructureRegistry,
@@ -178,6 +198,15 @@ def register_func(
             dependency_to_dependency_input(key, dependency, structure_registry)
         )
 
+    if config.execution == Execution.PLAIN:
+        calling = [d.key for d in dependencies if d.action_dependencies]
+        if calling:
+            raise DefinitionError(
+                f"{interface} calls other actions (through {', '.join(calling)}), "
+                "which only a workflow may do: register it with @app.workflow. "
+                "A protocol with only state attributes is fine on a plain action."
+            )
+
     optimistics: list[OptimisticInput] = [
         optimistic
         if isinstance(optimistic, OptimisticInput)
@@ -198,6 +227,9 @@ def register_func(
             tracks=tuple(implementation_details.tracks or []),
             needs_token=True,  # TODO: Make this configurable in the future, but for now, we want to ensure that all actors require tokens for security reasons.
             manipulates=tuple(implementation_details.manipulates or []),
+            effects=config.effects or implementation_registry.default_effects,
+            execution=config.execution,
+            code_hash=code_hash_of(function_or_actor),
         )),
         DeclaredImplementation(function_or_actor, config, actifier),
     )
@@ -234,6 +266,8 @@ def declare_implementation(
     policy: DisconnectPolicy = KEEP,
     version: str | None = None,
     catalogs: list[str] | None = None,
+    effects: Effects | None = None,
+    execution: Execution = Execution.PLAIN,
 ) -> WrappedFunction[P, R]:
     """Register a function directly: ``declare_implementation(fn, implementation_registry=...)``."""
 
@@ -265,6 +299,8 @@ def declare_implementation(
     policy: DisconnectPolicy = KEEP,
     version: str | None = None,
     catalogs: list[str] | None = None,
+    effects: Effects | None = None,
+    execution: Execution = Execution.PLAIN,
 ) -> Callable[[Callable[P, R]], WrappedFunction[P, R]]:
     """Build a configured decorator: ``declare_implementation(implementation_registry=..., name=...)``."""
 
@@ -295,6 +331,8 @@ def declare_implementation(
     policy: DisconnectPolicy = KEEP,
     version: str | None = None,
     catalogs: list[str] | None = None,
+    effects: Effects | None = None,
+    execution: Execution = Execution.PLAIN,
 ) -> WrappedFunction[P, R] | Callable[[Callable[P, R]], WrappedFunction[P, R]]:
     """Register a function or actor with an app registry.
 
@@ -349,6 +387,10 @@ def declare_implementation(
             actor may run concurrently ("parallel") or one at a time
             ("serial", the default).
         version (Optional[str]): Version of the definition.
+        effects (Effects | None): What running it again would do to the world.
+            Informational. None takes the app's default.
+        execution (Execution): WORKFLOW to call other actions and be resumed
+            after a crash; PLAIN otherwise.
 
     Returns:
         The wrapped function, or a decorator producing it.
@@ -376,6 +418,8 @@ def declare_implementation(
         policy=policy,
         tracks=tracks,
         in_process=in_process,
+        effects=effects,
+        execution=execution,
     )
 
     def offer(function_or_actor: Callable[P, R]) -> WrappedFunction[P, R]:
