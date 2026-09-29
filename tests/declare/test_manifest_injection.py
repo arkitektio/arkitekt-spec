@@ -30,8 +30,8 @@ class Agent:
     def __init__(self, manifest: AppManifest) -> None:
         self.manifest = manifest
 
-    async def aprovide(self, context: Any) -> None: ...  # noqa: ANN401
-    async def aconnect(self, context: Any = None, timeout: float | None = None) -> None: ...  # noqa: ANN401
+    async def aprovide(self, context: Any) -> None: ...
+    async def aconnect(self, context: Any = None, timeout: float | None = None) -> None: ...
     async def aloop(self) -> None: ...
 
 

@@ -1,8 +1,8 @@
 """An action can be called directly, with a task that only logs."""
 
 import asyncio
-import time
 import logging
+import time
 
 import pytest
 
