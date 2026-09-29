@@ -1175,22 +1175,6 @@ class ImplementationInput(ActionModel):
         description="A hash of the implementation's code. A workflow is only resumed by an implementation with the same hash.",
     )
 
-    @model_validator(mode="before")
-    @classmethod
-    def _read_an_older_effect_class(cls, data: Any) -> Any:  # noqa: ANN401
-        """Read the ``effect`` (NONE/PHYSICAL) that manifests written before ``effects`` carry.
-
-        Stored app manifests still have it, and ``extra="forbid"`` would refuse them.
-        PHYSICAL said the same as IRREVERSIBLE; NONE claimed nothing, so it becomes the
-        default. Only read: nothing writes ``effect`` any more.
-        """
-        if not isinstance(data, dict) or "effect" not in data:
-            return data
-        items: dict[str, Any] = dict(data)  # pyright: ignore[reportUnknownArgumentType]
-        effect = items.pop("effect")
-        if effect == "PHYSICAL" and "effects" not in items:
-            items["effects"] = Effects.IRREVERSIBLE
-        return items
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )

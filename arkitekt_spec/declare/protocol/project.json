@@ -103,7 +103,6 @@
                         "DescriptorInput",
                         "DescriptorOperator",
                         "DynamicValueInput",
-                        "EffectClass",
                         "EffectInput",
                         "EffectKind",
                         "ImplementAgentInput",

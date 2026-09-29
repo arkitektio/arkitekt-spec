@@ -200,7 +200,6 @@ definitions:
       stateful: false
       version: '1'
     dependencies: []
-    effect: null
     instance_id: null
     interface: predict_flou2
     locks: []
@@ -317,7 +316,6 @@ definitions:
       stateful: false
       version: '1'
     dependencies: []
-    effect: null
     instance_id: null
     interface: predict_stardist_he
     locks: []
