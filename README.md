@@ -10,9 +10,26 @@ that produces or consumes it.
 | `Selector` (`cpu`, `ram`, `cuda`, `rocm`, `oneapi`, `label`) | where a flavour may run | a flavour's `config.yaml` | kabinet, deployers |
 | `DeploymentsFile` | `.arkitekt/deployments.yaml`, the images a repo publishes | `arkitekt plugin publish` | kabinet's repo scan |
 
-It depends only on pydantic and pyyaml. It deliberately does **not** depend on rekuest: the
-implementations, states, locks and bloks inside an inspection are rekuest's language, and each
-side validates them with its own rekuest models.
+It also owns the **action language** (`arkitekt_spec.actions`: definitions, ports,
+implementations) and the **declaration layer** (`arkitekt_spec.declare`): `AppRegistry`, the
+`@app.action` / `@app.workflow` / `@app.declare` machinery, structures, and the `Task` protocol a
+runtime implements. SDKs build on it; apps import the same names from
+[arkitekt](https://github.com/arkitektio/arkitekt). It depends on pydantic, pyyaml and three small
+pure-python helpers, and on no runtime, transport or client.
+
+## Workflows and recovery
+
+An implementation carries two claims the server keeps:
+
+| Field | Values | Meaning |
+| --- | --- | --- |
+| `execution` | `PLAIN`, `WORKFLOW` | Only a `WORKFLOW` may call other actions; it is resumed when its agent dies, a `PLAIN` task ends LOST. |
+| `effects` | `NONE`, `REPEATABLE`, `UNKNOWN`, `IRREVERSIBLE` | What running it again would do. Information for whoever decides about a lost task, never a rule. |
+
+`code_hash` pins a resume to the code that started the run. The errors a caller sees
+(`AgentLost`, `NonDeterministicWorkflow`, `NotAWorkflowError`, `StateChanged`) live in
+`arkitekt_spec.declare.errors`, and the workflow helpers (`record`, `retry`, `hold`, `guard`) are
+on the `Task` protocol.
 
 ## Compatibility
 
