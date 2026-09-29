@@ -197,8 +197,11 @@ class Task(Protocol):
         """:meth:`retry`, awaiting ``call``."""
         ...
 
-    def guard(self, state: StateRef, *paths: str) -> "contextlib.AbstractContextManager[None]":
+    def guard(self, state: object, *paths: str) -> "contextlib.AbstractContextManager[None]":
         """Watch a dependency's state (the ``paths`` of it, or all of it) across a resume.
+
+        ``state`` is the state attribute of a dependency (``handler.plate``): the protocol
+        types it as the state's class, and the proxy hands over a :class:`StateRef`.
 
         On a resumed run, entering the guard raises ``StateChanged`` if anything other than
         this workflow's own calls changed it since the first run entered, or its agent
@@ -206,7 +209,7 @@ class Task(Protocol):
         """
         ...
 
-    def aguard(self, state: StateRef, *paths: str) -> "contextlib.AbstractAsyncContextManager[None]":
+    def aguard(self, state: object, *paths: str) -> "contextlib.AbstractAsyncContextManager[None]":
         """:meth:`guard`, entered with ``async with``."""
         ...
 
@@ -438,12 +441,12 @@ class LocalTask:
         return await aretry(call, *args, attempts=attempts, if_started=if_started, **kwargs)
 
     @contextlib.contextmanager
-    def guard(self, state: StateRef, *paths: str) -> Generator[None, None, None]:
+    def guard(self, state: object, *paths: str) -> Generator[None, None, None]:
         """A local task is never resumed: nothing to watch."""
         yield
 
     @contextlib.asynccontextmanager
-    async def aguard(self, state: StateRef, *paths: str) -> AsyncIterator[None]:
+    async def aguard(self, state: object, *paths: str) -> AsyncIterator[None]:
         """A local task is never resumed: nothing to watch."""
         yield
 
