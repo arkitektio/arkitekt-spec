@@ -47,7 +47,7 @@ from typing import (
 )
 
 from arkitekt_spec.declare.wiring import Alias, Own, Require, TokenLoader, is_fakts_client
-from arkitekt_spec.manifest import Requirement
+from arkitekt_spec.manifest import AppManifest, Requirement
 
 if TYPE_CHECKING:
     from arkitekt_spec.declare.app import AppRegistry
@@ -65,6 +65,7 @@ class ServiceDefinitionError(TypeError):
 _ALIAS = "alias"
 _OWN = "own"
 _TOKENS = "tokens"
+_MANIFEST = "manifest"
 _FAKTS = "fakts"
 _REGISTRY = "registry"
 _CLIENT = "client"
@@ -174,6 +175,8 @@ def _injection_for(
         )
     if annotation is TokenLoader:
         return _Injection(name, _TOKENS)
+    if isinstance(annotation, type) and issubclass(annotation, AppManifest):
+        return _Injection(name, _MANIFEST)
     if is_fakts_client(annotation):
         return _Injection(name, _FAKTS)
     if isinstance(annotation, type) and issubclass(annotation, AppRegistry):
@@ -188,7 +191,8 @@ def _injection_for(
     raise ServiceDefinitionError(
         f"'{function_name}' asks for '{name}: {annotation!r}', which a run cannot "
         "supply. A service parameter is one of: Annotated[Alias, Require(...)] for a "
-        "requirement, TokenLoader for authentication, AppRegistry for the run's registry, "
+        "requirement, TokenLoader for authentication, AppManifest for what the app says "
+        "it is, AppRegistry for the run's registry, "
         "or Fakts when a service genuinely needs the whole client"
         + (
             "; a provider may also ask for a client a service declared here returns."
@@ -371,6 +375,8 @@ class Service(Generic[C]):
                     kwargs[injection.name] = await fakts.aget_alias(injection.name)
             elif injection.kind == _OWN:
                 kwargs[injection.name] = await fakts.aget_self_alias()
+            elif injection.kind == _MANIFEST:
+                kwargs[injection.name] = fakts.manifest
             else:
                 kwargs[injection.name] = fakts
 

@@ -12,7 +12,8 @@ by annotation::
 
     @registry.provider()
     def rekuest_agent(rekuest: Annotated[Alias, Require("live.arkitekt.rekuest")],
-                      fakts: Fakts, registry: AppRegistry) -> RekuestAgent: ...
+                      tokens: TokenLoader, manifest: AppManifest,
+                      registry: AppRegistry) -> RekuestAgent: ...
 
 A run builds every client first, then the provider, then owns the agent: it binds
 the run to it, applies the run's options and drives it (``aprovide``). The
@@ -27,6 +28,7 @@ from typing import TYPE_CHECKING, Any, Generic, TypeVar, cast
 from arkitekt_spec.declare.service import (
     _ALIAS,
     _CLIENT,
+    _MANIFEST,
     _OWN,
     _REGISTRY,
     _Injection,
@@ -152,6 +154,8 @@ class Provider(Generic[A]):
                     )
                 elif injection.kind == _OWN:
                     kwargs[injection.name] = await fakts.aget_self_alias()
+                elif injection.kind == _MANIFEST:
+                    kwargs[injection.name] = fakts.manifest
                 else:
                     kwargs[injection.name] = fakts
 
