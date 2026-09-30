@@ -401,11 +401,6 @@
           "description": "Which app this dependency corresponds to (i.e. do you want to use a stardist agent for that or imagej agents needs to be a world unique classsifier (reverse domain notation) that identifies the type of agent you want to use, and then we can have multiple agents of the same type running in the system, e.g. startdist could be the app for all agents that correpsond to a startdist instance)",
           "title": "App"
         },
-        "assign_policy": {
-          "$ref": "#/$defs/AssignPolicy",
-          "default": "BALANCED",
-          "description": "The policy used to pick which instance of the agent to assign to."
-        },
         "auto_resolvable": {
           "default": false,
           "description": "Whether this dependency is auto resolvable or not. If so we will try to automatically resolve it based on the demands specified in the dependency and the capabilities of the available agents in the system. This is used to identify the demand in the system. Attention if any of the dependencies of this agent dependency is not auto resolvable, this dependency will also not be auto resolvable",
@@ -968,18 +963,6 @@
       ],
       "title": "ArgPortInput",
       "type": "object"
-    },
-    "AssignPolicy": {
-      "description": "No documentation",
-      "enum": [
-        "AUTOMATIC",
-        "BALANCED",
-        "ROUND_ROBIN",
-        "LEAST_BUSY",
-        "FASTEST_RESPONSE"
-      ],
-      "title": "AssignPolicy",
-      "type": "string"
     },
     "BlokImplementationInput": {
       "additionalProperties": false,

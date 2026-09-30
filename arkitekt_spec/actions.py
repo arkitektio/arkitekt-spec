@@ -92,17 +92,6 @@ class ActionKind(str, Enum):
     __str__ = str.__str__
 
 
-class AssignPolicy(str, Enum):
-    """No documentation"""
-
-    AUTOMATIC = "AUTOMATIC"
-    BALANCED = "BALANCED"
-    ROUND_ROBIN = "ROUND_ROBIN"
-    LEAST_BUSY = "LEAST_BUSY"
-    FASTEST_RESPONSE = "FASTEST_RESPONSE"
-    __str__ = str.__str__
-
-
 class DescriptorOperator(str, Enum):
     """The operator of a requires/provides descriptor: how a port's constraint compares the object's value at `key` with `value`."""
 
@@ -667,13 +656,6 @@ class AgentDependencyInput(ActionModel):
         default=None,
         description="The prefered amount of instances for the agent. This is used to identify the demand in the system.",
     )
-    assign_policy: Annotated[AssignPolicy, GraphQLDefault("BALANCED")] = Field(
-        validation_alias=AliasChoices("assign_policy", "assignPolicy"),
-        serialization_alias="assignPolicy",
-        default=AssignPolicy.BALANCED,
-        description="The policy used to pick which instance of the agent to assign to.",
-    )
-    "The policy used to pick which instance of the agent to assign to.\nDefault: BALANCED"
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )
