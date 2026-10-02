@@ -2,6 +2,7 @@ from typing import Any, Self
 
 from pydantic import BaseModel, model_validator
 
+from arkitekt_spec.actions import AgentDependencyInput
 from arkitekt_spec.rules import check_demo_state
 
 
@@ -16,10 +17,12 @@ class CreateBlokInputTrait(BaseModel):
     @model_validator(mode="after")  # type: ignore[override]
     def validate_components_and_demo_state(self) -> Self:
         """Validate blok components against the provided dependencies."""
-        from arkitekt_spec.declare.blok.validate import validate_blok
+        from arkitekt_spec.declare.blok.validate import local_roots_of, validate_blok
 
         model: Any = self
+        dependencies: list[AgentDependencyInput] = list(model.dependencies or ())
+        local_roots = local_roots_of(dependencies, model.demo_state)
         for component in model.components or ():
-            validate_blok(component, list(model.dependencies or ()))
+            validate_blok(component, dependencies, local_roots=local_roots)
         check_demo_state(model.dependencies, model.demo_state)
         return self

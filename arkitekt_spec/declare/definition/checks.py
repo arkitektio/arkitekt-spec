@@ -101,10 +101,12 @@ def check_implementation(
 
 def check_blok(blok: BlokImplementationInput) -> BlokImplementationInput:
     """Every component of a blok is valid against the blok's dependencies."""
-    from arkitekt_spec.declare.blok.validate import validate_blok
+    from arkitekt_spec.declare.blok.validate import local_roots_of, validate_blok
 
+    dependencies = list(blok.dependencies or ())
+    local_roots = local_roots_of(dependencies, blok.demo_state)
     for component in blok.components or ():
-        validate_blok(component, list(blok.dependencies or ()))
+        validate_blok(component, dependencies, local_roots=local_roots)
     return blok
 
 

@@ -1,7 +1,8 @@
 """Validate blok component trees against their declared dependencies."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from arkitekt_spec.actions import (
     AgentDependencyInput,
@@ -83,12 +84,40 @@ class DependencyIndex:
         return self.aliases.get(key, key)
 
 
+# Path roots the blok language reads itself; ``self`` is this agent's own key.
+# None of them can name a blok's own UI state.
+RESERVED_ROOTS = frozenset({"self", "state", "actions", "utils"})
+
+
+def local_roots_of(
+    dependencies: Iterable[AgentDependencyInput] | None,
+    demo_state: Any,
+) -> frozenset[str]:
+    """The roots of a blok's own UI state: the ``demo_state`` keys no dependency owns.
+
+    The same rule the server applies: a path may be rooted at a dependency key or
+    at any top-level ``demo_state`` key. One that is not a dependency is state the
+    blok keeps for itself -- a form's values -- and has no schema to resolve against.
+    """
+    if not isinstance(demo_state, Mapping):
+        return frozenset()
+    owned = {dependency.key for dependency in dependencies or ()} | RESERVED_ROOTS
+    keys: Iterable[Any] = demo_state  # pyright: ignore[reportUnknownVariableType]
+    return frozenset(str(key) for key in keys) - owned
+
+
 class _ValidationVisitor(BlokVisitor):
     """Resolves every reference in a blok against its declared dependencies."""
 
-    def __init__(self, index: DependencyIndex, catalog: "CatalogView | None" = None) -> None:
+    def __init__(
+        self,
+        index: DependencyIndex,
+        catalog: "CatalogView | None" = None,
+        local_roots: frozenset[str] = frozenset(),
+    ) -> None:
         self.index = index
         self.catalog = catalog
+        self.local_roots = local_roots
         self.diagnostics: list[Diagnostic] = []
 
     def visit_component(
@@ -187,6 +216,11 @@ class _ValidationVisitor(BlokVisitor):
                 context,
             )
 
+        if root in self.local_roots:
+            # The blok's own UI state: nothing declares its shape, so the path
+            # is taken as written.
+            return None
+
         if root == "state" and len(path_parts) > 1:
             canonical_state_dependency = index.canonical(path_parts[1])
             if len(path_parts) > 2 and canonical_state_dependency in index.state_demands:
@@ -237,8 +271,12 @@ def validate_blok(
     component: ComponentNodeInput,
     dependencies: list[AgentDependencyInput],
     catalog: "CatalogView | None" = None,
+    local_roots: Iterable[str] = (),
 ) -> list[Diagnostic]:
     """Validate every reference in ``component`` resolves against ``dependencies``.
+
+    A path rooted at one of ``local_roots`` is the blok's own UI state (see
+    :func:`local_roots_of`) and resolves without a schema.
 
     With a ``catalog``, the tree's components, props and util operations are checked
     against it too. Without one, only references are checked -- component names are
@@ -248,6 +286,7 @@ def validate_blok(
         component: The component tree to validate.
         dependencies: What references in the tree may resolve against.
         catalog: The catalog view in force, or ``None`` to skip every catalog rule.
+        local_roots: Path roots that name the blok's own UI state.
 
     Returns:
         The non-fatal findings, e.g. util calls naming an operation the catalog does
@@ -257,7 +296,8 @@ def validate_blok(
         ValueError: If any reference cannot be resolved, or any catalog rule is broken.
             The message names the component and its structural id.
     """
-    visitor = _ValidationVisitor(DependencyIndex.from_dependencies(dependencies), catalog)
+    index = DependencyIndex.from_dependencies(dependencies)
+    visitor = _ValidationVisitor(index, catalog, frozenset(local_roots) - index.keys)
     walk_component(component, visitor)
     return visitor.diagnostics
 

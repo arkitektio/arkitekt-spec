@@ -1,6 +1,6 @@
 """Turn registered blok declarations into the inputs the agent uploads."""
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -17,6 +17,7 @@ from arkitekt_spec.actions import (
     StateDependencyInput,
     UtilCallInput,
 )
+from arkitekt_spec.declare.blok.validate import RESERVED_ROOTS
 from arkitekt_spec.declare.blok.walk import BlokVisitor, action_key_for, walk_component
 from arkitekt_spec.declare.definition.checks import check_blok
 from arkitekt_spec.declare.definition.dependencies import (
@@ -39,11 +40,18 @@ def build_declared_bloks(
             declaration.component,
             app_registry,
             declaration.dependencies or (),
+            local_state=declaration.local_state or {},
+            demo_state=declaration.demo_state or {},
         )
 
         demo_state = declaration.demo_state
         if demo_state is None:
             demo_state = _autogenerate_demo_state(dependencies, app_registry)
+        if declaration.local_state:
+            # The wire has one field for both: the server takes every top-level
+            # demo_state key as a path root, and the renderer seeds its data
+            # model from it.
+            demo_state = {**demo_state, **declaration.local_state}
 
         declared_bloks[blok_key] = check_blok(BlokImplementationInput(
             key=blok_key,
@@ -60,8 +68,12 @@ def build_declared_bloks(
 class _ReferenceCollector(BlokVisitor):
     """Collects the dependency keys, actions and states a blok tree references."""
 
-    def __init__(self, aliases: dict[str, str]) -> None:
+    def __init__(
+        self, aliases: dict[str, str], local_roots: frozenset[str] = frozenset()
+    ) -> None:
         self.aliases = aliases
+        # Roots of the blok's own UI state: they name no dependency.
+        self.local_roots = local_roots
         self.actions: dict[str, set[str]] = {}
         self.states: dict[str, set[str]] = {}
         # A ``state.<key>`` reference that names no dependency; resolvable only
@@ -81,7 +93,7 @@ class _ReferenceCollector(BlokVisitor):
             return
 
         root = path_parts[0]
-        if root == "utils":
+        if root == "utils" or root in self.local_roots:
             return
 
         if root == "state":
@@ -126,6 +138,8 @@ def _build_dependencies_for_component(
     component: ComponentNodeInput,
     app_registry: "AppRegistry",
     explicit_dependencies: Sequence[AgentDependencyInput],
+    local_state: Mapping[str, Any] | None = None,
+    demo_state: Mapping[str, Any] | None = None,
 ) -> list[AgentDependencyInput]:
     """Resolve a blok's dependencies, preferring explicitly declared ones.
 
@@ -133,6 +147,11 @@ def _build_dependencies_for_component(
     from the agent's *own* implementations and states. A dependency satisfied by
     another app cannot be inferred that way -- pass it in via
     ``register_blok(dependencies={"key": DeclaredProtocol})``.
+
+    A root named in ``local_state`` is the blok's own UI state and no dependency.
+    So is a ``demo_state`` key the tree never calls and that names none of this
+    agent's states: every root would otherwise be read as this agent under
+    another name.
     """
     explicit_by_key = {
         dependency.key: dependency for dependency in explicit_dependencies
@@ -143,8 +162,22 @@ def _build_dependencies_for_component(
         if dependency.app is not None
     }
 
-    collector = _ReferenceCollector(aliases)
+    collector = _ReferenceCollector(aliases, frozenset(local_state or ()))
     walk_component(component, collector)
+
+    called_locals = collector.local_roots & set(collector.actions)
+    if called_locals:
+        raise ValueError(
+            f"Blok local state {sorted(called_locals)} is also the target of an agent "
+            f"call. A root is either the blok's own state or a dependency, not both."
+        )
+
+    for key in set(demo_state or ()) - set(explicit_by_key) - RESERVED_ROOTS:
+        referenced = collector.states.get(key)
+        if referenced is None or key in collector.actions:
+            continue
+        if referenced.isdisjoint(app_registry.states):
+            del collector.states[key]
 
     dependency_keys = collector.dependency_keys | set(explicit_by_key)
 

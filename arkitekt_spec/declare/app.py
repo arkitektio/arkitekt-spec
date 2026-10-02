@@ -46,7 +46,7 @@ from arkitekt_spec.declare.actors.types import Actifier, DeclaredImplementation
 from arkitekt_spec.declare.agents.hooks.registry import HooksRegistry
 from arkitekt_spec.declare.blok.parser import bsx as parse_bsx
 from arkitekt_spec.declare.blok.registry import build_declared_bloks
-from arkitekt_spec.declare.blok.validate import validate_blok_catalog
+from arkitekt_spec.declare.blok.validate import RESERVED_ROOTS, validate_blok_catalog
 from arkitekt_spec.declare.catalogs import (
     Catalog,
     CatalogView,
@@ -86,6 +86,7 @@ class BlokDeclaration(BaseModel):
     component: ComponentNodeInput
     description: str | None = None
     demo_state: dict[str, Any] | None = None
+    local_state: dict[str, Any] | None = None
     dependencies: list[AgentDependencyInput] | None = None
     catalog: str | None = None
 
@@ -538,6 +539,7 @@ class AppRegistry(BaseModel):
         demo_state: dict[str, Any] | None = None,
         dependencies: "Mapping[str, type[Any]] | Sequence[AgentDependencyInput] | None" = None,
         catalog: str | None = None,
+        local_state: dict[str, Any] | None = None,
     ) -> None:
         """Register a blok component tree in the registry.
 
@@ -559,10 +561,16 @@ class AppRegistry(BaseModel):
             demo_state: State to render the blok with when there is none.
             dependencies: Other apps' actions and states the tree uses.
             catalog: The UI catalog the blok renders against.
+            local_state: The blok's own UI state and its initial values, e.g.
+                ``{"form": {"iterations": 15}}``. Its keys are path roots the tree
+                may bind controls to (``bind="form.iterations"``) and read back
+                in a call (``@self.run(iterations=form.iterations)``). It never
+                reaches the agent's state.
 
         Raises:
             ValueError: If the name or component is missing, a reference does not
-                resolve, or a declared catalog rejects the tree.
+                resolve, a declared catalog rejects the tree, or a ``local_state``
+                key is reserved or names a dependency.
         """
         self._refuse_if_frozen(f"the blok {name!r}")
         if not name:
@@ -573,6 +581,20 @@ class AppRegistry(BaseModel):
             component = parse_bsx(component)
 
         resolved_dependencies = self._resolve_dependencies(dependencies)
+        taken = RESERVED_ROOTS | {
+            dependency.key for dependency in resolved_dependencies or ()
+        }
+        clashing = sorted(taken.intersection(local_state or ()))
+        if clashing:
+            raise ValueError(
+                f"Blok '{name}' cannot keep local state under {clashing}: "
+                f"the name is reserved or names a dependency"
+            )
+        shadowed = sorted(set(local_state or ()).intersection(demo_state or ()))
+        if shadowed:
+            raise ValueError(
+                f"Blok '{name}' names {shadowed} in both demo_state and local_state"
+            )
         # Catalog rules only: references need the dependencies that
         # ``build_declared_bloks`` infers later, and are checked there.
         for diagnostic in validate_blok_catalog(component, self.catalog_view(catalog)):
@@ -584,6 +606,7 @@ class AppRegistry(BaseModel):
             component=component,
             description=description,
             demo_state=demo_state,
+            local_state=local_state,
             dependencies=resolved_dependencies,
             catalog=catalog,
         )

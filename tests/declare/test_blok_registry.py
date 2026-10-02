@@ -181,3 +181,135 @@ def test_state_missing_from_an_explicit_dependency_is_rejected(
 
     with pytest.raises(ValueError, match="state 'NopeState' does not exist"):
         registry.get_declared_bloks()
+
+
+# --- local state ----------------------------------------------------------
+
+
+FORM_BLOK = """
+<Card>
+    <Slider bind="form.iterations" />
+    <Text text="@form.iterations" />
+    <Text text="@self.RunStatus.message" />
+    <Button label="Run" onClick="@self.run(iterations=form.iterations)" />
+</Card>
+"""
+
+
+@pytest.fixture
+def runner() -> AppRegistry:
+    """An app with one action and one state, for a blok that also keeps a form."""
+    registry = AppRegistry()
+
+    @registry.state
+    @dataclass
+    class RunStatus:
+        message: str = ""
+
+    @registry.register
+    def run(iterations: int) -> None:
+        """Run.
+
+        Args:
+            iterations (int): How often.
+        """
+
+    return registry
+
+
+def test_local_state_is_a_path_root_and_no_dependency(runner: AppRegistry) -> None:
+    runner.register_blok("form", FORM_BLOK, local_state={"form": {"iterations": 15}})
+
+    blok = runner.get_declared_bloks()["form"]
+
+    assert [dependency.key for dependency in blok.dependencies] == ["self"]
+
+
+def test_local_state_joins_the_synthesized_demo_state(runner: AppRegistry) -> None:
+    runner.register_blok("form", FORM_BLOK, local_state={"form": {"iterations": 15}})
+
+    assert runner.get_declared_bloks()["form"].demo_state == {
+        "self": {"RunStatus": {"message": ""}},
+        "form": {"iterations": 15},
+    }
+
+
+def test_a_declared_blok_with_local_state_passes_the_agent_checks(
+    runner: AppRegistry,
+) -> None:
+    # The whole declaration is validated again from the wire model, which only
+    # knows the demo state.
+    runner.register_blok("form", FORM_BLOK, local_state={"form": {"iterations": 15}})
+
+    agent = runner.to_implement_agent_input()
+
+    assert [blok.key for blok in agent.bloks] == ["form"]
+
+
+def test_a_handwritten_demo_state_key_is_local_state_too(runner: AppRegistry) -> None:
+    # What the server accepts: any top-level demo_state key is a path root.
+    runner.register_blok(
+        "form",
+        FORM_BLOK,
+        demo_state={
+            "self": {"RunStatus": {"message": "idle"}},
+            "form": {"iterations": 15},
+        },
+    )
+
+    blok = runner.get_declared_bloks()["form"]
+
+    assert [dependency.key for dependency in blok.dependencies] == ["self"]
+    assert blok.demo_state["form"] == {"iterations": 15}
+
+
+def test_a_demo_state_key_does_not_make_self_local(runner: AppRegistry) -> None:
+    # A typo under `self` must stay an unknown state: `self` is this agent,
+    # whatever the demo state says.
+    runner.register_blok(
+        "form",
+        '<Text text="@self.RunStatos.message" />',
+        demo_state={"self": {"RunStatos": {"message": ""}}},
+    )
+
+    with pytest.raises(ValueError, match="Blok references unknown state 'RunStatos'"):
+        runner.get_declared_bloks()
+
+
+def test_an_undeclared_root_is_still_an_unknown_state(runner: AppRegistry) -> None:
+    runner.register_blok("form", FORM_BLOK)
+
+    with pytest.raises(ValueError, match="Blok references unknown state 'iterations'"):
+        runner.get_declared_bloks()
+
+
+@pytest.mark.parametrize("root", ["self", "state", "actions", "utils"])
+def test_local_state_cannot_take_a_reserved_root(runner: AppRegistry, root: str) -> None:
+    with pytest.raises(ValueError, match="reserved or names a dependency"):
+        runner.register_blok("form", "<Card />", local_state={root: {}})
+
+
+def test_local_state_cannot_take_a_dependency_key(registry: AppRegistry) -> None:
+    with pytest.raises(ValueError, match="reserved or names a dependency"):
+        registry.register_blok(
+            "remote",
+            CROSS_APP_BLOK,
+            dependencies={"opentrons": OpentronsLike},
+            local_state={"opentrons": {}},
+        )
+
+
+def test_local_state_cannot_be_the_target_of_a_call(runner: AppRegistry) -> None:
+    runner.register_blok(
+        "form", '<Button onClick="@form.run(iterations=1)" />', local_state={"form": {}}
+    )
+
+    with pytest.raises(ValueError, match="also the target of an agent call"):
+        runner.get_declared_bloks()
+
+
+def test_demo_state_and_local_state_do_not_overlap(runner: AppRegistry) -> None:
+    with pytest.raises(ValueError, match="both demo_state and local_state"):
+        runner.register_blok(
+            "form", FORM_BLOK, demo_state={"form": {}}, local_state={"form": {}}
+        )

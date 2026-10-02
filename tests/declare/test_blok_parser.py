@@ -92,6 +92,19 @@ def test_hash_prop_is_a_plain_static_value_outside_foreach() -> None:
     assert prop.declares_value is None
 
 
+def test_a_structure_identifier_is_a_static_value_not_an_expression() -> None:
+    # "@mikro/arraydataset" starts like an expression but names a kind of object.
+    prop = bsx('<StructurePicker identifier="@mikro/arraydataset" />').props[0]
+
+    assert prop.static_value == "@mikro/arraydataset"
+    assert prop.dynamic_value is None
+
+
+def test_an_expression_that_is_no_identifier_is_still_rejected() -> None:
+    with pytest.raises(ValueError, match="must be a path or function call"):
+        bsx('<Text text="@a / b" />')
+
+
 def test_hash_prop_outside_foreach_declares_no_local() -> None:
     # A stray "#" used to declare a local that suppressed the unknown-reference
     # error for that name anywhere in the subtree.

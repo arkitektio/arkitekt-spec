@@ -2,6 +2,7 @@ import ast
 import functools
 import io
 import keyword
+import re
 import tokenize
 import xml.etree.ElementTree as ET
 
@@ -15,6 +16,9 @@ from arkitekt_spec.actions import (
 )
 from arkitekt_spec.declare.blok.walk import FOREACH_COMPONENT, FOREACH_LET_PROP
 from arkitekt_spec.declare.traits.calls import resolve_base_arguments
+
+# ``@mikro/arraydataset``: what a structure port carries as its identifier.
+_STRUCTURE_IDENTIFIER = re.compile(r"@[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 
 
 class BlokParser:
@@ -149,7 +153,12 @@ class BlokParser:
                 key=key, dynamic_value=DynamicValueInput(path=path)
             )
 
-        # 2. Agent/Util Action Callback using AST (@)
+        # 2. A structure identifier (@package/key) names a kind of object, not a
+        #    path: it was never a valid expression, so it is the string it reads as.
+        elif _STRUCTURE_IDENTIFIER.fullmatch(value):
+            return ComponentPropInput(key=key, static_value=value)
+
+        # 3. Agent/Util Action Callback using AST (@)
         elif value.startswith("@"):
             python_expr = value[1:]
             try:
@@ -177,7 +186,7 @@ class BlokParser:
             except SyntaxError as e:
                 raise ValueError(f"Failed to parse action syntax '{python_expr}': {e}")
 
-        # 3. A foreach loop variable declaration (#name)
+        # 4. A foreach loop variable declaration (#name)
         elif cls._is_foreach_let(component, key):
             return cls._parse_foreach_let(component, key, value)
 
