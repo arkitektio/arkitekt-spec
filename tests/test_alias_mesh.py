@@ -41,6 +41,15 @@ def test_an_unknown_kind_is_kept_and_not_mesh() -> None:
 
     assert alias.kind == "satellite"
     assert alias.is_mesh() is False
+    assert alias.is_docker() is False
+
+
+@pytest.mark.parametrize(
+    ("kind", "expected"),
+    [("docker", True), ("absolute", False), ("mesh", False), (None, False)],
+)
+def test_is_docker(kind: str | None, expected: bool) -> None:
+    assert Alias(id="a", host="gateway", kind=kind).is_docker() is expected
 
 
 class FakeNode:

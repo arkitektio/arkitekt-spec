@@ -82,9 +82,10 @@ class Alias(BaseModel):
     network. Informational: the server decides which aliases to hand out,
     the client just tries them in order."""
     kind: str | None = None
-    """How the server reaches the instance: ``"absolute"``, ``"relative"`` or
-    ``"mesh"`` (only reachable over the deployment's tailnet). Older servers
-    do not send it; see :meth:`is_mesh`."""
+    """How the server reaches the instance: ``"absolute"``, ``"mesh"`` (only
+    reachable over the deployment's tailnet) or ``"docker"`` (only reachable
+    from inside the deployment's own docker environment).
+    Older servers do not send it; see :meth:`is_mesh` and :meth:`is_docker`."""
     proxy: str | None = Field(default=None, exclude=True)
     """The HTTP proxy this alias is reached through (the mesh node's local
     proxy), set by the fakts client when it resolves the alias. Never sent or
@@ -156,6 +157,14 @@ class Alias(BaseModel):
             return ipaddress.IPv4Address(self.host) in _TAILNET
         except ValueError:
             return False
+
+    def is_docker(self) -> bool:
+        """Whether this alias is only reachable from inside the deployment's
+        own docker environment (its host is a name on that docker network).
+
+        Only the server can say so: there is nothing to tell from the host.
+        """
+        return self.kind == "docker"
 
     @property
     def challenge_path(self) -> str:
