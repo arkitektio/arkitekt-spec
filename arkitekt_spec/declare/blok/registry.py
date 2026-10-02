@@ -17,8 +17,13 @@ from arkitekt_spec.actions import (
     StateDependencyInput,
     UtilCallInput,
 )
-from arkitekt_spec.declare.blok.validate import RESERVED_ROOTS
-from arkitekt_spec.declare.blok.walk import BlokVisitor, action_key_for, walk_component
+from arkitekt_spec.declare.blok.validate import RESERVED_ROOTS, idle_task_record
+from arkitekt_spec.declare.blok.walk import (
+    BlokVisitor,
+    action_key_for,
+    bound_calls,
+    walk_component,
+)
 from arkitekt_spec.declare.definition.checks import check_blok
 from arkitekt_spec.declare.definition.dependencies import (
     build_action_dependency_input,
@@ -52,6 +57,10 @@ def build_declared_bloks(
             # demo_state key as a path root, and the renderer seeds its data
             # model from it.
             demo_state = {**demo_state, **declaration.local_state}
+        bound = bound_calls(declaration.component)
+        if bound:
+            # A call that has not run yet: what the renderer shows until it does.
+            demo_state = {**demo_state, **{name: idle_task_record() for name in bound}}
 
         declared_bloks[blok_key] = check_blok(BlokImplementationInput(
             key=blok_key,
@@ -74,6 +83,8 @@ class _ReferenceCollector(BlokVisitor):
         self.aliases = aliases
         # Roots of the blok's own UI state: they name no dependency.
         self.local_roots = local_roots
+        # Names calls are bound to (``.into(name)``).
+        self.bound: set[str] = set()
         self.actions: dict[str, set[str]] = {}
         self.states: dict[str, set[str]] = {}
         # A ``state.<key>`` reference that names no dependency; resolvable only
@@ -133,6 +144,10 @@ class _ReferenceCollector(BlokVisitor):
         # what this pass is building. Declaring the name is enough here.
         self.visit_path(items_path, scope, context)
 
+    def declare_bound_call(self, name: str, call: AgentProbeInput, context: str) -> None:
+        # In scope from here on, so a path rooted at it names no dependency.
+        self.bound.add(name)
+
 
 def _build_dependencies_for_component(
     component: ComponentNodeInput,
@@ -164,6 +179,20 @@ def _build_dependencies_for_component(
 
     collector = _ReferenceCollector(aliases, frozenset(local_state or ()))
     walk_component(component, collector)
+
+    taken = (
+        RESERVED_ROOTS
+        | collector.local_roots
+        | set(demo_state or ())
+        | set(explicit_by_key)
+        | collector.dependency_keys
+    )
+    clashing = sorted(collector.bound & taken)
+    if clashing:
+        raise ValueError(
+            f"A call cannot be bound to {clashing}: the name is reserved, or already names "
+            f"a dependency or the blok's own state."
+        )
 
     called_locals = collector.local_roots & set(collector.actions)
     if called_locals:

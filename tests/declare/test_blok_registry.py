@@ -313,3 +313,193 @@ def test_demo_state_and_local_state_do_not_overlap(runner: AppRegistry) -> None:
         runner.register_blok(
             "form", FORM_BLOK, demo_state={"form": {}}, local_state={"form": {}}
         )
+
+
+# --- bound calls ----------------------------------------------------------
+
+
+@pytest.fixture
+def pipeline() -> AppRegistry:
+    """An app whose actions return something, to bind and to pass on."""
+    registry = AppRegistry()
+
+    @registry.register
+    def blur(sigma: int) -> str:
+        """Blur.
+
+        Args:
+            sigma (int): How much.
+
+        Returns:
+            str: The blurred image.
+        """
+        return "blurred"
+
+    @registry.register
+    def segment(image: str) -> int:
+        """Segment.
+
+        Args:
+            image (str): What to segment.
+
+        Returns:
+            int: How many objects.
+        """
+        return 0
+
+    return registry
+
+
+BOUND_BLOK = """
+<Card>
+    <Button label="Blur" onClick="@self.blur(sigma=2).into(job)" disabled="@job.running" />
+    <Progress value="@job.progress" />
+    <Text text="@job.result" />
+</Card>
+"""
+
+
+def test_a_bound_call_is_a_value_the_tree_can_read(pipeline: AppRegistry) -> None:
+    pipeline.register_blok("ui", BOUND_BLOK)
+
+    blok = pipeline.get_declared_bloks()["ui"]
+
+    # The name is the blok's own, not a second agent: the action is inferred as
+    # ever, and nothing is demanded for `job`.
+    dependency = blok.dependencies[0]
+    assert [d.key for d in blok.dependencies] == ["self"]
+    assert [demand.key for demand in dependency.action_dependencies] == ["blur"]
+    assert dependency.state_dependencies is None
+
+
+def test_a_bound_call_starts_as_an_idle_record(pipeline: AppRegistry) -> None:
+    pipeline.register_blok("ui", BOUND_BLOK)
+
+    assert pipeline.get_declared_bloks()["ui"].demo_state == {
+        "job": {
+            "status": "idle",
+            "running": False,
+            "done": False,
+            "failed": False,
+            "progress": 0,
+            "message": "",
+            "error": "",
+            "result": None,
+            "returns": {},
+        }
+    }
+
+
+def test_a_bound_call_is_read_anywhere_in_the_tree(pipeline: AppRegistry) -> None:
+    # Read above and beside where it is bound: the name is the blok's, not the button's.
+    pipeline.register_blok(
+        "ui",
+        """
+        <Row>
+            <Card><Text text="@job.message" /></Card>
+            <Card><Button onClick="@self.blur(sigma=2).into(job)" /></Card>
+        </Row>
+        """,
+    )
+
+    assert pipeline.to_implement_agent_input().bloks[0].key == "ui"
+
+
+def test_one_calls_result_feeds_the_next(pipeline: AppRegistry) -> None:
+    pipeline.register_blok(
+        "ui",
+        """
+        <Row>
+            <Button label="Blur" onClick="@self.blur(sigma=2).into(blurred)" />
+            <Button label="Segment" onClick="@self.segment(image=blurred.result).into(objects)" />
+            <Text text="@objects.result" />
+        </Row>
+        """,
+    )
+
+    blok = pipeline.to_implement_agent_input().bloks[0]
+
+    assert sorted(blok.demo_state) == ["blurred", "objects"]
+    assert [d.key for d in blok.dependencies[0].action_dependencies] == ["blur", "segment"]
+
+
+@pytest.mark.parametrize(
+    ("path", "problem"),
+    [
+        ("job.reslt", "'reslt' does not exist"),
+        ("job.result.nope", "'nope' does not exist"),
+        ("job.returns.nope", "'nope' does not exist"),
+    ],
+)
+def test_a_bound_calls_record_is_typed(pipeline: AppRegistry, path: str, problem: str) -> None:
+    pipeline.register_blok(
+        "ui", f'<Row><Button onClick="@self.blur(sigma=2).into(job)" /><Text text="@{path}" /></Row>'
+    )
+
+    with pytest.raises(ValueError, match=problem):
+        pipeline.get_declared_bloks()
+
+
+def test_every_return_is_readable_by_its_port_key(pipeline: AppRegistry) -> None:
+    pipeline.register_blok(
+        "ui",
+        '<Row><Button onClick="@self.blur(sigma=2).into(job)" /><Text text="@job.returns.return0" /></Row>',
+    )
+
+    assert pipeline.get_declared_bloks()["ui"].key == "ui"
+
+
+def test_a_name_is_bound_once(pipeline: AppRegistry) -> None:
+    # Refused where the blok is declared, on the line that wrote it.
+    with pytest.raises(ValueError, match="'job' is bound twice"):
+        pipeline.register_blok(
+            "ui",
+            """
+            <Row>
+                <Button onClick="@self.blur(sigma=1).into(job)" />
+                <Button onClick="@self.blur(sigma=2).into(job)" />
+            </Row>
+            """,
+        )
+
+
+def test_a_call_is_not_bound_inside_a_loop(registry: AppRegistry) -> None:
+    # Every item's button would write the one record.
+    with pytest.raises(ValueError, match="'job' is bound inside a foreach"):
+        registry.register_blok(
+            "remote",
+            """
+            <foreach items="@opentrons.RunState.available_protocols" let="#protocol">
+                <Button label="@protocol" onClick="@opentrons.run_protocol(protocol).into(job)" />
+            </foreach>
+            """,
+            dependencies={"opentrons": OpentronsLike},
+        )
+
+
+@pytest.mark.parametrize("name", ["self", "utils", "form"])
+def test_a_call_is_not_bound_to_a_taken_name(pipeline: AppRegistry, name: str) -> None:
+    pipeline.register_blok(
+        "ui",
+        f'<Button onClick="@self.blur(sigma=1).into({name})" />',
+        local_state={"form": {}},
+    )
+
+    with pytest.raises(ValueError, match="A call cannot be bound to"):
+        pipeline.get_declared_bloks()
+
+
+def test_a_bound_call_to_another_app_is_read_but_not_looked_into(registry: AppRegistry) -> None:
+    registry.register_blok(
+        "remote",
+        """
+        <Row>
+            <Button onClick="@opentrons.run_protocol('a').into(job)" />
+            <Progress value="@job.progress" />
+            <Text text="@job.result" />
+        </Row>
+        """,
+        dependencies={"opentrons": OpentronsLike},
+    )
+
+    assert sorted(registry.get_declared_bloks()["remote"].demo_state) == ["job"]

@@ -17,6 +17,9 @@ from arkitekt_spec.actions import (
 from arkitekt_spec.declare.blok.walk import FOREACH_COMPONENT, FOREACH_LET_PROP
 from arkitekt_spec.declare.traits.calls import resolve_base_arguments
 
+# ``@dep.op(...).into(name)`` binds the call's task to ``name``.
+BOUND_CALL_STEP = "into"
+
 # ``@mikro/arraydataset``: what a structure port carries as its identifier.
 _STRUCTURE_IDENTIFIER = re.compile(r"@[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 
@@ -176,6 +179,11 @@ class BlokParser:
                         f"Dynamic expression must be a path or function call. Got: {python_expr}"
                     )
 
+                bound = cls._bound_call(tree.body, python_expr)
+                if bound is not None:
+                    call, name = bound
+                    return ComponentPropInput(key=key, agent_call=call, declares_value=name)
+
                 parsed_call = cls._parse_ast_call(tree.body)
 
                 if isinstance(parsed_call, AgentProbeInput):
@@ -193,6 +201,35 @@ class BlokParser:
         # 4. Static Value
         else:
             return ComponentPropInput(key=key, static_value=value)
+
+    @classmethod
+    def _bound_call(cls, node: ast.Call, source: str) -> tuple[AgentProbeInput, str] | None:
+        """``dep.op(...).into(name)``: the call, and the name its task is bound to.
+
+        ``into`` is a step only on a *call*. An action that happens to be called
+        ``into`` is ``dep.into(...)``, an attribute of a name, and is left alone.
+        """
+        func = node.func
+        if not (
+            isinstance(func, ast.Attribute)
+            and func.attr == BOUND_CALL_STEP
+            and isinstance(func.value, ast.Call)
+        ):
+            return None
+
+        if node.keywords or len(node.args) != 1 or not isinstance(node.args[0], ast.Name):
+            raise ValueError(
+                f"'.{BOUND_CALL_STEP}(...)' takes one bare name, the value the call's task is "
+                f"bound to, e.g. '.{BOUND_CALL_STEP}(run)'. Got: {source}"
+            )
+
+        call = cls._parse_ast_call(func.value)
+        if not isinstance(call, AgentProbeInput):
+            raise ValueError(
+                f"Only a call to an agent runs as a task that can be bound with "
+                f"'.{BOUND_CALL_STEP}(...)'; a utils call returns at once. Got: {source}"
+            )
+        return call, node.args[0].id
 
     @staticmethod
     def _is_foreach_let(component: str, key: str) -> bool:

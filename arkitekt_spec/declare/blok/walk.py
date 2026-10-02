@@ -59,6 +59,11 @@ class BlokVisitor(Protocol):
     ) -> Any:  # pragma: no cover - protocol
         ...
 
+    def declare_bound_call(
+        self, name: str, call: AgentProbeInput, context: str
+    ) -> Any:  # pragma: no cover - protocol
+        ...
+
 
 def action_key_for(call: AgentProbeInput) -> str:
     """The action key an agent call names.
@@ -109,13 +114,57 @@ def foreach_parts(
     return let_name, items_path
 
 
+def bound_calls(node: ComponentNodeInput) -> dict[str, tuple[AgentProbeInput, str]]:
+    """Every call the tree binds to a name (``@dep.op(...).into(name)``), with where.
+
+    A bound call's task is a value of the blok: the name holds what the call is
+    doing and what it returned. Unlike a ``foreach`` local it is visible in the
+    whole tree -- the button that starts a run and the panel that shows its
+    result are rarely nested in each other.
+    """
+    found: dict[str, tuple[AgentProbeInput, str]] = {}
+
+    def visit(current: ComponentNodeInput, repeated: bool) -> None:
+        for prop in current.props or ():
+            if prop.agent_call is None or not prop.declares_value:
+                continue
+            context = prop_context(current, prop)
+            if repeated:
+                # One name, as many buttons as there are items: every run would
+                # write the same record, and only the last click would show.
+                raise ValueError(
+                    f"'{prop.declares_value}' is bound inside a {FOREACH_COMPONENT} in {context}. "
+                    f"A call is bound to one name, and a repeated call would share it; "
+                    f"bind it outside the loop."
+                )
+            if prop.declares_value in found:
+                raise ValueError(
+                    f"'{prop.declares_value}' is bound twice: in {found[prop.declares_value][1]} "
+                    f"and in {context}. Each call needs a name of its own."
+                )
+            found[prop.declares_value] = (prop.agent_call, context)
+        inside = repeated or current.component.lower() == FOREACH_COMPONENT
+        for child in current.children or ():
+            visit(child, inside)
+
+    visit(node, False)
+    return found
+
+
 def walk_component(
     node: ComponentNodeInput,
     visitor: BlokVisitor,
     scope: dict[str, Any] | None = None,
 ) -> None:
     """Walk ``node`` and its subtree, invoking ``visitor`` for the node and every reference."""
-    current_scope = dict(scope or {})
+    if scope is None:
+        # The root: bound calls are declared before anything is walked, so a
+        # path may name one that is bound further down, or in another branch.
+        scope = {
+            name: visitor.declare_bound_call(name, call, context)
+            for name, (call, context) in bound_calls(node).items()
+        }
+    current_scope = dict(scope)
 
     visitor.visit_component(node, current_scope, node_context(node))
 

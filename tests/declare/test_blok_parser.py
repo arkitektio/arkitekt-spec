@@ -169,3 +169,38 @@ def test_util_call_base_positionals_are_named() -> None:
         ("a", "dep.state.x", None),
         ("b", None, 2),
     ]
+
+
+# --- bound calls ----------------------------------------------------------
+
+
+def test_into_binds_the_call_to_a_name() -> None:
+    prop = bsx('<Button onClick="@self.run(iterations=5).into(job)" />').props[0]
+
+    assert prop.declares_value == "job"
+    assert prop.agent_call is not None
+    assert (prop.agent_call.dependency, prop.agent_call.operation) == ("self", "run")
+    assert [argument.key for argument in prop.agent_call.arguments] == ["iterations"]
+    assert prop.util_call is None
+
+
+def test_an_action_called_into_is_still_just_an_action() -> None:
+    # `into` is a step on a call. On a name it is an operation like any other.
+    prop = bsx('<Button onClick="@self.into(job)" />').props[0]
+
+    assert prop.declares_value is None
+    assert prop.agent_call.operation == "into"
+
+
+@pytest.mark.parametrize(
+    "expression",
+    ["self.run().into()", "self.run().into(a, b)", "self.run().into(form.job)", "self.run().into(name=job)"],
+)
+def test_into_takes_exactly_one_bare_name(expression: str) -> None:
+    with pytest.raises(ValueError, match="takes one bare name"):
+        bsx(f'<Button onClick="@{expression}" />')
+
+
+def test_a_utils_call_cannot_be_bound() -> None:
+    with pytest.raises(ValueError, match="Only a call to an agent"):
+        bsx('<Button onClick="@utils.gt(1, 2).into(job)" />')

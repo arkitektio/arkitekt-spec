@@ -38,6 +38,8 @@ class DependencyIndex:
     state_demands: dict[str, dict[str, StateDependencyInput]]
     state_index: dict[str, list[tuple[str, StateDependencyInput]]]
     action_demands: dict[str, frozenset[str] | None]
+    # What each declared action returns, where its demand says so.
+    action_returns: dict[str, dict[str, tuple[PortMatchInput, ...] | None]]
 
     @classmethod
     def from_dependencies(
@@ -77,6 +79,15 @@ class DependencyIndex:
                 )
                 for dependency in dependencies
             },
+            action_returns={
+                dependency.key: {
+                    action_demand.key: (
+                        action_demand.demand.return_matches if action_demand.demand else None
+                    )
+                    for action_demand in dependency.action_dependencies or ()
+                }
+                for dependency in dependencies
+            },
         )
 
     def canonical(self, key: str) -> str:
@@ -87,6 +98,46 @@ class DependencyIndex:
 # Path roots the blok language reads itself; ``self`` is this agent's own key.
 # None of them can name a blok's own UI state.
 RESERVED_ROOTS = frozenset({"self", "state", "actions", "utils"})
+
+
+def idle_task_record() -> dict[str, Any]:
+    """The value a bound call's name holds before the call has run.
+
+    The one place the record's shape is written down: :func:`_task_record_match`
+    is derived from it, and the renderer writes the same fields as the task runs.
+    """
+    return {
+        "status": "idle",
+        "running": False,
+        "done": False,
+        "failed": False,
+        "progress": 0,
+        "message": "",
+        "error": "",
+        "result": None,
+        "returns": {},
+    }
+
+
+def _task_record_match(
+    name: str, returns: tuple[PortMatchInput, ...] | None
+) -> PortMatchInput:
+    """The shape of a bound call's record: its fixed fields, and what the action returns.
+
+    ``result`` is the action's first return, ``returns`` all of them by port key.
+    An action whose returns are not declared leaves both untyped: they can be
+    read, but not looked into.
+    """
+    fields = [
+        PortMatchInput(key=key)
+        for key in idle_task_record()
+        if key not in ("result", "returns")
+    ]
+    result = returns[0].model_copy(update={"key": "result"}) if returns else PortMatchInput(key="result")
+    return PortMatchInput(
+        key=name,
+        children=(*fields, result, PortMatchInput(key="returns", children=returns)),
+    )
 
 
 def local_roots_of(
@@ -194,6 +245,13 @@ class _ValidationVisitor(BlokVisitor):
         return _infer_iterable_item_match(
             self._resolve(items_path, scope, context), items_path
         )
+
+    def declare_bound_call(
+        self, name: str, call: AgentProbeInput, context: str
+    ) -> PortMatchInput:
+        dependency = self.index.canonical(call.dependency)
+        returns = self.index.action_returns.get(dependency, {}).get(action_key_for(call))
+        return _task_record_match(name, returns)
 
     def _resolve(
         self, path: str, scope: dict[str, PortMatchInput | None], context: str
@@ -357,6 +415,11 @@ class _CatalogVisitor(BlokVisitor):
         items_path: str,
         scope: dict[str, PortMatchInput | None],
         context: str,
+    ) -> PortMatchInput | None:
+        return None
+
+    def declare_bound_call(
+        self, name: str, call: AgentProbeInput, context: str
     ) -> PortMatchInput | None:
         return None
 
