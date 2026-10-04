@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from kanne import PintQuantity
 
 
-def _pint_quantity(load: bool = False) -> Any:  # noqa: ANN401
+def _pint_quantity(load: bool = False) -> Any:
     """kanne's ``PintQuantity``, when kanne is loaded; ``None`` otherwise.
 
     ``load`` imports an installed kanne that nobody imported yet. That is for a
@@ -37,7 +37,7 @@ def _pint_quantity(load: bool = False) -> Any:  # noqa: ANN401
     return getattr(module, "PintQuantity", None)
 
 
-def _registry() -> Any:  # noqa: ANN401
+def _registry() -> Any:
     """kanne's unit registry. Only called once kanne is known to be loaded."""
     from kanne.registry import get_global_registry
 
