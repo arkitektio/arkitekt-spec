@@ -47,6 +47,7 @@ from arkitekt_spec.declare.structures.convert import (
     is_global_structure,
     is_literal,
     make_enum_converter,
+    model_identifier,
 )
 from arkitekt_spec.declare.structures.model import ensure_model_dataclass, model_field
 from arkitekt_spec.declare.structures.utils import build_instance_predicate
@@ -548,7 +549,17 @@ class StructureRegistry(BaseModel):
         predicate: Predicator | None = None,
         description: str | None = None,
     ) -> None:
-        """Register a class as a model."""
+        """Register a class as a model.
+
+        Raises:
+            StructureDefinitionError: If the identifier is not ``@package/key``,
+                which the server would refuse when the agent registers.
+        """
+        if not is_valid_identifier(identifier):
+            raise StructureDefinitionError(
+                f"The model {cls.__qualname__} cannot travel as {identifier!r}: an identifier "
+                f"reads '@package/key', e.g. '@myapp/{inflection.underscore(cls.__name__)}'."
+            )
 
         fullfile_type = FullFilledModel(
             cls=cls,
@@ -974,14 +985,15 @@ class StructureRegistry(BaseModel):
     ) -> "type[T] | Callable[[type[T]], type[T]]":
         """Declare a model: a class whose instances travel by value, field by field.
 
-        ``@app.model`` or ``@app.model(identifier="config")``. The class is made
+        ``@app.model`` or ``@app.model(identifier="@myapp/config")``. The class is made
         a dataclass if it is not one and registered here; a port annotated with
         it is a ``MODEL`` port with one child per field, and a model used inside
         another model has to be declared too.
 
         Args:
             *cls: The class, when used without parentheses.
-            identifier: What it travels as. Defaults to the snake_case class name.
+            identifier: What it travels as, ``@package/key``. Defaults to
+                ``@<the class's module>/<snake_case class name>``.
             description: What it is, for the UI. Defaults to the class docstring.
 
         Returns:
@@ -998,7 +1010,7 @@ class StructureRegistry(BaseModel):
             target = ensure_model_dataclass(target)
             self.register_as_model(
                 target,
-                identifier or inflection.underscore(target.__name__),
+                identifier or model_identifier(target.__module__, target),
                 description=description or target.__doc__,
             )
             return target

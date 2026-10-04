@@ -18,6 +18,8 @@ from typing import (
     get_origin,
 )
 
+import inflection
+
 from arkitekt_spec.actions import (
     ChoiceAssignWidgetInput,
     ChoiceInput,
@@ -30,6 +32,17 @@ from arkitekt_spec.declare.structures.types import (
 )
 from arkitekt_spec.declare.structures.utils import build_instance_predicate
 from arkitekt_spec.scalars import Identifier, validate_identifier
+
+
+def model_identifier(package: str, cls: type[Any]) -> str:
+    """The identifier a model travels as when none is given: ``@package/snake_case_name``.
+
+    ``package`` is whatever names the declaring side -- an app's identifier, or
+    the class's module -- with everything the server refuses in that slot
+    replaced by ``-``.
+    """
+    slot = re.sub(r"[^A-Za-z0-9_.-]+", "-", package).strip("-") or "app"
+    return f"@{slot}/{inflection.underscore(cls.__name__)}"
 
 
 def cls_to_identifier(cls: type[Any]) -> Identifier:

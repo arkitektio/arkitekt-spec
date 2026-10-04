@@ -1255,7 +1255,8 @@ class AppRegistry(BaseModel):
 
         Args:
             *args: The class, when used without parentheses.
-            identifier: What it travels as. Defaults to the snake_case class name.
+            identifier: What it travels as, ``@package/key``. Defaults to
+                ``@<the class's module>/<snake_case class name>``.
             description: What it is, for the UI. Defaults to the class docstring.
 
         Returns:

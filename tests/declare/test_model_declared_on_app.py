@@ -16,6 +16,7 @@ from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.definition.define import prepare_definition
 from arkitekt_spec.declare.definition.errors import DefinitionError
 from arkitekt_spec.declare.errors import RegistryFrozenError
+from arkitekt_spec.declare.structures.errors import StructureDefinitionError
 from arkitekt_spec.declare.structures.model import model_field
 from arkitekt_spec.declare.structures.registry import StructureRegistry
 
@@ -41,20 +42,34 @@ def test_declaring_a_model_makes_a_dataclass_and_registers_it() -> None:
     assert not any(name.startswith("__rekuest") for name in vars(Inner))
     declared = registry.structure_registry.model_for(Inner)
     assert declared is not None
-    assert (declared.identifier, declared.description) == ("inner", "An inner model.")
+    # `@package/key` is all the server accepts; the class's module names the package.
+    assert (declared.identifier, declared.description) == (
+        f"@{Inner.__module__}/inner",
+        "An inner model.",
+    )
     assert Inner(n=1) == Inner(n=1)
 
 
 def test_identifier_and_description_can_be_given() -> None:
     registry = StructureRegistry()
 
-    @registry.model(identifier="the_inner", description="Given")
+    @registry.model(identifier="@lab/the_inner", description="Given")
     class Given:
         n: int
 
     declared = registry.model_for(Given)
     assert declared is not None
-    assert (declared.identifier, declared.description) == ("the_inner", "Given")
+    assert (declared.identifier, declared.description) == ("@lab/the_inner", "Given")
+
+
+def test_an_identifier_the_server_would_refuse_is_refused_at_declaration() -> None:
+    registry = StructureRegistry()
+
+    with pytest.raises(StructureDefinitionError, match="@package/key"):
+
+        @registry.model(identifier="config")
+        class Config:
+            n: int
 
 
 def test_an_action_naming_a_declared_model_gets_a_model_port_with_children() -> None:
@@ -68,11 +83,11 @@ def test_an_action_naming_a_declared_model_gets_a_model_port_with_children() -> 
 
     definition = prepare_definition(use, structure_registry=registry)
     (arg,) = definition.args
-    assert (arg.kind, arg.identifier) == (PortKind.MODEL, "outer")
+    assert (arg.kind, arg.identifier) == (PortKind.MODEL, f"@{Outer.__module__}/outer")
     assert arg.children is not None
     by_key = {child.key: child for child in arg.children}
     assert by_key["inner"].kind == PortKind.MODEL
-    assert by_key["inner"].identifier == "inner"
+    assert by_key["inner"].identifier == f"@{Inner.__module__}/inner"
     assert by_key["threshold"].description == "Cut-off"
     assert definition.returns[0].kind == PortKind.MODEL
 
