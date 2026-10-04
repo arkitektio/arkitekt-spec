@@ -418,6 +418,22 @@ class StructureRegistry(BaseModel):
         """Get the fullfilled memory structure for a given identifier."""
         return self._lookup("identifier_memory_structure_map", identifier)
 
+    def declared_as_another(self, value: object, identifier: str) -> FullFilledStructure | None:
+        """The structure ``value`` was declared as, when that is not ``identifier``.
+
+        A structure travels as its id, and by default that is just ``value.id``:
+        a dataset returned where a lens is annotated would be sent as a lens with
+        the dataset's id. ``None`` for a value of the right structure, and for
+        one this app never declared (which may be anything carrying an id).
+        """
+        try:
+            found = self.find_for_cls(type(value))
+        except TypeError:  # unhashable class
+            return None
+        if isinstance(found, FullFilledStructure) and found.identifier != identifier:
+            return found
+        return None
+
     def find_for_cls(self, cls: type[Any]) -> FullFilledType | None:
         """Find the fullfilled type registered for a class, or ``None``.
 
