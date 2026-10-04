@@ -8,19 +8,40 @@ at definition time and to expand a wire string (``"5 mV"``) back into a live qua
 Everything here degrades gracefully when kanne is absent: :func:`is_pint_quantity`
 returns ``False`` so no quantity ports are ever produced, and :func:`resolve_quantity_type`
 returns ``None`` so the serializer can raise a clear error.
+
+kanne is never imported from here. It brings pint, and with it a large part of the
+scientific stack, which an app with no quantity pays for on every start. A class can
+only be a kanne type if whoever wrote it imported kanne, so kanne being loaded is
+both the question and the answer.
 """
 
-from typing import Any
+import importlib.util
+import sys
+from typing import TYPE_CHECKING, Any
 
-try:
+if TYPE_CHECKING:
     from kanne import PintQuantity
+
+
+def _pint_quantity(load: bool = False) -> Any:  # noqa: ANN401
+    """kanne's ``PintQuantity``, when kanne is loaded; ``None`` otherwise.
+
+    ``load`` imports an installed kanne that nobody imported yet. That is for a
+    *value* arriving off the wire -- a caller reading a quantity an action
+    returned never named a kanne type itself -- and never for asking what a
+    class is, which is what every app does on every start.
+    """
+    module = sys.modules.get("kanne")
+    if module is None and load and importlib.util.find_spec("kanne") is not None:
+        import kanne as module  # pyright: ignore[reportMissingImports]
+    return getattr(module, "PintQuantity", None)
+
+
+def _registry() -> Any:  # noqa: ANN401
+    """kanne's unit registry. Only called once kanne is known to be loaded."""
     from kanne.registry import get_global_registry
 
-    KANNE_AVAILABLE = True
-except ImportError:  # kanne (the ``units`` extra) not installed
-    PintQuantity = None  # type: ignore[assignment,misc]
-    get_global_registry = None  # type: ignore[assignment]
-    KANNE_AVAILABLE = False
+    return get_global_registry()
 
 
 def is_pint_quantity(cls: Any) -> bool:
@@ -28,7 +49,8 @@ def is_pint_quantity(cls: Any) -> bool:
 
     Always ``False`` when kanne isn't installed, so callers need no separate guard.
     """
-    return KANNE_AVAILABLE and isinstance(cls, type) and issubclass(cls, PintQuantity)
+    quantity = _pint_quantity()
+    return quantity is not None and isinstance(cls, type) and issubclass(cls, quantity)
 
 
 def dimension_of(cls: "type[PintQuantity]") -> str:
@@ -36,7 +58,7 @@ def dimension_of(cls: "type[PintQuantity]") -> str:
 
     This is the wiring-compatibility key stamped onto the port's ``dimension`` field.
     """
-    return str(get_global_registry().get_dimensionality(cls.reference_unit))
+    return str(_registry().get_dimensionality(cls.reference_unit))
 
 
 def proposed_units_of(cls: "type[PintQuantity]") -> "tuple[str, ...]":
@@ -48,8 +70,11 @@ def proposed_units_of(cls: "type[PintQuantity]") -> "tuple[str, ...]":
 
 def _iter_quantity_types() -> "list[type[PintQuantity]]":
     """All (transitive) concrete kanne dimension types currently imported."""
+    quantity = _pint_quantity(load=True)
+    if quantity is None:
+        return []
     seen: set = set()
-    stack = [PintQuantity]
+    stack = [quantity]
     out: list = []
     while stack:
         current = stack.pop()
@@ -79,7 +104,7 @@ def resolve_quantity_type(unit: str | None) -> "type[PintQuantity] | None":
     ``None`` when kanne is absent, ``unit`` is falsy, or no kanne type declares that
     reference unit — the caller turns that into an explicit expansion error.
     """
-    if not unit or not KANNE_AVAILABLE:
+    if not unit or _pint_quantity(load=True) is None:
         return None
     if unit not in _REFERENCE_UNIT_TO_TYPE:
         _refresh_map()
@@ -92,7 +117,8 @@ def shrink_quantity(value: Any) -> str:
     Accepts a kanne :class:`~kanne.PintQuantity`, a raw ``pint.Quantity`` (formatted with
     the abbreviated ``~`` spec), or an already-serialized string.
     """
-    if KANNE_AVAILABLE and isinstance(value, PintQuantity):
+    quantity = _pint_quantity()
+    if quantity is not None and isinstance(value, quantity):
         return value.to_pint_string()
     if isinstance(value, str):
         return value
@@ -110,7 +136,7 @@ def expand_quantity(value: Any, reference_unit: str | None) -> Any:
     """
     cls = resolve_quantity_type(reference_unit)
     if cls is None:
-        if not KANNE_AVAILABLE:
+        if importlib.util.find_spec("kanne") is None:
             raise ValueError(
                 "Cannot expand a QUANTITY port: kanne is not installed. Install the "
                 "'units' extra (e.g. `pip install rekuest[units]`)."
@@ -130,11 +156,12 @@ def matches_dimension(value: Any, dimension: str | None) -> bool:
     or a unit-bearing pint string (``"5 mV"``). ``False`` when kanne is absent, ``dimension``
     is ``None``, or the value can't be interpreted as a matching quantity.
     """
-    if not KANNE_AVAILABLE or dimension is None:
+    quantity_type = _pint_quantity(load=True) if dimension is not None else None
+    if quantity_type is None or dimension is None:
         return False
-    registry = get_global_registry()
+    registry = _registry()
     try:
-        if isinstance(value, PintQuantity):
+        if isinstance(value, quantity_type):
             quantity = value.quantity
         elif isinstance(value, str):
             quantity = registry(value)
