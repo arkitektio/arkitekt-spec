@@ -65,7 +65,6 @@ def inspect_state(
 def declare_state(cls: type[T], /, *,
     name: str | None = None,
     required_locks: list[str] | None = None,
-    publish_interval: float = 0.1,
     registry: "AppRegistry",
     structure_reg: StructureRegistry | None = None,
 ) -> type[T]: ...
@@ -75,7 +74,6 @@ def declare_state(cls: type[T], /, *,
 def declare_state(cls: None = None, /, *,
     name: str | None = None,
     required_locks: list[str] | None = None,
-    publish_interval: float = 0.1,
     registry: "AppRegistry",
     structure_reg: StructureRegistry | None = None,
 ) -> Callable[[type[T]], type[T]]: ...
@@ -87,7 +85,6 @@ def declare_state(
     *,
     name: str | None = None,
     required_locks: list[str] | None = None,
-    publish_interval: float = 0.1,
     registry: "AppRegistry",
     structure_reg: StructureRegistry | None = None,
 ) -> type[T] | Callable[[type[T]], type[T]]:
@@ -109,7 +106,6 @@ def declare_state(
             parentheses.
         name: Explicit exported state name. Defaults to the class name.
         required_locks: Locks that must be held while mutating this state.
-        publish_interval: Debounce interval for published state updates.
         registry: The app registry the state is recorded in.
         structure_reg: Structure registry used while inspecting the state
             schema. Defaults to the app registry's.
@@ -147,7 +143,6 @@ def declare_state(
             inspect_state(cls, interface, structure_registry),
             structure_registry,
             required_locks=required_locks,
-            publish_interval=publish_interval,
         )
         return cls
 

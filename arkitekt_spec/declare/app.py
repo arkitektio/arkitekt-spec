@@ -486,7 +486,6 @@ class AppRegistry(BaseModel):
         registry: StructureRegistry,
         *,
         required_locks: Sequence[str] | None = None,
-        publish_interval: float = 0.1,
     ) -> None:
         """Register a state schema at its interface, with the rules for changing it.
 
@@ -499,7 +498,6 @@ class AppRegistry(BaseModel):
             state: Its schema, built against ``registry``.
             registry: The structures its ports were built against.
             required_locks: Locks an action must hold to change it.
-            publish_interval: Seconds between published updates.
         """
         self._refuse_if_frozen(f"the state '{state.interface}'")
         self.states[state.interface] = state
@@ -510,7 +508,6 @@ class AppRegistry(BaseModel):
             interface=state.interface,
             definition=state.definition,
             required_locks=tuple(required_locks or ()),
-            publish_interval=publish_interval,
         )
         # On this app's structures, and on the ones the schema was built against
         # when those are separate: a definition built against the latter must
@@ -980,7 +977,6 @@ class AppRegistry(BaseModel):
         *,
         name: str | None = None,
         required_locks: list[str] | None = None,
-        publish_interval: float = 0.1,
     ) -> type[T]: ...
 
     @overload
@@ -990,7 +986,6 @@ class AppRegistry(BaseModel):
         *,
         name: str | None = None,
         required_locks: list[str] | None = None,
-        publish_interval: float = 0.1,
     ) -> Callable[[type[T]], type[T]]: ...
 
     @dataclass_transform(field_specifiers=(model_field,))
@@ -999,7 +994,6 @@ class AppRegistry(BaseModel):
         *args: type[T],
         name: str | None = None,
         required_locks: list[str] | None = None,
-        publish_interval: float = 0.1,
     ) -> type[T] | Callable[[type[T]], type[T]]:
         """Register a class as a stateful entity (it becomes a dataclass).
 
@@ -1012,7 +1006,6 @@ class AppRegistry(BaseModel):
             *args,
             name=name,
             required_locks=required_locks,
-            publish_interval=publish_interval,
             registry=self,
             structure_reg=self.structure_registry,
         )

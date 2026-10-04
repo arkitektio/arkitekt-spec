@@ -339,7 +339,6 @@ class StateDeclaration:
     interface: str
     definition: StateDefinitionInput
     required_locks: tuple[str, ...] = ()
-    publish_interval: float = 0.1
 
 
 @dataclasses.dataclass(frozen=True)
