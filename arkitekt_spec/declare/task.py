@@ -140,6 +140,16 @@ class Task(Protocol):
         """Pause here if the task was asked to."""
         ...
 
+    def check_cancelled(self) -> None:
+        """Stop here if the task was cancelled.
+
+        A function that is not ``async`` only learns of a cancellation where it
+        asks: here, and at :meth:`progress` and :meth:`log`. Call it between the
+        steps of anything long -- before each move, each frame, each file -- so
+        a cancelled task stops instead of running to its end.
+        """
+        ...
+
     def install_hook(self, hook: AssignmentHook) -> None:
         """Run ``hook`` when the task's assignment receives a message of its kind."""
         ...
@@ -393,6 +403,10 @@ class LocalTask:
 
     async def apausepoint(self) -> None:
         """Nothing pauses a local call."""
+        return
+
+    def check_cancelled(self) -> None:
+        """Nothing cancels a local call."""
         return
 
     def install_hook(self, hook: AssignmentHook) -> None:
