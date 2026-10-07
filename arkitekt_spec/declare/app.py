@@ -55,7 +55,9 @@ from arkitekt_spec.declare.catalogs import (
     OperationSpec,
     base_only_view,
     check_extension_does_not_shadow_base,
+    is_standard_catalog,
     resolve_catalogs,
+    standard_view,
 )
 from arkitekt_spec.declare.coercible_types import OptimisticCoercible
 from arkitekt_spec.declare.errors import AppContextError, RegistryFrozenError
@@ -66,6 +68,7 @@ from arkitekt_spec.declare.structures.errors import StructureRegistryError
 from arkitekt_spec.declare.structures.model import model_field
 from arkitekt_spec.declare.structures.registry import StructureRegistry
 from arkitekt_spec.declare.structures.types import (
+    Describer,
     ExpanderT,
     ManyExpander,
     Shrinker,
@@ -196,6 +199,7 @@ class AppRegistry(BaseModel):
         *,
         schema: str | Path | None = None,
         turms: str | Path | None = None,
+        image: str | None = None,
     ) -> Callable[[Callable[..., T]], Service[T]]:
         """Declare a service here: ``@registry.service()`` on its builder.
 
@@ -208,6 +212,9 @@ class AppRegistry(BaseModel):
         Args:
             schema: Path to the service's GraphQL schema, for code generation.
             turms: Path to the turms project that generates its client.
+            image: The image that hosts the server this client talks to, e.g.
+                ``"jhnnsrs/mikro:7"``: what a deployment made for this app's
+                tests runs. Not part of the manifest.
 
         Returns:
             A decorator returning the :class:`~rekuest.service.Service`.
@@ -218,7 +225,7 @@ class AppRegistry(BaseModel):
         """
 
         def declare(function: Callable[..., T]) -> Service[T]:
-            declared = declare_service(self, function, schema=schema, turms=turms)
+            declared = declare_service(self, function, schema=schema, turms=turms, image=image)
             self._take_service(declared)
             return declared
 
@@ -651,15 +658,24 @@ class AppRegistry(BaseModel):
     def catalog_view(self, name: str | None) -> "CatalogView":
         """The view a blok naming ``name`` is validated against offline.
 
-        A declared catalog makes the operation set authoritative, so an unknown
-        operation becomes a warning. Without one there is only the base catalog,
-        which cannot tell a typo from an operation the UI legitimately provides,
-        so unknown operations stay quiet until the server sees them.
+        A blok that names no catalog, or the standard one, is checked against
+        the standard catalog this package ships (``load_standard_catalog``): its
+        components and props are known, and one it does not have is refused. A
+        catalog this app declared is checked against that declaration. Either
+        makes the operation set authoritative, so an unknown operation becomes a
+        warning. A name nobody declared leaves only the base catalog, which
+        cannot tell a typo from an operation the UI legitimately provides, so
+        nothing but base operations is checked until the server sees it.
         """
         declared = self.declared_catalogs.get(name) if name is not None else None
-        if declared is None:
-            return base_only_view()
-        return resolve_catalogs([declared], authoritative=True)
+        if declared is not None:
+            return resolve_catalogs([declared], authoritative=True)
+        if is_standard_catalog(name):
+            # What a blok is drawn by unless it says otherwise: the vendored
+            # catalog of the Orkestrator app, so a component or prop it does
+            # not have is refused here and not found out in the user interface.
+            return standard_view()
+        return base_only_view()
 
     def _resolve_dependencies(
         self,
@@ -1105,6 +1121,7 @@ class AppRegistry(BaseModel):
         expand_many: ManyExpander | None = None,
         shrink: Shrinker | None = None,
         returnwidget: ReturnWidgetInput | None = None,
+        describe: Describer | None = None,
     ) -> Callable[[ExpanderT], ExpanderT]:
         """Declare a type that travels by id: ``@registry.structure("@mikro/image")``.
 
@@ -1129,6 +1146,9 @@ class AppRegistry(BaseModel):
                 It may ask for clients by annotation after the object, like the
                 expander.
             returnwidget: The widget one is shown with.
+            describe: Computes an object's descriptors (``{key: value}``). A run
+                tests them against a port's ``Requires`` and ``Provides``; a key
+                it does not return is not tested.
 
         Returns:
             A decorator returning the expander unchanged, with its declared type.
@@ -1141,6 +1161,7 @@ class AppRegistry(BaseModel):
             expand_many=expand_many,
             shrink=shrink,
             returnwidget=returnwidget,
+            describe=describe,
         )
 
     def app_context(

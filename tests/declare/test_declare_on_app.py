@@ -137,12 +137,12 @@ def test_a_blok_names_declared_protocols_by_key() -> None:
     registry = app_knowing_sample_as("@a/sample")
     registry.declare(app="lab")(Lab)
 
-    registry.register_blok("b", "<Action key='lab' />", dependencies={"lab": Lab})
+    registry.register_blok("b", "<div />", dependencies={"lab": Lab})
 
     (dependency,) = registry.registered_bloks["b"].dependencies
     assert (dependency.key, dependency.app) == ("lab", "lab")
     with pytest.raises(KeyError, match="not a protocol this app declared"):
-        registry.register_blok("c", "<Action key='x' />", dependencies={"x": Sample})
+        registry.register_blok("c", "<div />", dependencies={"x": Sample})
 
 
 # --------------------------------------------------------------------------- #

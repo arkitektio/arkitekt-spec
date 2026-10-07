@@ -7,6 +7,7 @@ arkitekt's plugin CLI writes it, and the kabinet server reads it.
 - :class:`AppManifest` and :class:`Requirement`: who the app is, what services it needs.
 - :class:`Inspection`: what the app declares, in the action language of :mod:`.actions`.
 - :data:`Selector`: where a flavour of it may run.
+- :class:`ReleaseDescriptor`: a release as its registry repository carries it (:mod:`.release`).
 - :class:`DeploymentsFile`: ``.arkitekt/deployments.yaml``, the images a repo publishes.
 """
 
@@ -33,6 +34,14 @@ from arkitekt_spec.manifest import (
     AppManifest,
     Requirement,
 )
+from arkitekt_spec.release import (
+    RELEASE_MEDIA_TYPE,
+    ReleaseDescriptor,
+    ReleaseFlavour,
+    dump_descriptor,
+    load_descriptor,
+    parse_repository,
+)
 from arkitekt_spec.selectors import (
     SELECTOR_KINDS,
     BaseSelector,
@@ -51,6 +60,11 @@ def json_schema() -> dict[str, Any]:
     return DeploymentsFile.model_json_schema(by_alias=True)
 
 
+def release_json_schema() -> dict[str, Any]:
+    """The JSON Schema of a release descriptor."""
+    return ReleaseDescriptor.model_json_schema(by_alias=True)
+
+
 def selector_adapter() -> TypeAdapter[Selector]:
     """A validator for a single selector, dispatched on ``kind``."""
     return TypeAdapter(Selector)
@@ -59,6 +73,7 @@ def selector_adapter() -> TypeAdapter[Selector]:
 __all__ = [
     "DEFAULT_ENTRYPOINT",
     "DEPLOYMENTS_PATH",
+    "RELEASE_MEDIA_TYPE",
     "SELECTOR_KINDS",
     "SPEC_VERSION",
     "UNKNOWN_AUTHOR",
@@ -74,13 +89,19 @@ __all__ = [
     "LabelSelector",
     "OneApiSelector",
     "RamSelector",
+    "ReleaseDescriptor",
+    "ReleaseFlavour",
     "Requirement",
     "RocmSelector",
     "Selector",
     "actions",
     "definition_hash",
     "dump_deployments",
+    "dump_descriptor",
     "json_schema",
     "load_deployments",
+    "load_descriptor",
+    "parse_repository",
+    "release_json_schema",
     "selector_adapter",
 ]

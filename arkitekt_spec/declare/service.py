@@ -259,6 +259,8 @@ class Service(Generic[C]):
             the built client.
         registry: The registry it was declared on: the structures and actions
             the client package brings with it.
+        image: The image that hosts the server this client talks to, if the
+            package says: what a deployment made for a test runs.
     """
 
     def __init__(
@@ -270,11 +272,13 @@ class Service(Generic[C]):
         registry: "AppRegistry",
         schema: str | Path | None,
         turms: str | Path | None,
+        image: str | None = None,
     ) -> None:
         self._function = function
         self._injections = list(injections)
         self._schema = schema
         self._turms = turms
+        self.image = image
         self.name = name
         self.returns: type[C] = returns
         self.registry = registry
@@ -390,6 +394,7 @@ def declare_service(
     *,
     schema: str | Path | None = None,
     turms: str | Path | None = None,
+    image: str | None = None,
 ) -> Service[C]:
     """Read a service off ``function``, declared on ``registry``.
 
@@ -402,6 +407,7 @@ def declare_service(
         function: The builder.
         schema: Path to the service's GraphQL schema, for code generation.
         turms: Path to the turms project that generates its client.
+        image: The image that hosts the server this client talks to.
 
     Returns:
         The :class:`Service`.
@@ -422,4 +428,5 @@ def declare_service(
         registry=registry,
         schema=schema,
         turms=turms,
+        image=image,
     )

@@ -2,7 +2,7 @@
 
 import dataclasses
 import re
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from enum import Enum
 from typing import (
     Any,
@@ -76,6 +76,9 @@ class Expander(Protocol):
 
         ...
 
+
+Describer = Callable[[Any], Mapping[str, Any]]
+"""Computes an object's descriptors: a flat ``{key: value}``, locally."""
 
 ExpanderT = TypeVar("ExpanderT", bound=Callable[..., Awaitable[Any]])
 """The expander exactly as declared, clients and all.
@@ -157,6 +160,15 @@ class FullFilledStructure(BaseModel):
 
     Set either by the structure itself or, when it asks for a client that offers
     one, by :meth:`StructureRegistry.bind`. ``None`` means one request per id.
+    """
+    describe: Describer | None = None
+    """Computes the object's descriptors, as a flat ``{key: value}``.
+
+    The client-side twin of what the hosting service declares for the structure.
+    A run tests it against a port's ``requires`` after expanding and against its
+    ``provides`` before shrinking, so it must be cheap and must not reach a
+    server. A key it does not return is not tested: that is provenance, which
+    only whoever made the object can state.
     """
     injects: dict[str, type] = Field(default_factory=dict, exclude=True)
     """The clients this structure's functions ask for.

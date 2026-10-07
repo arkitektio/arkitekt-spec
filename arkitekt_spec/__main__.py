@@ -1,7 +1,9 @@
-"""Print the JSON Schema of ``deployments.yaml``: ``python -m arkitekt_spec``."""
+"""Print a JSON Schema: ``python -m arkitekt_spec`` (deployments.yaml) or ``... release``."""
 
 import json
+import sys
 
-from arkitekt_spec import json_schema
+from arkitekt_spec import json_schema, release_json_schema
 
-print(json.dumps(json_schema(), indent=2, sort_keys=True))
+schema = release_json_schema() if sys.argv[1:] == ["release"] else json_schema()
+print(json.dumps(schema, indent=2, sort_keys=True))

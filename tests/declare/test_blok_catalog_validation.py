@@ -70,11 +70,12 @@ def test_a_util_call_nested_in_an_agent_call_argument_is_checked() -> None:
         validate_blok_catalog(tree, electron_view())
 
 
-def test_without_a_declared_catalog_nothing_is_invented() -> None:
-    """No catalog registered components, so component names are unknowable."""
+def test_without_a_declared_catalog_a_blok_is_checked_against_the_standard_one() -> None:
+    """A blok that names no catalog is drawn by the standard one, whose components are known."""
     registry = AppRegistry()
-    registry.register_blok("anything", '<Slidr whatever="1" />')
-    assert "anything" in registry.registered_bloks
+    with pytest.raises(ValueError, match="'Slidr' is not registered"):
+        registry.register_blok("anything", '<Slidr whatever="1" />')
+    assert "anything" not in registry.registered_bloks
 
 
 def test_naming_an_undeclared_catalog_falls_back_to_base_only() -> None:
@@ -108,18 +109,18 @@ def test_foreach_passes_when_the_catalog_registers_it() -> None:
 def test_structural_foreach_rules_still_fire_without_a_catalog() -> None:
     """The walker's own rules are unaffected by the catalog layer.
 
-    With no catalog the component rules are skipped entirely, so what raises here is
+    The standard catalog asks nothing of a ``foreach``'s props, so what raises here is
     the walker's own requirement that a ``foreach`` carry ``items`` and ``let``.
     """
     registry = AppRegistry()
     with pytest.raises(ValueError, match="missing required prop"):
-        registry.register_blok("bad", '<Box><foreach let="#x" /></Box>')
+        registry.register_blok("bad", '<div><foreach let="#x" /></div>')
 
 
 def test_the_catalog_reaches_the_wire_input() -> None:
     registry = _registry()
     registry.register_blok("panel", '<Box><Slider min="1" /></Box>', catalog="electron")
-    registry.register_blok("plain", "<Box />")
+    registry.register_blok("plain", "<div />")
 
     bloks = build_declared_bloks(registry)
     assert bloks["panel"].catalog == "electron"

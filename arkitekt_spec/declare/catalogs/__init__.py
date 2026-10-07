@@ -30,7 +30,7 @@ models so that they stay usable from anywhere -- see the import rule below.
 import functools
 import json
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib import resources
 
 BASE_CATALOG_NAME = "base"
@@ -184,6 +184,143 @@ def base_operation(name: str) -> OperationSpec | None:
 def is_base_operation(name: str) -> bool:
     """Whether ``name`` is provided by the base catalog."""
     return name in base_operations()
+
+
+# --------------------------------------------------------------------------- the standard catalog
+
+STANDARD_CATALOG_NAME = "orkestrator"
+"""The catalog a blok is checked against when it names none: what the Orkestrator app renders."""
+
+STANDARD_CATALOG_SOURCE = "arkitektio/orkestrator"
+"""The repository whose releases publish the standard catalog, as ``blok-catalog.json``."""
+
+
+STANDARD_CATALOG_CORRECTIONS: Mapping[str, Mapping[str, object]] = {
+    # The app renders the children of a ``foreach`` once per item, but derives
+    # ``acceptsChildren`` from a ``children`` prop the loop's schema does not have, so
+    # the published catalog says it takes none. A loop without a body is no loop.
+    "foreach": {"accepts_children": True},
+}
+"""Where the published standard catalog is known to say something the app does not do.
+
+The vendored file stays as published; what is wrong in it is set right here, by name, and
+``tests/declare/test_standard_catalog.py`` fails for an entry the file no longer needs --
+which is when to delete it. The fix belongs in the app that publishes the catalog.
+"""
+
+
+def _parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]
+    """A ``registerUiCatalog`` payload, as a UI app publishes it, as a :class:`Catalog`.
+
+    Operations the base catalog already provides are left out: a UI catalog only extends
+    the base, and a published one lists everything the app evaluates, base included.
+    """
+    components: list[ComponentSpec] = []
+    seen: set[str] = set()
+    for entry in raw.get("components", []):
+        name = entry["name"]
+        if not name or name in seen:
+            raise ValueError(f"catalog {raw.get('name')!r}: duplicate or empty component name {name!r}")
+        seen.add(name)
+        props: list[PropSpec] = []
+        keys: set[str] = set()
+        for prop in entry.get("props", []):
+            if prop["key"] in keys:
+                raise ValueError(f"catalog {raw.get('name')!r}: {name} repeats the prop {prop['key']!r}")
+            if prop["kind"] not in VALUE_KINDS:
+                raise ValueError(
+                    f"catalog {raw.get('name')!r}: {name}.{prop['key']} has unknown kind {prop['kind']!r}"
+                )
+            keys.add(prop["key"])
+            props.append(
+                PropSpec(
+                    key=prop["key"],
+                    kind=prop["kind"],
+                    required=bool(prop.get("required", False)),
+                    description=prop.get("description"),
+                )
+            )
+        components.append(
+            ComponentSpec(
+                name=name,
+                accepts_children=bool(entry.get("acceptsChildren", False)),
+                props=tuple(props),
+                description=entry.get("description"),
+            )
+        )
+
+    operations: list[OperationSpec] = []
+    for entry in raw.get("operations", []):
+        if is_base_operation(entry["name"]):
+            continue
+        operations.append(
+            OperationSpec(
+                name=entry["name"],
+                returns=entry["returns"],
+                arguments=tuple(
+                    ArgumentSpec(
+                        key=argument["key"],
+                        kind=argument["kind"],
+                        required=bool(argument.get("required", False)),
+                        description=argument.get("description"),
+                    )
+                    for argument in entry.get("arguments", [])
+                ),
+                description=entry.get("description"),
+            )
+        )
+
+    return Catalog(
+        name=raw["name"],
+        operations=tuple(operations),
+        components=tuple(components),
+        description=raw.get("description"),
+    )
+
+
+@functools.lru_cache(maxsize=1)
+def load_standard_catalog() -> Catalog:
+    """The vendored standard catalog, parsed and validated (cached).
+
+    ``orkestrator.json`` is the ``blok-catalog.json`` of an Orkestrator release, unmodified:
+    the components that app draws and the operations it evaluates. It is the frontend's to
+    write and only ever copied here (``scripts/sync_standard_catalog.py``), which is what
+    keeps a blok written against it from drifting from what is rendered.
+    """
+    catalog = load_published_standard_catalog()
+    return replace(
+        catalog,
+        components=tuple(
+            replace(component, **STANDARD_CATALOG_CORRECTIONS.get(component.name, {}))  # type: ignore[arg-type]
+            for component in catalog.components
+        ),
+    )
+
+
+@functools.lru_cache(maxsize=1)
+def load_published_standard_catalog() -> Catalog:
+    """The vendored standard catalog exactly as it was published, before the corrections."""
+    text = resources.files(__package__).joinpath("orkestrator.json").read_text(encoding="utf-8")
+    catalog = _parse_ui_catalog(json.loads(text))
+    if catalog.name != STANDARD_CATALOG_NAME:
+        raise ValueError(f"the standard catalog is named {catalog.name!r}, not {STANDARD_CATALOG_NAME!r}")
+    return catalog
+
+
+@functools.lru_cache(maxsize=1)
+def standard_catalog_release() -> str:
+    """The Orkestrator release the vendored standard catalog was copied from, e.g. ``v2.19.0``."""
+    return resources.files(__package__).joinpath("orkestrator.release").read_text(encoding="utf-8").strip()
+
+
+def is_standard_catalog(name: str | None) -> bool:
+    """Whether a blok naming ``name`` is checked against the standard catalog: it names it, or none."""
+    return name is None or name == STANDARD_CATALOG_NAME
+
+
+def standard_view() -> "CatalogView":
+    """The view of the standard catalog: its components, and its operations on the base's."""
+    return resolve_catalogs([load_standard_catalog()], authoritative=True)
 
 
 def base_version_named(name: str) -> int | None:

@@ -1,0 +1,3879 @@
+{
+  "$defs": {
+    "ActionArgumentInput": {
+      "additionalProperties": false,
+      "description": "A JSON-serializable argument entry for a multi-agent action trigger.",
+      "properties": {
+        "agent_call": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentProbeInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Defines a nested agent call if this argument should trigger an agent interaction."
+        },
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The argument property name.",
+          "title": "Key"
+        },
+        "util_call": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtilCallInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Defines a nested utility call if this argument should trigger a system utility interaction."
+        },
+        "value_dict": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ActionArgumentInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Defines a list of key-value pairs if this argument should be a dictionary.",
+          "title": "Value Dict"
+        },
+        "value_list": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ActionArgumentInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Defines a list of values if this argument should be an array.",
+          "title": "Value List"
+        },
+        "value_literal": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Static literal value if not dynamically bound.",
+          "title": "Value Literal"
+        },
+        "value_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON Pointer referencing the shared Blok state to inject into this argument slot dynamically.",
+          "title": "Value Path"
+        }
+      },
+      "title": "ActionArgumentInput",
+      "type": "object"
+    },
+    "ActionDemandInput": {
+      "additionalProperties": false,
+      "description": "Pure matching criteria for an action: hash or name short-circuits, arg/return\nport matches, protocols and forced port counts. Used directly by query filters and, wrapped\nin an ActionDependencyInput, by dependency declarations.",
+      "properties": {
+        "app": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The identifier of the app providing the action, e.g. 'imagej'. Omit (or drop when loosening) to allow equivalent actions from any app.",
+          "title": "App"
+        },
+        "arg_matches": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/PortMatchInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The matches the action's arg ports must satisfy.",
+          "title": "Arg Matches"
+        },
+        "force_arg_length": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Require that the action has exactly this number of root args.",
+          "title": "Force Arg Length"
+        },
+        "force_return_length": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Require that the action has exactly this number of root returns.",
+          "title": "Force Return Length"
+        },
+        "hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The exact hash of the action. When set, matching short-circuits on the hash and everything else is ignored.",
+          "title": "Hash"
+        },
+        "idempotent": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Require the action to be (or not be) idempotent. Omit to match either.",
+          "title": "Idempotent"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The action's key within its app, e.g. 'open_image'. Together with `app` this is the preferred identification of the demanded action.",
+          "title": "Key"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The display name of the action to match.",
+          "title": "Name"
+        },
+        "protocols": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Protocols (by name) the action must implement, e.g. 'predicate'.",
+          "title": "Protocols"
+        },
+        "pure": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Require the action to be (or not be) pure. Omit to match either.",
+          "title": "Pure"
+        },
+        "return_matches": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/PortMatchInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The matches the action's return ports must satisfy.",
+          "title": "Return Matches"
+        },
+        "stateful": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Require the action to be (or not be) stateful. Omit to match either.",
+          "title": "Stateful"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The exact version of the action.",
+          "title": "Version"
+        }
+      },
+      "title": "ActionDemandInput",
+      "type": "object"
+    },
+    "ActionDependencyInput": {
+      "additionalProperties": false,
+      "description": "A named action requirement of a dependency: a slot key plus the demand the\nresolved action must satisfy, and resolution-lifecycle filters.",
+      "properties": {
+        "allow_inactive": {
+          "default": true,
+          "description": "Allow inactive nodes, defaults to true",
+          "title": "Allow Inactive",
+          "type": "boolean"
+        },
+        "demand": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActionDemandInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The matching criteria the resolved action must satisfy (app/key preferred; matches loosen)."
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The description of the dependency, why it is needed and what it is used for.",
+          "title": "Description"
+        },
+        "key": {
+          "description": "The local slot key of this action requirement \u2014 callers reference it when assigning.",
+          "title": "Key",
+          "type": "string"
+        },
+        "optional": {
+          "default": false,
+          "description": "Whether the dependency is optional or not. If the dependency is optional, the agent doesn't have to provide it to be potentially callable",
+          "title": "Optional",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "title": "ActionDependencyInput",
+      "type": "object"
+    },
+    "ActionKind": {
+      "description": "The kind of action.",
+      "enum": [
+        "FUNCTION",
+        "GENERATOR"
+      ],
+      "title": "ActionKind",
+      "type": "string"
+    },
+    "AgentDependencyInput": {
+      "additionalProperties": false,
+      "description": "A dependency for a implementation. By defining dependencies, you can\ncreate a dependency graph for your implementations and actions",
+      "properties": {
+        "action_dependencies": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ActionDependencyInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The named action requirements of the agent \u2014 each a slot key plus the demand the resolved action must satisfy.",
+          "title": "Action Dependencies"
+        },
+        "app": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Which app this dependency corresponds to (i.e. do you want to use a stardist agent for that or imagej agents needs to be a world unique classsifier (reverse domain notation) that identifies the type of agent you want to use, and then we can have multiple agents of the same type running in the system, e.g. startdist could be the app for all agents that correpsond to a startdist instance)",
+          "title": "App"
+        },
+        "auto_resolvable": {
+          "default": false,
+          "description": "Whether this dependency is auto resolvable or not. If so we will try to automatically resolve it based on the demands specified in the dependency and the capabilities of the available agents in the system. This is used to identify the demand in the system. Attention if any of the dependencies of this agent dependency is not auto resolvable, this dependency will also not be auto resolvable",
+          "title": "Auto Resolvable",
+          "type": "boolean"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A description of the dependency, why it is needed and what it is used for. This can be used to provide more context to users when assigning dependencies.",
+          "title": "Description"
+        },
+        "key": {
+          "description": "The key of this dependency, when assigning you can reference this key to specify which agent_dependency you are assigning to.",
+          "title": "Key",
+          "type": "string"
+        },
+        "max_viable_instances": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The maximum amount of viable instances for the agent. This is used to identify the demand in the system.",
+          "title": "Max Viable Instances"
+        },
+        "min_viable_instances": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum amount of viable instances for the agent. This is used to identify the demand in the system.",
+          "title": "Min Viable Instances"
+        },
+        "mutually_exclusive_keys": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A list of keys of other agent dependencies that are mutually exclusive with this one. This means two agent dependencies with mutually exclusive keys cannot be assigned to the same implementing agent. This is used to identify the demand in the system.",
+          "title": "Mutually Exclusive Keys"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The name of the agent. This is used to identify the agent in the system.",
+          "title": "Name"
+        },
+        "optional": {
+          "default": false,
+          "description": "Whether the dependency is optional or not. If the dependency is optional, users can choose to not provide it",
+          "title": "Optional",
+          "type": "boolean"
+        },
+        "prefered_instances": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The prefered amount of instances for the agent. This is used to identify the demand in the system.",
+          "title": "Prefered Instances"
+        },
+        "state_dependencies": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/StateDependencyInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The named state requirements of the agent \u2014 each a slot key plus the demand the agent's state must satisfy.",
+          "title": "State Dependencies"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The version of the app this dependency corresponds to.",
+          "title": "Version"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "title": "AgentDependencyInput",
+      "type": "object"
+    },
+    "AgentProbeInput": {
+      "additionalProperties": false,
+      "description": "Defines a callback that routes user interactions directly to an Arkitekt Agent via Rekuest.",
+      "properties": {
+        "arguments": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ActionArgumentInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Key-value arguments map compiled for the target agent call.",
+          "title": "Arguments"
+        },
+        "dependency": {
+          "description": "The abstract agent dependency key declared in the Blok manifest (e.g., 'stage_dep').",
+          "title": "Dependency",
+          "type": "string"
+        },
+        "operation": {
+          "description": "The target function name registered on that specific agent's worker thread loop.",
+          "title": "Operation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dependency",
+        "operation"
+      ],
+      "title": "AgentProbeInput",
+      "type": "object"
+    },
+    "AppManifest": {
+      "description": "The identity of one released version of an app.",
+      "properties": {
+        "author": {
+          "default": "unknown",
+          "description": "Who publishes the app.",
+          "title": "Author",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the app is, in a sentence or two.",
+          "title": "Description"
+        },
+        "entrypoint": {
+          "default": "app",
+          "description": "The target (`module[:attr]`) the image runs to find the app.",
+          "title": "Entrypoint",
+          "type": "string"
+        },
+        "identifier": {
+          "description": "The globally unique identifier of the app.",
+          "title": "Identifier",
+          "type": "string"
+        },
+        "logo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A URL to the app's logo.",
+          "title": "Logo"
+        },
+        "scopes": {
+          "description": "The scopes the app requests from the user.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Scopes",
+          "type": "array"
+        },
+        "version": {
+          "description": "The version of this release.",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "identifier",
+        "version"
+      ],
+      "title": "AppManifest",
+      "type": "object"
+    },
+    "ArgPortInput": {
+      "additionalProperties": false,
+      "description": "A Port is a single input or output of an action, identified by its `key` and typed by its `kind`.\n\nSTRUCTURE, MEMORY_STRUCTURE and INTERFACE ports carry an `identifier` of the form `@package/key`\n(e.g. `@mikro/image`); ports with the same identifier are compatible. LIST and DICT ports have one\nchild (the item type), UNION ports two or more (the variants), MODEL ports one per field. ENUM ports\ndeclare `choices`. See docs/design/ports.md for the full table.",
+      "properties": {
+        "children": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ArgPortInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The child ports (used for list, dict, union and model ports).",
+          "title": "Children"
+        },
+        "choices": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ChoiceInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The values the port accepts (required for ENUM; optional for INT, FLOAT, STRING). Rendered by CHOICE widgets.",
+          "title": "Choices"
+        },
+        "default": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The default value for the port; must fit the port's kind.",
+          "title": "Default"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The description of the port. This is the text that is displayed in the UI when the user hovers over the port",
+          "title": "Description"
+        },
+        "dimension": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For QUANTITY ports: the pint dimensionality string, e.g. \"[mass] * [length] ** 2 / [time] ** 3 / [current]\". This is the wiring-compatibility key between quantity ports.",
+          "title": "Dimension"
+        },
+        "effects": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/EffectInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The effects of the port",
+          "title": "Effects"
+        },
+        "identifier": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The identifier of the port's type, of the form @package/key. Required for STRUCTURE, MEMORY_STRUCTURE and INTERFACE, where it is the only identity a value has; optional for MODEL and ENUM, where it names the class or enum the port was built from so that agents can map a value back to it.",
+          "title": "Identifier"
+        },
+        "key": {
+          "description": "The key of the port: unique among its siblings, free of '..', not 'value'. LIST/DICT item ports are conventionally keyed '...'.",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/PortKind",
+          "description": "The kind of the port. This is the type of the port. Can be either int, string, structure, list, bool, dict, float, date, union or model"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The label of the port. This is the text that is displayed in the UI",
+          "title": "Label"
+        },
+        "nullable": {
+          "default": false,
+          "description": "Whether the port is nullable or not. If the port is nullable, it can be set to null. If the port is not nullable, it cannot be set to null",
+          "title": "Nullable",
+          "type": "boolean"
+        },
+        "proposed_units": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For QUANTITY ports: units offered as a dropdown in the UI, e.g. [\"pF\", \"nF\", \"uF\"]. Proposals only \u2014 any unit of the same dimension remains valid input.",
+          "title": "Proposed Units"
+        },
+        "reference_unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For QUANTITY ports: the canonical/reference unit of the physical quantity, e.g. \"volt\" or \"farad\". It is the default selection and the key used to resolve the concrete quantity type; other units of the same dimension are still allowed.",
+          "title": "Reference Unit"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/RequiresInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The descriptors for the port. Descriptors are key-value pairs that can be used to add additional metadata to a port. When using rekuest's action search, you can filter actions based on their port descriptors",
+          "title": "Requires"
+        },
+        "validators": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ValidatorInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The validators for the port",
+          "title": "Validators"
+        },
+        "widget": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "CHOICE": "#/$defs/ChoiceAssignWidgetInput",
+                  "CUSTOM": "#/$defs/CustomAssignWidgetInput",
+                  "PROXY": "#/$defs/ProxyAssignWidgetInput",
+                  "SEARCH": "#/$defs/SearchAssignWidgetInput",
+                  "SLIDER": "#/$defs/SliderAssignWidgetInput",
+                  "STATE_CHOICE": "#/$defs/StateChoiceAssignWidgetInput",
+                  "STRING": "#/$defs/StringAssignWidgetInput"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ChoiceAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/CustomAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/ProxyAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/SearchAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/SliderAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/StateChoiceAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/StringAssignWidgetInput"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The assign widget to use for this port, discriminated by `kind`.",
+          "title": "Widget"
+        }
+      },
+      "required": [
+        "key",
+        "kind"
+      ],
+      "title": "ArgPortInput",
+      "type": "object"
+    },
+    "BlokImplementationInput": {
+      "additionalProperties": false,
+      "description": "Which locks does the agent provide in general",
+      "properties": {
+        "catalog": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The optional catalog name if this Blok should be registered inside a specific namespace in your Electron app's UI component registry.",
+          "title": "Catalog"
+        },
+        "components": {
+          "description": "The UI component tree blueprint for this Blok.",
+          "items": {
+            "$ref": "#/$defs/ComponentNodeInput"
+          },
+          "title": "Components",
+          "type": "array"
+        },
+        "demo_state": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "An optional JSON-serializable object providing demo state values for this Blok's internal reactive data model, useful for testing and development purposes.",
+          "title": "Demo State"
+        },
+        "dependencies": {
+          "default": [],
+          "description": "The dependencies required by this Blok.",
+          "items": {
+            "$ref": "#/$defs/AgentDependencyInput"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A human-readable description about this Blok's purpose and functionality.",
+          "title": "Description"
+        },
+        "key": {
+          "description": "The key of this Blok implementation.",
+          "title": "Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "components"
+      ],
+      "title": "BlokImplementationInput",
+      "type": "object"
+    },
+    "ChoiceAssignWidgetInput": {
+      "additionalProperties": false,
+      "description": "A dropdown over the port's `choices`.",
+      "properties": {
+        "follow_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Port path of another port whose value this widget follows and mirrors.",
+          "title": "Follow Value"
+        },
+        "kind": {
+          "const": "CHOICE",
+          "default": "CHOICE",
+          "title": "Kind",
+          "type": "string"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The placeholder text shown before a choice is made. The choices themselves are the port's `choices`.",
+          "title": "Placeholder"
+        }
+      },
+      "title": "ChoiceAssignWidgetInput",
+      "type": "object"
+    },
+    "ChoiceInput": {
+      "additionalProperties": false,
+      "description": "A choice is a value that can be selected in a dropdown.\n\nIt is composed of a value, a label, and a description. The value is the\nvalue that is returned when the choice is selected. The label is the\ntext that is displayed in the dropdown. The description is the text\nthat is displayed when the user hovers over the choice.",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The description of the choice. This is the text that is displayed in the UI when the user hovers over the choice",
+          "title": "Description"
+        },
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The image of the choice. This is the image that is displayed in the UI (must be a URL)",
+          "title": "Image"
+        },
+        "label": {
+          "description": "The label of the choice. This is the text that is displayed in the UI",
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "description": "The value of the choice (any JSON value); must fit the port's kind. This is the value that is returned when the choice is selected",
+          "title": "Value"
+        }
+      },
+      "required": [
+        "value",
+        "label"
+      ],
+      "title": "ChoiceInput",
+      "type": "object"
+    },
+    "ChoiceReturnWidgetInput": {
+      "additionalProperties": false,
+      "description": "Displays the port's `choices` label for a returned value.",
+      "properties": {
+        "kind": {
+          "const": "CHOICE",
+          "default": "CHOICE",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "title": "ChoiceReturnWidgetInput",
+      "type": "object"
+    },
+    "ComponentNodeInput": {
+      "additionalProperties": false,
+      "description": "An abstract structural visual element inside a Blok blueprint manifest.",
+      "properties": {
+        "children": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ComponentNodeInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Flat adjacency pointer list mapping out IDs nested inside this specific component layer.",
+          "title": "Children"
+        },
+        "component": {
+          "description": "The type indicator token matching your Electron app's registered catalog specs (e.g. 'Slider').",
+          "title": "Component",
+          "type": "string"
+        },
+        "id": {
+          "description": "Unique structural string identifying this node instance inside the flat workspace layout tree.",
+          "title": "Id",
+          "type": "string"
+        },
+        "props": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ComponentPropInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The collection of static values, state pointers, or action endpoints assigned to this component.",
+          "title": "Props"
+        }
+      },
+      "required": [
+        "id",
+        "component"
+      ],
+      "title": "ComponentNodeInput",
+      "type": "object"
+    },
+    "ComponentPropInput": {
+      "additionalProperties": false,
+      "description": "A single key-value prop configuration for a component layout node.",
+      "properties": {
+        "agent_call": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentProbeInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Defines an imperative interactive network action callback loop if this prop should trigger an agent interaction."
+        },
+        "declares_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "If set, this prop declares a new 'value' in the Blok state that can be referenced by other props or actions. The value of this field should be the name of the declared value (e.g., 'selected_user').",
+          "title": "Declares Value"
+        },
+        "dynamic_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DynamicValueInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A reactive state data-binding rule."
+        },
+        "key": {
+          "description": "The prop key name matching the target UI catalog constraint.",
+          "title": "Key",
+          "type": "string"
+        },
+        "static_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A raw scalar or JSON-stringified literal configuration parameter (e.g. '40x' or True).",
+          "title": "Static Value"
+        },
+        "util_call": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtilCallInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Defines an imperative interactive network action callback loop if this prop should trigger a system utility interaction."
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "title": "ComponentPropInput",
+      "type": "object"
+    },
+    "CpuSelector": {
+      "additionalProperties": false,
+      "description": "CPU requirements of the flavour.",
+      "properties": {
+        "arch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The CPU architecture the image is built for (docker platform / kubernetes.io/arch values, e.g. 'amd64', 'arm64').",
+          "title": "Arch"
+        },
+        "frequency": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum CPU frequency required, in MHz.",
+          "title": "Frequency"
+        },
+        "kind": {
+          "const": "cpu",
+          "default": "cpu",
+          "title": "Kind",
+          "type": "string"
+        },
+        "minCount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum number of CPU cores required.",
+          "title": "Mincount"
+        },
+        "required": {
+          "default": true,
+          "description": "If true, a backend failing this selector must not run the flavour (hard constraint). If false, the selector is a preference scored by `weight`.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "weight": {
+          "default": 1,
+          "description": "Scoring weight of a preferred (non-required) selector; deployers prefer candidates with the highest sum of satisfied weights.",
+          "title": "Weight",
+          "type": "integer"
+        }
+      },
+      "title": "CpuSelector",
+      "type": "object"
+    },
+    "CudaSelector": {
+      "additionalProperties": false,
+      "description": "Requires a CUDA-capable (NVIDIA) GPU.",
+      "properties": {
+        "computeCapability": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum CUDA compute capability required (e.g. '8.6') \u2014 NVIDIA's standard placement key.",
+          "title": "Computecapability"
+        },
+        "count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The number of GPUs required (a Docker device-reservation count; unset lets the deployer decide).",
+          "title": "Count"
+        },
+        "cudaCores": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Deprecated: the minimum number of CUDA cores. Prefer computeCapability and memory.",
+          "title": "Cudacores"
+        },
+        "cudaVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum CUDA (driver/runtime) version required.",
+          "title": "Cudaversion"
+        },
+        "kind": {
+          "const": "cuda",
+          "default": "cuda",
+          "title": "Kind",
+          "type": "string"
+        },
+        "memory": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum GPU memory (VRAM) required, in MB.",
+          "title": "Memory"
+        },
+        "required": {
+          "default": true,
+          "description": "If true, a backend failing this selector must not run the flavour (hard constraint). If false, the selector is a preference scored by `weight`.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "weight": {
+          "default": 1,
+          "description": "Scoring weight of a preferred (non-required) selector; deployers prefer candidates with the highest sum of satisfied weights.",
+          "title": "Weight",
+          "type": "integer"
+        }
+      },
+      "title": "CudaSelector",
+      "type": "object"
+    },
+    "CustomAssignWidgetInput": {
+      "additionalProperties": false,
+      "description": "A catalog component rendered as the port's widget.",
+      "properties": {
+        "component": {
+          "description": "The catalog component to render. The port value is in scope as the reserved root `value`.",
+          "title": "Component",
+          "type": "string"
+        },
+        "dependencies": {
+          "default": [],
+          "description": "The other ports (port paths, `..` traverses children) whose values the props may reference.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "fallback": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "CHOICE": "#/$defs/ChoiceAssignWidgetInput",
+                  "CUSTOM": "#/$defs/CustomAssignWidgetInput",
+                  "PROXY": "#/$defs/ProxyAssignWidgetInput",
+                  "SEARCH": "#/$defs/SearchAssignWidgetInput",
+                  "SLIDER": "#/$defs/SliderAssignWidgetInput",
+                  "STATE_CHOICE": "#/$defs/StateChoiceAssignWidgetInput",
+                  "STRING": "#/$defs/StringAssignWidgetInput"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ChoiceAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/CustomAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/ProxyAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/SearchAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/SliderAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/StateChoiceAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/StringAssignWidgetInput"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Widget to render when the UI has no such component in its catalog.",
+          "title": "Fallback"
+        },
+        "follow_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Port path of another port whose value this widget follows and mirrors.",
+          "title": "Follow Value"
+        },
+        "kind": {
+          "const": "CUSTOM",
+          "default": "CUSTOM",
+          "title": "Kind",
+          "type": "string"
+        },
+        "props": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ComponentPropInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Props of the component. value_paths may only reference `value` and `dependencies`; agent calls are not allowed.",
+          "title": "Props"
+        }
+      },
+      "required": [
+        "component"
+      ],
+      "title": "CustomAssignWidgetInput",
+      "type": "object"
+    },
+    "CustomReturnWidgetInput": {
+      "additionalProperties": false,
+      "description": "A catalog component rendered for a returned value.",
+      "properties": {
+        "component": {
+          "description": "The catalog component to render. The returned value is in scope as the reserved root `value`.",
+          "title": "Component",
+          "type": "string"
+        },
+        "kind": {
+          "const": "CUSTOM",
+          "default": "CUSTOM",
+          "title": "Kind",
+          "type": "string"
+        },
+        "props": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ComponentPropInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Props of the component; value_paths may only reference `value`, agent calls are not allowed.",
+          "title": "Props"
+        }
+      },
+      "required": [
+        "component"
+      ],
+      "title": "CustomReturnWidgetInput",
+      "type": "object"
+    },
+    "DefinitionInput": {
+      "additionalProperties": false,
+      "description": "A definition\n\nDefinitions are the building implementation for Actions and provide the\ninformation needed to create a action. They are primarly composed of a name,\na description, and a list of ports.\n\nDefinitions provide a protocol of input and output, and do not contain\nany information about the actual implementation of the action ( this is handled\nby a implementation that implements a action).",
+      "properties": {
+        "allow_probe": {
+          "default": false,
+          "description": "Whether the action may be invoked as a probe: zero persistence, redis-held state, no history/replay/recovery. Only actions declaring this are callable via the call mutation.",
+          "title": "Allow Probe",
+          "type": "boolean"
+        },
+        "args": {
+          "default": [],
+          "description": "The args of the definition. This is the input ports of the definition",
+          "items": {
+            "$ref": "#/$defs/ArgPortInput"
+          },
+          "title": "Args",
+          "type": "array"
+        },
+        "catalogs": {
+          "default": [],
+          "description": "Names of the UI catalogs that extend the base catalog (`base@1`, always applied) for this definition's effect and validator calls. Unknown names yield an unknown_catalog warning; conflicting operation definitions across catalogs are a registration error.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Catalogs",
+          "type": "array"
+        },
+        "collections": {
+          "default": [],
+          "description": "The collections of the definition. This is used to group definitions together in the UI",
+          "items": {
+            "type": "string"
+          },
+          "title": "Collections",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The description of the definition. This is the text that is displayed in the UI",
+          "title": "Description"
+        },
+        "idempotent": {
+          "default": false,
+          "description": "Whether the action is idempotent: safe to run multiple times with the same args without changing the outcome \u2014 on ambiguous executor loss it may be freely re-dispatched.",
+          "title": "Idempotent",
+          "type": "boolean"
+        },
+        "is_dev": {
+          "default": false,
+          "description": "Whether the definition is a dev definition or not. If the definition is a dev definition, it can be used to create a dev action. If the definition is not a dev definition, it cannot be used to create a dev action",
+          "title": "Is Dev",
+          "type": "boolean"
+        },
+        "is_test_for": {
+          "default": [],
+          "description": "The actions this definition is a test for, each identified by hash or by (app, key, version).",
+          "items": {
+            "$ref": "#/$defs/TestTargetInput"
+          },
+          "title": "Is Test For",
+          "type": "array"
+        },
+        "key": {
+          "description": "The key of the definition. This is used to uniquely identify the definition",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ActionKind",
+          "description": "The kind of the definition. This is the type of the definition. Can be either a function or a generator"
+        },
+        "name": {
+          "description": "The name of the actions. This is used to uniquely identify the definition",
+          "title": "Name",
+          "type": "string"
+        },
+        "port_groups": {
+          "default": [],
+          "description": "The port groups of the definition. This is used to group ports together in the UI",
+          "items": {
+            "$ref": "#/$defs/PortGroupInput"
+          },
+          "title": "Port Groups",
+          "type": "array"
+        },
+        "pure": {
+          "default": false,
+          "description": "Whether the action is pure: same args always produce the same result and no side effects \u2014 its results are replayable/cacheable. Implies idempotent. Incompatible with stateful and with a PHYSICAL effect class.",
+          "title": "Pure",
+          "type": "boolean"
+        },
+        "returns": {
+          "default": [],
+          "description": "The returns of the definition. This is the output ports of the definition",
+          "items": {
+            "$ref": "#/$defs/ReturnPortInput"
+          },
+          "title": "Returns",
+          "type": "array"
+        },
+        "stateful": {
+          "default": false,
+          "description": "Whether the definition is stateful or not. If the definition is stateful, it can be used to create a stateful action. If the definition is not stateful, it cannot be used to create a stateful action",
+          "title": "Stateful",
+          "type": "boolean"
+        },
+        "version": {
+          "description": "The version of the definition. This is used to differentiate if the underyling algorithm has changed, i.e we would expect different results for the same input",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "version",
+        "name",
+        "kind"
+      ],
+      "title": "DefinitionInput",
+      "type": "object"
+    },
+    "DescriptorInput": {
+      "additionalProperties": false,
+      "description": "A single runtime descriptor key/value pair carried by a candidate object.",
+      "properties": {
+        "key": {
+          "description": "The descriptor key, e.g. 'axes'.",
+          "title": "Key",
+          "type": "string"
+        },
+        "value": {
+          "description": "The descriptor value. Any JSON-serializable value.",
+          "title": "Value"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ],
+      "title": "DescriptorInput",
+      "type": "object"
+    },
+    "DescriptorOperator": {
+      "description": "The operator of a requires/provides descriptor: how a port's constraint compares the object's value at `key` with `value`.",
+      "enum": [
+        "MATCHES",
+        "EXISTS",
+        "LTE",
+        "GTE",
+        "EQUALS",
+        "CONTAINS",
+        "NOT_EQUALS",
+        "IN",
+        "NOT_IN"
+      ],
+      "title": "DescriptorOperator",
+      "type": "string"
+    },
+    "DynamicValueInput": {
+      "additionalProperties": false,
+      "description": "A bound state pointer referencing a variable inside a Blok state instance.",
+      "properties": {
+        "literal": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A static fallback literal value (serialized string or JSON primitive) used when `path` does not resolve.",
+          "title": "Literal"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "JSON Pointer to a variable inside the Blok's isolated data model (e.g., '/microscope/exposure').",
+          "title": "Path"
+        }
+      },
+      "title": "DynamicValueInput",
+      "type": "object"
+    },
+    "EffectInput": {
+      "additionalProperties": false,
+      "description": "An effect is a way to modify a port based on a condition. For example,\nyou could have an effect that hides the port if another port meets a condition,\ne.g. when the user selects a certain option in a dropdown, another port is hidden.\n\nThe condition is a pure blok UtilCall (`call`) evaluated client-side against the\ncatalog; it must return a boolean deciding whether the effect applies. `dependencies`\nis the authoritative list of other ports the call may reference (plus `value` for the\nport's own value).",
+      "properties": {
+        "call": {
+          "$ref": "#/$defs/UtilCallInput",
+          "description": "The pure blok UtilCall, evaluated client-side against the catalog, that decides whether the effect applies. It must return a boolean. Argument value_paths may only reference names listed in `dependencies`, plus `value` for the port's own value."
+        },
+        "dependencies": {
+          "default": [],
+          "description": "The form-field subscription list of the effect: the keys of the other ports whose values the call may reference. This list is authoritative: a value_path in the call may only reference these names (plus `value` for the port's own value). Use the .. syntax to traverse the tree of ports, e.g. 'foo..bar' for the child 'bar' of port 'foo'.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "fade": {
+          "default": true,
+          "description": "Whether to fade out the port when the effect is applied (if it is a hide effect)",
+          "title": "Fade",
+          "type": "boolean"
+        },
+        "kind": {
+          "$ref": "#/$defs/EffectKind",
+          "description": "The kind of the effect. Can be either message, hide or custom"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The message to display when the effect is applied (if it is a message effect)",
+          "title": "Message"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The authoring expression the call was compiled from (informational; never parsed or validated by the server).",
+          "title": "Source"
+        }
+      },
+      "required": [
+        "call",
+        "kind"
+      ],
+      "title": "EffectInput",
+      "type": "object"
+    },
+    "EffectKind": {
+      "description": "The kind of effect.",
+      "enum": [
+        "MESSAGE",
+        "HIDE",
+        "CUSTOM"
+      ],
+      "title": "EffectKind",
+      "type": "string"
+    },
+    "Effects": {
+      "description": "What running an implementation again would do to the world. Purely informational: it is shown to whoever decides about a lost task (an ``AgentLost``, a hold), and never drives what the server does.",
+      "enum": [
+        "NONE",
+        "REPEATABLE",
+        "UNKNOWN",
+        "IRREVERSIBLE"
+      ],
+      "title": "Effects",
+      "type": "string"
+    },
+    "Execution": {
+      "description": "How an implementation runs. A WORKFLOW may call other actions and is resumed from its journal when its agent dies; a PLAIN implementation may not call other actions, and a task of it whose agent dies ends LOST.",
+      "enum": [
+        "PLAIN",
+        "WORKFLOW"
+      ],
+      "title": "Execution",
+      "type": "string"
+    },
+    "ImplementationInput": {
+      "additionalProperties": false,
+      "description": "A implementation is a blueprint for a action. It is composed of a definition, a list of dependencies, and a list of params.",
+      "properties": {
+        "code_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A hash of the implementation's code. A workflow is only resumed by an implementation with the same hash.",
+          "title": "Code Hash"
+        },
+        "definition": {
+          "$ref": "#/$defs/DefinitionInput",
+          "description": "The definition of the implementation. This is used to uniquely identify the implementation"
+        },
+        "dependencies": {
+          "default": [],
+          "description": "The agent dependencies required by this implementation.",
+          "items": {
+            "$ref": "#/$defs/AgentDependencyInput"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "effects": {
+          "$ref": "#/$defs/Effects",
+          "default": "UNKNOWN",
+          "description": "What running this implementation again would do to the world. Informational only: shown to whoever decides about a lost task."
+        },
+        "execution": {
+          "$ref": "#/$defs/Execution",
+          "default": "PLAIN",
+          "description": "How this implementation runs: a WORKFLOW may call other actions and is resumed when its agent dies; a PLAIN one may not call other actions."
+        },
+        "instance_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The instance id of the agent this implementation is bound to.",
+          "title": "Instance Id"
+        },
+        "interface": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The interface of the implementation. This is used to group implementations together in the UI",
+          "title": "Interface"
+        },
+        "locks": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The locks of the implementation. This is used to specify which resources the implementation needs to run",
+          "title": "Locks"
+        },
+        "manipulates": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The states that the implementation manipulates. This is used to identify which states are manipulated by the implementation, and can be use to enhance state safety in the system",
+          "title": "Manipulates"
+        },
+        "needs_token": {
+          "default": true,
+          "description": "Whether Rekuest should mint a signed provenance token when this implementation is assigned. Default true (provenance-by-default); set false for trivial/internal tasks that never produce external provenance.",
+          "title": "Needs Token",
+          "type": "boolean"
+        },
+        "optimistics": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/OptimisticInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The optimistics of the definition. This is used to optimistically set state values when the action is assigned, to provide a better user experience.",
+          "title": "Optimistics"
+        },
+        "params": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The params of the implementation. This is used to pass parameters to the implementation",
+          "title": "Params"
+        },
+        "provenance_audience": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The downstream service(s) the provenance token should be scoped to (the token's `aud`). If omitted, Rekuest derives the audience from the structures the assignment acts on.",
+          "title": "Provenance Audience"
+        },
+        "tracks": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TrackInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The tracks of the definition. This is used to track values over time during the runtime of an action. This is the state of a dependency",
+          "title": "Tracks"
+        }
+      },
+      "required": [
+        "definition"
+      ],
+      "title": "ImplementationInput",
+      "type": "object"
+    },
+    "Inspection": {
+      "description": "The declaration an app image makes, plus the services it requires.\n\nThe envelope reads across versions (unknown keys ignored, see\n:class:`~arkitekt_spec.base.WireModel`). The entries are the action language of\n:mod:`arkitekt_spec.actions`, which refuses unknown keys: a malformed definition\nfails where it is read rather than being stored half-understood.",
+      "properties": {
+        "bloks": {
+          "items": {
+            "$ref": "#/$defs/BlokImplementationInput"
+          },
+          "title": "Bloks",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the app is, as its agent declares it.",
+          "title": "Description"
+        },
+        "implementations": {
+          "items": {
+            "$ref": "#/$defs/ImplementationInput"
+          },
+          "title": "Implementations",
+          "type": "array"
+        },
+        "locks": {
+          "items": {
+            "$ref": "#/$defs/LockImplementationInput"
+          },
+          "title": "Locks",
+          "type": "array"
+        },
+        "requirements": {
+          "description": "The services the app needs.",
+          "items": {
+            "$ref": "#/$defs/Requirement"
+          },
+          "title": "Requirements",
+          "type": "array"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The uncompressed size of the image, in bytes.",
+          "title": "Size"
+        },
+        "states": {
+          "items": {
+            "$ref": "#/$defs/StateImplementationInput"
+          },
+          "title": "States",
+          "type": "array"
+        }
+      },
+      "title": "Inspection",
+      "type": "object"
+    },
+    "LabelSelector": {
+      "additionalProperties": false,
+      "description": "Requires the backend resource to carry a qualifier: the nodeSelector analog.",
+      "properties": {
+        "key": {
+          "description": "The qualifier key the backend resource must carry.",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "const": "label",
+          "default": "label",
+          "title": "Kind",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "description": "If true, a backend failing this selector must not run the flavour (hard constraint). If false, the selector is a preference scored by `weight`.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The value the qualifier must have; null means the key merely has to exist.",
+          "title": "Value"
+        },
+        "weight": {
+          "default": 1,
+          "description": "Scoring weight of a preferred (non-required) selector; deployers prefer candidates with the highest sum of satisfied weights.",
+          "title": "Weight",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "title": "LabelSelector",
+      "type": "object"
+    },
+    "LockDefinitionInput": {
+      "additionalProperties": false,
+      "description": "Which locks does the agent provide in general",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Describe the lock a bit",
+          "title": "Description"
+        },
+        "key": {
+          "description": "The key of the lock. This is used to uniquely identify the lock",
+          "title": "Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "title": "LockDefinitionInput",
+      "type": "object"
+    },
+    "LockImplementationInput": {
+      "additionalProperties": false,
+      "description": "Which locks does the agent provide in general",
+      "properties": {
+        "definition": {
+          "$ref": "#/$defs/LockDefinitionInput",
+          "description": "The lock definition this implementation fulfills."
+        },
+        "key": {
+          "description": "The key of the lock implementation.",
+          "title": "Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "definition"
+      ],
+      "title": "LockImplementationInput",
+      "type": "object"
+    },
+    "OneApiSelector": {
+      "additionalProperties": false,
+      "description": "Requires a oneAPI-capable (Intel) accelerator.",
+      "properties": {
+        "kind": {
+          "const": "oneapi",
+          "default": "oneapi",
+          "title": "Kind",
+          "type": "string"
+        },
+        "oneapiVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum oneAPI version required.",
+          "title": "Oneapiversion"
+        },
+        "required": {
+          "default": true,
+          "description": "If true, a backend failing this selector must not run the flavour (hard constraint). If false, the selector is a preference scored by `weight`.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "weight": {
+          "default": 1,
+          "description": "Scoring weight of a preferred (non-required) selector; deployers prefer candidates with the highest sum of satisfied weights.",
+          "title": "Weight",
+          "type": "integer"
+        }
+      },
+      "title": "OneApiSelector",
+      "type": "object"
+    },
+    "OptimisticInput": {
+      "additionalProperties": false,
+      "description": "An optimistic is used to optimistically set state values when the action is assigned. This is used to provide a better user experience by optimistically setting state values when the action is assigned, instead of waiting for the action to be executed and the state to be updated. This will only ever happen on the frontend.",
+      "properties": {
+        "accessor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Static JSON pointer into the assignment args for the value to set; omitted: the whole args.",
+          "title": "Accessor"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Static JSON pointer into the state value to set. Mutually exclusive with `path_call`.",
+          "title": "Path"
+        },
+        "path_call": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtilCallInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pure UtilCall returning the pointer dynamically; may reference `args` (the assignment arguments). Mutually exclusive with `path`."
+        },
+        "state": {
+          "description": "The state to optimistically set when the action is assigned",
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "OptimisticInput",
+      "type": "object"
+    },
+    "OptionKey": {
+      "description": "No documentation",
+      "enum": [
+        "LABEL",
+        "DESCRIPTION",
+        "LOGO",
+        "VALUE"
+      ],
+      "title": "OptionKey",
+      "type": "string"
+    },
+    "PortGroupInput": {
+      "additionalProperties": false,
+      "description": "A Port Group is a group of ports that are related to each other. It is used to group ports together in the UI and provide a better user experience.",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The description of the port group, displayed in the UI",
+          "title": "Description"
+        },
+        "effects": {
+          "default": [],
+          "description": "The effects applied to the port group as a whole",
+          "items": {
+            "$ref": "#/$defs/EffectInput"
+          },
+          "title": "Effects",
+          "type": "array"
+        },
+        "key": {
+          "description": "The key of the port group. This is used to uniquely identify the port group",
+          "title": "Key",
+          "type": "string"
+        },
+        "ports": {
+          "default": [],
+          "description": "The keys of the root arg ports in this group; a port belongs to at most one group",
+          "items": {
+            "type": "string"
+          },
+          "title": "Ports",
+          "type": "array"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The title of the port group, displayed in the UI",
+          "title": "Title"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "title": "PortGroupInput",
+      "type": "object"
+    },
+    "PortKind": {
+      "description": "The kind of a port: its structural type. Decides which of children, identifier and choices the port must, may or must not carry (see docs/design/ports.md).",
+      "enum": [
+        "INT",
+        "STRING",
+        "STRUCTURE",
+        "LIST",
+        "BOOL",
+        "DICT",
+        "FLOAT",
+        "DATE",
+        "UNION",
+        "ENUM",
+        "MODEL",
+        "MEMORY_STRUCTURE",
+        "INTERFACE",
+        "QUANTITY"
+      ],
+      "title": "PortKind",
+      "type": "string"
+    },
+    "PortMatchInput": {
+      "additionalProperties": false,
+      "description": "A structural (and optionally object-level) match against a port. Purely\nstructural fields target the port shape; the optional ``descriptors`` carry a concrete\nruntime object's key/value pairs, evaluated against the port's compiled requires\nmicro-constraint to find actions the object can actually be passed to.",
+      "properties": {
+        "at": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The index of the port to match.",
+          "title": "At"
+        },
+        "children": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/PortMatchInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The matches for the children of the port to match.",
+          "title": "Children"
+        },
+        "descriptors": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/DescriptorInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Runtime descriptors of a candidate object, evaluated against the port's compiled requires micro-constraint. Omit for purely structural matching.",
+          "title": "Descriptors"
+        },
+        "dimension": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The canonical pint dimensionality the port must have (QUANTITY wiring-compatibility key).",
+          "title": "Dimension"
+        },
+        "identifier": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The identifier of the port to match.",
+          "title": "Identifier"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The key of the port to match.",
+          "title": "Key"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PortKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The kind of the port to match."
+        },
+        "nullable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether the port is nullable.",
+          "title": "Nullable"
+        }
+      },
+      "title": "PortMatchInput",
+      "type": "object"
+    },
+    "ProvidesInput": {
+      "additionalProperties": false,
+      "description": "No documentation",
+      "properties": {
+        "key": {
+          "description": "The key of the provision: the descriptor name the constraint reads, matched verbatim as one flat key of the candidate object (any non-empty string, e.g. 'axes' or '@mikro/n_space_axes')",
+          "title": "Key",
+          "type": "string"
+        },
+        "operator": {
+          "$ref": "#/$defs/DescriptorOperator",
+          "description": "The operator for the provision"
+        },
+        "value": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The value of the provision. This can be any JSON serializable value; IN/NOT_IN take a list, LTE/GTE a number, EXISTS none",
+          "title": "Value"
+        }
+      },
+      "required": [
+        "key",
+        "operator"
+      ],
+      "title": "ProvidesInput",
+      "type": "object"
+    },
+    "ProxyAssignWidgetInput": {
+      "additionalProperties": false,
+      "description": "Delegates the port to a port of another action.",
+      "properties": {
+        "follow_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Port path of another port whose value this widget follows and mirrors.",
+          "title": "Follow Value"
+        },
+        "kind": {
+          "const": "PROXY",
+          "default": "PROXY",
+          "title": "Kind",
+          "type": "string"
+        },
+        "target_action": {
+          "description": "The action to target: an action-dependency key of `target_dependency` when that is set.",
+          "title": "Target Action",
+          "type": "string"
+        },
+        "target_dependency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The agent dependency (by key) that provides the targeted action; omitted: the implementing agent itself.",
+          "title": "Target Dependency"
+        },
+        "target_port": {
+          "description": "The port key on the targeted action.",
+          "title": "Target Port",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target_port",
+        "target_action"
+      ],
+      "title": "ProxyAssignWidgetInput",
+      "type": "object"
+    },
+    "RamSelector": {
+      "additionalProperties": false,
+      "description": "System-memory requirements of the flavour.",
+      "properties": {
+        "kind": {
+          "const": "ram",
+          "default": "ram",
+          "title": "Kind",
+          "type": "string"
+        },
+        "min": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum amount of system memory required, in MB.",
+          "title": "Min"
+        },
+        "required": {
+          "default": true,
+          "description": "If true, a backend failing this selector must not run the flavour (hard constraint). If false, the selector is a preference scored by `weight`.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "weight": {
+          "default": 1,
+          "description": "Scoring weight of a preferred (non-required) selector; deployers prefer candidates with the highest sum of satisfied weights.",
+          "title": "Weight",
+          "type": "integer"
+        }
+      },
+      "title": "RamSelector",
+      "type": "object"
+    },
+    "ReleaseFlavour": {
+      "description": "One flavour of a release: an image, and where it may be placed.",
+      "properties": {
+        "built_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When the image was built.",
+          "title": "Built At"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What sets this flavour apart.",
+          "title": "Description"
+        },
+        "image": {
+          "description": "The image, pinned by digest (`registry/repository@sha256:...`). For a multi-platform flavour this is the digest of the index.",
+          "title": "Image",
+          "type": "string"
+        },
+        "inspection": {
+          "$ref": "#/$defs/Inspection",
+          "description": "What the image declared when it was run."
+        },
+        "name": {
+          "description": "The name of the flavour, unique within the release.",
+          "title": "Name",
+          "type": "string"
+        },
+        "platforms": {
+          "description": "The platforms the image was built for.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Platforms",
+          "type": "array"
+        },
+        "selectors": {
+          "description": "Where the image may be placed.",
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "cpu": "#/$defs/CpuSelector",
+                "cuda": "#/$defs/CudaSelector",
+                "label": "#/$defs/LabelSelector",
+                "oneapi": "#/$defs/OneApiSelector",
+                "ram": "#/$defs/RamSelector",
+                "rocm": "#/$defs/RocmSelector"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/CpuSelector"
+              },
+              {
+                "$ref": "#/$defs/RamSelector"
+              },
+              {
+                "$ref": "#/$defs/CudaSelector"
+              },
+              {
+                "$ref": "#/$defs/RocmSelector"
+              },
+              {
+                "$ref": "#/$defs/OneApiSelector"
+              },
+              {
+                "$ref": "#/$defs/LabelSelector"
+              }
+            ]
+          },
+          "title": "Selectors",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "image",
+        "inspection"
+      ],
+      "title": "ReleaseFlavour",
+      "type": "object"
+    },
+    "Requirement": {
+      "description": "A service instance the app needs, filled in by the platform at login.\n\nA requirement is never a hardware constraint: those are selectors.",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why the app needs the service, shown to the user.",
+          "title": "Description"
+        },
+        "key": {
+          "description": "The key the app looks the service up by.",
+          "title": "Key",
+          "type": "string"
+        },
+        "optional": {
+          "default": false,
+          "description": "Whether the app still works when no instance of the service is available.",
+          "title": "Optional",
+          "type": "boolean"
+        },
+        "service": {
+          "description": "The service type that fills the key, in reverse-domain form (e.g. 'live.arkitekt.mikro').",
+          "title": "Service",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "service"
+      ],
+      "title": "Requirement",
+      "type": "object"
+    },
+    "RequiresInput": {
+      "additionalProperties": false,
+      "description": "No documentation",
+      "properties": {
+        "key": {
+          "description": "The key of the requirement: the descriptor name the constraint reads, matched verbatim as one flat key of the candidate object (any non-empty string, e.g. 'axes' or '@mikro/n_space_axes')",
+          "title": "Key",
+          "type": "string"
+        },
+        "operator": {
+          "$ref": "#/$defs/DescriptorOperator",
+          "description": "The operator for the requirement"
+        },
+        "value": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The value of the requirement. This can be any JSON serializable value; IN/NOT_IN take a list, LTE/GTE a number, EXISTS none",
+          "title": "Value"
+        }
+      },
+      "required": [
+        "key",
+        "operator"
+      ],
+      "title": "RequiresInput",
+      "type": "object"
+    },
+    "ReturnPortInput": {
+      "additionalProperties": false,
+      "description": "A Port is a single input or output of an action, identified by its `key` and typed by its `kind`.\n\nSTRUCTURE, MEMORY_STRUCTURE and INTERFACE ports carry an `identifier` of the form `@package/key`\n(e.g. `@mikro/image`); ports with the same identifier are compatible. LIST and DICT ports have one\nchild (the item type), UNION ports two or more (the variants), MODEL ports one per field. ENUM ports\ndeclare `choices`. See docs/design/ports.md for the full table.",
+      "properties": {
+        "children": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ReturnPortInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The child ports (used for list, dict, union and model ports).",
+          "title": "Children"
+        },
+        "choices": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ChoiceInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The values the port accepts (required for ENUM; optional for INT, FLOAT, STRING). Rendered by CHOICE widgets.",
+          "title": "Choices"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The description of the port. This is the text that is displayed in the UI when the user hovers over the port",
+          "title": "Description"
+        },
+        "dimension": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For QUANTITY ports: the pint dimensionality string, e.g. \"[mass] * [length] ** 2 / [time] ** 3 / [current]\". This is the wiring-compatibility key between quantity ports.",
+          "title": "Dimension"
+        },
+        "effects": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/EffectInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The effects of the port",
+          "title": "Effects"
+        },
+        "identifier": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The identifier of the port's type, of the form @package/key. Required for STRUCTURE, MEMORY_STRUCTURE and INTERFACE, where it is the only identity a value has; optional for MODEL and ENUM, where it names the class or enum the port was built from so that agents can map a value back to it.",
+          "title": "Identifier"
+        },
+        "key": {
+          "description": "The key of the port: unique among its siblings, free of '..', not 'value'. LIST/DICT item ports are conventionally keyed '...'.",
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/PortKind",
+          "description": "The kind of the port. This is the type of the port. Can be either int, string, structure, list, bool, dict, float, date, union or model"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The label of the port. This is the text that is displayed in the UI",
+          "title": "Label"
+        },
+        "nullable": {
+          "default": false,
+          "description": "Whether the port is nullable or not. If the port is nullable, it can be set to null. If the port is not nullable, it cannot be set to null",
+          "title": "Nullable",
+          "type": "boolean"
+        },
+        "proposed_units": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For QUANTITY ports: units offered as a dropdown in the UI, e.g. [\"pF\", \"nF\", \"uF\"]. Proposals only \u2014 any unit of the same dimension remains valid input.",
+          "title": "Proposed Units"
+        },
+        "provides": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ProvidesInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The provisions for the port. Provisions are key-value pairs that can be used to add additional metadata to a port. When using rekuest's action search, you can filter actions based on their port provisions",
+          "title": "Provides"
+        },
+        "reference_unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For QUANTITY ports: the canonical/reference unit of the physical quantity, e.g. \"volt\" or \"farad\". It is the default selection and the key used to resolve the concrete quantity type; other units of the same dimension are still allowed.",
+          "title": "Reference Unit"
+        },
+        "widget": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "CHOICE": "#/$defs/ChoiceReturnWidgetInput",
+                  "CUSTOM": "#/$defs/CustomReturnWidgetInput"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ChoiceReturnWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/CustomReturnWidgetInput"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The return widget to use for this port, discriminated by `kind`.",
+          "title": "Widget"
+        }
+      },
+      "required": [
+        "key",
+        "kind"
+      ],
+      "title": "ReturnPortInput",
+      "type": "object"
+    },
+    "RocmSelector": {
+      "additionalProperties": false,
+      "description": "Requires a ROCm-capable (AMD) GPU.",
+      "properties": {
+        "apiThing": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "An additional ROCm capability qualifier.",
+          "title": "Apithing"
+        },
+        "apiVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum ROCm API version required.",
+          "title": "Apiversion"
+        },
+        "kind": {
+          "const": "rocm",
+          "default": "rocm",
+          "title": "Kind",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "description": "If true, a backend failing this selector must not run the flavour (hard constraint). If false, the selector is a preference scored by `weight`.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "weight": {
+          "default": 1,
+          "description": "Scoring weight of a preferred (non-required) selector; deployers prefer candidates with the highest sum of satisfied weights.",
+          "title": "Weight",
+          "type": "integer"
+        }
+      },
+      "title": "RocmSelector",
+      "type": "object"
+    },
+    "SearchAssignWidgetInput": {
+      "additionalProperties": false,
+      "description": "A search over a ward for STRUCTURE ports (or lists of them).",
+      "properties": {
+        "dependencies": {
+          "default": [],
+          "description": "The other ports (port paths, `..` traverses children) whose values the query may reference.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "filters": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ArgPortInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Filter ports whose values are passed to the query as variables named by their keys.",
+          "title": "Filters"
+        },
+        "follow_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Port path of another port whose value this widget follows and mirrors.",
+          "title": "Follow Value"
+        },
+        "kind": {
+          "const": "SEARCH",
+          "default": "SEARCH",
+          "title": "Kind",
+          "type": "string"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The placeholder text.",
+          "title": "Placeholder"
+        },
+        "query": {
+          "description": "The GraphQL query the ward executes to populate the choices. Must be a single `query` operation declaring `$search: String` and `$values: [ID!]`, plus one variable per filter port key.",
+          "title": "Query",
+          "type": "string"
+        },
+        "ward": {
+          "description": "The ward (service) that executes the query.",
+          "title": "Ward",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query",
+        "ward"
+      ],
+      "title": "SearchAssignWidgetInput",
+      "type": "object"
+    },
+    "SliderAssignWidgetInput": {
+      "additionalProperties": false,
+      "description": "A numeric slider for INT, FLOAT and QUANTITY ports.",
+      "properties": {
+        "follow_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Port path of another port whose value this widget follows and mirrors.",
+          "title": "Follow Value"
+        },
+        "kind": {
+          "const": "SLIDER",
+          "default": "SLIDER",
+          "title": "Kind",
+          "type": "string"
+        },
+        "max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The maximum value.",
+          "title": "Max"
+        },
+        "min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minimum value.",
+          "title": "Min"
+        },
+        "step": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The step between selectable values; must be positive.",
+          "title": "Step"
+        }
+      },
+      "title": "SliderAssignWidgetInput",
+      "type": "object"
+    },
+    "StateAccessorInput": {
+      "additionalProperties": false,
+      "description": "No documentation",
+      "properties": {
+        "call": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtilCallInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pure UtilCall returning the pointer string dynamically. May reference `state`, `value` and the widget's `dependencies`. Mutually exclusive with `path`."
+        },
+        "option_key": {
+          "$ref": "#/$defs/OptionKey",
+          "description": "The part of the state accessor to use as the value for the assign widget (e.g. the key, the description, the logo, etc.)"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Static JSON pointer into the state value ('/x/y'). Omit for the whole value. Mutually exclusive with `call`.",
+          "title": "Path"
+        }
+      },
+      "required": [
+        "option_key"
+      ],
+      "title": "StateAccessorInput",
+      "type": "object"
+    },
+    "StateChoiceAssignWidgetInput": {
+      "additionalProperties": false,
+      "description": "A choice over entries of an agent's state.",
+      "properties": {
+        "dependencies": {
+          "default": [],
+          "description": "The other ports (port paths, `..` traverses children) whose values the calls may reference.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "dependency": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The agent dependency (by key) whose state provides the choices; omitted: the implementing agent's own state.",
+          "title": "Dependency"
+        },
+        "follow_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Port path of another port whose value this widget follows and mirrors.",
+          "title": "Follow Value"
+        },
+        "kind": {
+          "const": "STATE_CHOICE",
+          "default": "STATE_CHOICE",
+          "title": "Kind",
+          "type": "string"
+        },
+        "state_accessors": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/StateAccessorInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How to read label/description/logo/value out of each state entry; each accessor is a static pointer or a pure call.",
+          "title": "State Accessors"
+        },
+        "state_call": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtilCallInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Pure UtilCall returning that pointer dynamically; may reference `state`, `value` and `dependencies`. Mutually exclusive with `state_path`."
+        },
+        "state_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Static JSON pointer into the state value that provides the choices. Mutually exclusive with `state_call`.",
+          "title": "State Path"
+        }
+      },
+      "title": "StateChoiceAssignWidgetInput",
+      "type": "object"
+    },
+    "StateDefinitionInput": {
+      "additionalProperties": false,
+      "description": "A state schema is a blueprint for a state. It is composed of a definition, a list of dependencies, and a list of params.",
+      "properties": {
+        "name": {
+          "description": "The name of the state schema. This is used to uniquely identify the state schema",
+          "title": "Name",
+          "type": "string"
+        },
+        "ports": {
+          "description": "The ports of the state schema. This is used to define the structure of the state",
+          "items": {
+            "$ref": "#/$defs/ReturnPortInput"
+          },
+          "title": "Ports",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ports",
+        "name"
+      ],
+      "title": "StateDefinitionInput",
+      "type": "object"
+    },
+    "StateDemandInput": {
+      "additionalProperties": false,
+      "description": "Pure matching criteria for a state definition: hash short-circuits, port\nmatches and protocols. Used directly by query filters and, wrapped in a\nStateDependencyInput, by dependency declarations.",
+      "properties": {
+        "app": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The identifier of the app providing the state.",
+          "title": "App"
+        },
+        "hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The exact hash of the state definition. When set, matching short-circuits on the hash.",
+          "title": "Hash"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The state's identity key on the agent (defaults to the interface at registration).",
+          "title": "Key"
+        },
+        "matches": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/PortMatchInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The matches the state definition's ports must satisfy.",
+          "title": "Matches"
+        },
+        "protocols": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Protocols (by name) the state must implement.",
+          "title": "Protocols"
+        }
+      },
+      "title": "StateDemandInput",
+      "type": "object"
+    },
+    "StateDependencyInput": {
+      "additionalProperties": false,
+      "description": "A named state requirement of a dependency: a slot key plus the demand the\nagent's state must satisfy, and resolution-lifecycle filters.",
+      "properties": {
+        "allow_inactive": {
+          "default": true,
+          "description": "Allow inactive nodes, defaults to true",
+          "title": "Allow Inactive",
+          "type": "boolean"
+        },
+        "demand": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StateDemandInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The matching criteria the agent's state must satisfy (app/key preferred; matches loosen)."
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The description of the dependency, why it is needed and what it is used for.",
+          "title": "Description"
+        },
+        "key": {
+          "description": "The local slot key of this state requirement \u2014 callers reference it when assigning.",
+          "title": "Key",
+          "type": "string"
+        },
+        "optional": {
+          "default": false,
+          "description": "Whether the dependency is optional or not. If the dependency is optional, the agent doesn't have to provide it to be potentially callable",
+          "title": "Optional",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "title": "StateDependencyInput",
+      "type": "object"
+    },
+    "StateImplementationInput": {
+      "additionalProperties": false,
+      "description": "A state implementation is a blueprint for a state. It is composed of a definition, a list of dependencies, and a list of params.",
+      "properties": {
+        "app": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The identifier of the app providing this state. Defaults to the registering agent's app identifier when omitted.",
+          "title": "App"
+        },
+        "definition": {
+          "$ref": "#/$defs/StateDefinitionInput",
+          "description": "The schema of the state implementation. This is used to define the structure of the state"
+        },
+        "interface": {
+          "description": "The key of the state implementation. This is used to uniquely identify the state implementation",
+          "title": "Interface",
+          "type": "string"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The stable identity key of the state, matched by state demands. Defaults to the interface when omitted.",
+          "title": "Key"
+        }
+      },
+      "required": [
+        "interface",
+        "definition"
+      ],
+      "title": "StateImplementationInput",
+      "type": "object"
+    },
+    "StringAssignWidgetInput": {
+      "additionalProperties": false,
+      "description": "A text input for STRING ports.",
+      "properties": {
+        "as_paragraph": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Render as a multi-line paragraph.",
+          "title": "As Paragraph"
+        },
+        "follow_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Port path of another port whose value this widget follows and mirrors.",
+          "title": "Follow Value"
+        },
+        "kind": {
+          "const": "STRING",
+          "default": "STRING",
+          "title": "Kind",
+          "type": "string"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The placeholder text.",
+          "title": "Placeholder"
+        }
+      },
+      "title": "StringAssignWidgetInput",
+      "type": "object"
+    },
+    "TestTargetInput": {
+      "additionalProperties": false,
+      "description": "A test target: the action a test action tests, identified by exact hash or by an (app, key, version) coordinate. app defaults to the registering agent's app; omitting version matches every version.",
+      "properties": {
+        "app": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The app identifier owning the target action. Defaults to the registering agent's app.",
+          "title": "App"
+        },
+        "hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The exact hash of the target action.",
+          "title": "Hash"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The key of the target action. Matches every version unless version is given.",
+          "title": "Key"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Restrict a key target to one specific version.",
+          "title": "Version"
+        }
+      },
+      "title": "TestTargetInput",
+      "type": "object"
+    },
+    "TrackInput": {
+      "additionalProperties": false,
+      "description": "A value that is being tracked over time during the runtime of an action. This is the state of a dependency",
+      "properties": {
+        "dependency_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The key of the dependency whose state is being tracked.",
+          "title": "Dependency Key"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "An optional description for the track.",
+          "title": "Description"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "An optional human-readable label for the track.",
+          "title": "Label"
+        },
+        "state_key": {
+          "description": "The key of the state to track.",
+          "title": "State Key",
+          "type": "string"
+        },
+        "value_key": {
+          "description": "The key of the value within the state to track.",
+          "title": "Value Key",
+          "type": "string"
+        },
+        "windows": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/WindowInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The windows (aggregations) computed over the tracked value.",
+          "title": "Windows"
+        }
+      },
+      "required": [
+        "state_key",
+        "value_key"
+      ],
+      "title": "TrackInput",
+      "type": "object"
+    },
+    "UtilCallInput": {
+      "additionalProperties": false,
+      "description": "Defines a utility call that can be invoked within the system.",
+      "properties": {
+        "arguments": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ActionArgumentInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Key-value arguments map compiled for the target utility call.",
+          "title": "Arguments"
+        },
+        "operation": {
+          "description": "The utility function name to invoke.",
+          "title": "Operation",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "title": "UtilCallInput",
+      "type": "object"
+    },
+    "ValidatorInput": {
+      "additionalProperties": false,
+      "description": "A validator for a port. `call` is a pure blok UtilCall evaluated client-side against the\ncatalog; it must return a boolean meaning 'valid'. Other ports the call references must be\nlisted in `dependencies` (the authoritative subscription list); `value` refers to the port's\nown value. Use the .. syntax when traversing the tree of ports.",
+      "properties": {
+        "call": {
+          "$ref": "#/$defs/UtilCallInput",
+          "description": "The pure blok UtilCall, evaluated client-side against the catalog, that validates the port value. It must return a boolean meaning 'valid'. Argument value_paths may only reference names listed in `dependencies`, plus `value` for the port's own value."
+        },
+        "dependencies": {
+          "default": [],
+          "description": "The form-field subscription list of the validator: the keys of the other ports whose values the call may reference. This list is authoritative: a value_path in the call may only reference these names (plus `value` for the port's own value). Use the .. syntax to traverse the tree of ports, e.g. 'foo..bar' for the child 'bar' of port 'foo'.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The error message to display when the validation fails",
+          "title": "Error Message"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "An optional human-readable label for the validator.",
+          "title": "Label"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The authoring expression the call was compiled from (informational; never parsed or validated by the server).",
+          "title": "Source"
+        }
+      },
+      "required": [
+        "call"
+      ],
+      "title": "ValidatorInput",
+      "type": "object"
+    },
+    "WindowFunction": {
+      "description": "Aggregation computed over a tracked value within a window.",
+      "enum": [
+        "MEAN",
+        "MIN",
+        "MAX",
+        "SUM",
+        "COUNT",
+        "LAST",
+        "FIRST",
+        "STD"
+      ],
+      "title": "WindowFunction",
+      "type": "string"
+    },
+    "WindowInput": {
+      "additionalProperties": false,
+      "description": "A window that is calculated",
+      "properties": {
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "An optional human-readable label for the window.",
+          "title": "Label"
+        },
+        "window_function": {
+          "$ref": "#/$defs/WindowFunction",
+          "description": "The aggregation to compute over the tracked value within the window."
+        }
+      },
+      "required": [
+        "window_function"
+      ],
+      "title": "WindowInput",
+      "type": "object"
+    }
+  },
+  "description": "One release of an app, as its registry repository carries it.",
+  "properties": {
+    "channel": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The channel this build belongs to (a branch name). A release proper has none and never changes.",
+      "title": "Channel"
+    },
+    "flavours": {
+      "items": {
+        "$ref": "#/$defs/ReleaseFlavour"
+      },
+      "title": "Flavours",
+      "type": "array"
+    },
+    "manifest": {
+      "$ref": "#/$defs/AppManifest"
+    },
+    "revision": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The source revision the release was built from.",
+      "title": "Revision"
+    },
+    "source": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Where the source lives. Informational only.",
+      "title": "Source"
+    },
+    "spec_version": {
+      "const": 1,
+      "default": 1,
+      "description": "The version of this spec the descriptor follows.",
+      "title": "Spec Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "manifest"
+  ],
+  "title": "ReleaseDescriptor",
+  "type": "object"
+}

@@ -60,6 +60,7 @@ from .errors import (
 )
 from .types import (
     ContextDeclaration,
+    Describer,
     Expander,
     ExpanderT,
     FullFilledEnum,
@@ -673,6 +674,7 @@ class StructureRegistry(BaseModel):
         description: str | None = None,
         default_widget: AssignWidgetInput | None = None,
         default_returnwidget: ReturnWidgetInput | None = None,
+        describe: Describer | None = None,
     ) -> FullFilledStructure:
         """Register a class as a structure.
 
@@ -691,6 +693,7 @@ class StructureRegistry(BaseModel):
             convert_default (Callable[[Any], str] | None, optional): A way to convert the default. Defaults to None.
             default_widget (Optional[AssignWidgetInput], optional): A widget that will be used as a default. Defaults to None.
             default_returnwidget (Optional[ReturnWidgetInput], optional): A return widget that will be used as a default. Defaults to None.
+            describe (Describer | None, optional): Computes an object's descriptors, to test them against a port's requires and provides. Defaults to None.
 
         Returns:
             FullFilledStructure: The fullfilled structure that was created
@@ -735,6 +738,7 @@ class StructureRegistry(BaseModel):
             predicate=predicate or build_instance_predicate(cls),
             default_widget=default_widget,
             default_returnwidget=default_returnwidget,
+            describe=describe,
         )
         self.fullfill_registration(fs)
         return fs
@@ -1110,6 +1114,7 @@ class StructureRegistry(BaseModel):
         expand_many: ManyExpander | None = None,
         shrink: Shrinker | None = None,
         returnwidget: ReturnWidgetInput | None = None,
+        describe: Describer | None = None,
     ) -> Callable[[ExpanderT], ExpanderT]:
         """Declare a type that travels by id: ``@registry.structure("@mikro/image")``.
 
@@ -1138,6 +1143,11 @@ class StructureRegistry(BaseModel):
                 Like the expander, it may ask for clients by annotation after
                 the object (``shrink(dataset, mikro: Mikro)``).
             returnwidget: The widget one is shown with.
+            describe: Computes an object's descriptors, as a flat ``{key: value}``
+                in the vocabulary the hosting service declares. A run tests them
+                against a port's ``Requires`` when one comes in and its
+                ``Provides`` when one goes out; a key it does not return is not
+                tested. Cheap and local: it runs on every value.
 
         Returns:
             A decorator returning the expander unchanged, so it stays callable
@@ -1159,6 +1169,7 @@ class StructureRegistry(BaseModel):
                 description=description,
                 default_widget=widget,
                 default_returnwidget=returnwidget,
+                describe=describe,
             )
             return expand
 
