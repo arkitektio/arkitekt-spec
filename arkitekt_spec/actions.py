@@ -144,6 +144,15 @@ class OptionKey(str, Enum):
     __str__ = str.__str__
 
 
+class ComponentContext(str, Enum):
+    """The renderer a blok component lives in. A blok's tree starts in HTML."""
+
+    HTML = "HTML"
+    "Panels, dashboards and popouts."
+    SCENE = "SCENE"
+    "A 3D view."
+
+
 class PortKind(str, Enum):
     """The kind of a port: its structural type. Decides which of children, identifier and choices the port must, may or must not carry (see docs/design/ports.md)."""
 
@@ -791,6 +800,26 @@ class BlokImplementationInput(BlokRules, ActionModel):
         default=None,
         description="An optional JSON-serializable object providing demo state values for this Blok's internal reactive data model, useful for testing and development purposes.",
     )
+    context: Annotated[ComponentContext, GraphQLDefault("HTML")] = Field(
+        default=ComponentContext.HTML,
+        description="The renderer for this Blok's root: HTML for panels and dashboards, SCENE for a full 3D view whose one root is the Scene component.",
+    )
+    default: Annotated[bool, GraphQLDefault("false")] = Field(
+        default=False,
+        description="Whether this Blok is its agent's default for its context. A newly declared default replaces the previous one.",
+    )
+    for_model: str | None = Field(
+        validation_alias=AliasChoices("for_model", "forModel"),
+        serialization_alias="forModel",
+        default=None,
+        description="The model ('sha256:...') this Blok decorates: viewers showing that model offer this Blok at `for_node`. HTML bloks only.",
+    )
+    for_node: str | None = Field(
+        validation_alias=AliasChoices("for_node", "forNode"),
+        serialization_alias="forNode",
+        default=None,
+        description="The node of `for_model` this Blok attaches to; the model's root when absent.",
+    )
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )
@@ -1051,6 +1080,36 @@ class EffectInput(EffectRules, ActionModel):
     )
 
 
+class AssetKind(str, Enum):
+    """What a file an app registers as an asset is."""
+
+    MODEL_3D = "MODEL_3D"
+    """A 3D model: a binary glTF (GLB) file, shown by a scene blok."""
+    IMAGE = "IMAGE"
+    """An image: a PNG, JPEG or WebP file."""
+
+    @property
+    def label(self) -> str:
+        """The kind as it is said: ``3D model``, ``image``."""
+        return {"MODEL_3D": "3D model", "IMAGE": "image"}[self.value]
+
+
+class AssetInput(ActionModel):
+    """A file an agent brings with it: the name its bloks call it by, and what the bytes are."""
+
+    name: str = Field(
+        description="The name bloks refer to the asset by, as in `@self.assets.<name>`. Unique within the agent.",
+    )
+    kind: AssetKind = Field(description="What the file is.")
+    ref: str = Field(
+        description="'sha256:' and the hex SHA-256 of the file's exact bytes.",
+    )
+    size: int = Field(description="The size of the file in bytes.")
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
+    )
+
+
 class ImplementAgentInput(AgentRules, ActionModel):
     """Implement an agent with the given implementations, states and locks. This will create the agent if it doesn't exist and update it if it does exist."""
 
@@ -1077,6 +1136,10 @@ class ImplementAgentInput(AgentRules, ActionModel):
     bloks: tuple[BlokImplementationInput, ...] | None = Field(
         default=None,
         description="The blocks of the agent. This is used to specify the initial blocks of the agent",
+    )
+    assets: tuple[AssetInput, ...] | None = Field(
+        default=None,
+        description="The files the agent brings with it, by name. The agent uploads the ones the server does not hold yet.",
     )
     hash: str | None = Field(
         default=None,

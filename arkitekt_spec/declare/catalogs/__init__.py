@@ -29,6 +29,7 @@ models so that they stay usable from anywhere -- see the import rule below.
 
 import functools
 import json
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from importlib import resources
@@ -36,7 +37,39 @@ from importlib import resources
 BASE_CATALOG_NAME = "base"
 BASE_CATALOG_VERSION = 1
 BASE_CATALOG_ID = f"{BASE_CATALOG_NAME}@{BASE_CATALOG_VERSION}"
-VALUE_KINDS = ("STRING", "INT", "FLOAT", "BOOL", "DICT", "LIST", "ANY", "CALLBACK")
+VALUE_KINDS = ("STRING", "INT", "FLOAT", "BOOL", "DICT", "LIST", "ANY", "CALLBACK", "ASSET")
+
+ASSET_KIND = "ASSET"
+"""The prop kind that names a file an app registered: bound to ``<dependency>.assets.<name>``."""
+ASSETS_SEGMENT = "assets"
+"""What follows a dependency's key in the path of one of its assets. No state can be called this."""
+MODEL_REF_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
+"""A file's reference: the algorithm, and the hex SHA-256 of its exact bytes."""
+
+
+def asset_path_parts(path: str) -> tuple[str, str] | None:
+    """The ``(dependency key, asset name)`` of an asset path, or None if ``path`` is not one.
+
+    An asset is named like everything else of a dependency, key first:
+    ``self.assets.scope``.
+
+    Raises:
+        ValueError: If the path reaches into a dependency's assets and is not
+            ``<dependency>.assets.<name>``.
+    """
+    parts = path.split(".")
+    if len(parts) < 2 or parts[1] != ASSETS_SEGMENT:
+        return None
+    if len(parts) != 3 or not all(parts):
+        raise ValueError(f"an asset is named '<dependency>.assets.<name>', not {path!r}")
+    return parts[0], parts[2]
+
+HTML_CONTEXT = "HTML"
+SCENE_CONTEXT = "SCENE"
+COMPONENT_CONTEXTS = (HTML_CONTEXT, SCENE_CONTEXT)
+# The one component a scene blok may have as its root.
+SCENE_ROOT_COMPONENT = "Scene"
+"""The renderers a component can live in. A blok's tree starts in the html context."""
 """The ``CatalogValueKind`` names, hard-coded so this module never imports the generated schema."""
 
 CALLBACK_KIND = "CALLBACK"
@@ -94,6 +127,14 @@ class ComponentSpec:
     accepts_children: bool = False
     props: tuple[PropSpec, ...] = ()
     description: str | None = None
+    context: str = HTML_CONTEXT
+    """The context the component may be placed in."""
+    children_context: str | None = None
+    """The context of its children when it differs from its own: it bridges two renderers."""
+    downstream_of: tuple[str, ...] = ()
+    """Components of which at least one must be an ancestor, at any depth."""
+    not_downstream_of: tuple[str, ...] = ()
+    """Components of which none may be an ancestor."""
 
     def prop(self, key: str) -> PropSpec | None:
         """The prop called ``key``, or ``None``."""
@@ -195,18 +236,21 @@ STANDARD_CATALOG_SOURCE = "arkitektio/orkestrator"
 """The repository whose releases publish the standard catalog, as ``blok-catalog.json``."""
 
 
-STANDARD_CATALOG_CORRECTIONS: Mapping[str, Mapping[str, object]] = {
-    # The app renders the children of a ``foreach`` once per item, but derives
-    # ``acceptsChildren`` from a ``children`` prop the loop's schema does not have, so
-    # the published catalog says it takes none. A loop without a body is no loop.
-    "foreach": {"accepts_children": True},
-}
+STANDARD_CATALOG_CORRECTIONS: Mapping[str, Mapping[str, object]] = {}
 """Where the published standard catalog is known to say something the app does not do.
 
 The vendored file stays as published; what is wrong in it is set right here, by name, and
 ``tests/declare/test_standard_catalog.py`` fails for an entry the file no longer needs --
 which is when to delete it. The fix belongs in the app that publishes the catalog.
 """
+
+
+def _parse_context(raw: dict, component: str, value: object) -> str | None:  # type: ignore[type-arg]
+    if value is None:
+        return None
+    if value not in COMPONENT_CONTEXTS:
+        raise ValueError(f"catalog {raw.get('name')!r}: {component} has unknown context {value!r}")
+    return str(value)
 
 
 def _parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]
@@ -246,6 +290,10 @@ def _parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]
                 accepts_children=bool(entry.get("acceptsChildren", False)),
                 props=tuple(props),
                 description=entry.get("description"),
+                context=_parse_context(raw, name, entry.get("context")) or HTML_CONTEXT,
+                children_context=_parse_context(raw, name, entry.get("childrenContext")),
+                downstream_of=tuple(entry.get("downstreamOf") or ()),
+                not_downstream_of=tuple(entry.get("notDownstreamOf") or ()),
             )
         )
 
@@ -508,6 +556,7 @@ def check_component(
     callback_bindings: Mapping[str, bool],
     view: CatalogView,
     owner: str,
+    bound_paths: Mapping[str, str] | None = None,
 ) -> None:
     """Check one component node against ``view``.
 
@@ -526,10 +575,12 @@ def check_component(
         callback_bindings: Per prop key, whether it is bound via an agent call or a util call.
         view: The catalog view in force.
         owner: The node's location, for error messages.
+        bound_paths: Per prop key, the path the prop is bound to, for the props bound to one.
 
     Raises:
         ValueError: On an unknown component, children a component does not accept, an unknown
-            or missing required prop, or an unbound ``CALLBACK`` prop.
+            or missing required prop, an unbound ``CALLBACK`` prop, or an ``ASSET`` prop
+            that does not name an asset.
     """
     if view.components is None:
         return
@@ -556,6 +607,17 @@ def check_component(
                 f"prop {key!r} of {owner} is a CALLBACK prop and must be bound "
                 "via agent_call or util_call"
             )
+        if prop_spec.kind == ASSET_KIND:
+            path = (bound_paths or {}).get(key)
+            try:
+                named = asset_path_parts(path) if path is not None else None
+            except ValueError as error:
+                raise ValueError(f"prop {key!r} of {owner}: {error}") from None
+            if named is None:
+                raise ValueError(
+                    f"prop {key!r} of {owner} is an ASSET prop and must name an asset "
+                    f"the app registered, as in {key}=\"@self.assets.<name>\""
+                )
 
 
 def check_catalog_names(names: Iterable[str], known: Iterable[str], owner: str) -> list[Diagnostic]:
@@ -607,6 +669,47 @@ def check_catalog_names(names: Iterable[str], known: Iterable[str], owner: str) 
 # --------------------------------------------------------------------------- parity inventory
 
 
+def check_placement(
+    component: str,
+    ancestors: tuple[str, ...],
+    context: str,
+    view: CatalogView,
+    owner: str,
+) -> str:
+    """Check where a component sits in the tree; return the context of its children.
+
+    A tree starts in the html context. A component whose ``children_context`` differs from
+    its own bridges two renderers, and everything below it is checked in the new one. Does
+    nothing when ``view.components`` is ``None`` or does not know the component (which
+    :func:`check_component` reports).
+
+    Args:
+        component: The component's name.
+        ancestors: The names of the components above it, outermost first.
+        context: The context in force where it is placed.
+        view: The catalog view in force.
+        owner: The node's location, for error messages.
+
+    Raises:
+        ValueError: If the component is placed outside its context, lacks a required
+            ancestor, or sits under a forbidden one.
+    """
+    spec = view.components.get(component) if view.components is not None else None
+    if spec is None:
+        return context
+    if spec.context != context:
+        raise ValueError(
+            f"{owner}: component {component!r} is a {spec.context.lower()} component "
+            f"and cannot be placed in the {context.lower()} context"
+        )
+    if spec.downstream_of and not set(spec.downstream_of) & set(ancestors):
+        raise ValueError(f"{owner}: component {component!r} must be inside one of {sorted(spec.downstream_of)}")
+    forbidden = sorted(set(spec.not_downstream_of) & set(ancestors))
+    if forbidden:
+        raise ValueError(f"{owner}: component {component!r} must not be inside {forbidden}")
+    return spec.children_context or spec.context
+
+
 @dataclass(frozen=True)
 class Rule:
     """One validation rule, and the server function this client mirrors it from.
@@ -628,6 +731,9 @@ RULES: tuple[Rule, ...] = (
     Rule("component_children", "_check_component", "Children on a component that does not accept them."),
     Rule("component_props", "_check_component", "Unknown or missing required props on a component."),
     Rule("callback_prop_unbound", "_check_component", "A CALLBACK prop not bound via agent_call or util_call."),
+    Rule("asset_prop", "_check_asset_prop", "An ASSET prop that is not bound to a <dependency>.assets.<name> path."),
+    Rule("scene_root", "validate_components_against_catalogs", "A scene blok whose one root is not the Scene component."),
+    Rule("component_placement", "_check_placement", "A component outside its context, without a required ancestor, or under a forbidden one."),
     Rule("catalog_conflict", "resolve_operations", "Two catalogs defining one operation or component differently."),
     Rule("base_shadowed", "check_extension_does_not_shadow_base", "A UI catalog redefining a base operation."),
     Rule("unknown_catalog", "catalogs_for_definition", "A definition naming a catalog that resolves to nothing (warning)."),

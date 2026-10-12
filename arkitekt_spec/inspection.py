@@ -3,6 +3,7 @@
 from pydantic import Field
 
 from arkitekt_spec.actions import (
+    AssetInput,
     BlokImplementationInput,
     ImplementationInput,
     LockImplementationInput,
@@ -10,6 +11,14 @@ from arkitekt_spec.actions import (
 )
 from arkitekt_spec.base import WireModel
 from arkitekt_spec.manifest import Requirement
+
+
+class InspectedAsset(AssetInput):
+    """A file the app brings, as its image holds it: what the server is told, and where it is."""
+
+    path: str = Field(
+        description="Where the file is, relative to the app's directory, with forward slashes.",
+    )
 
 
 class Inspection(WireModel):
@@ -34,3 +43,7 @@ class Inspection(WireModel):
     states: list[StateImplementationInput] = Field(default_factory=list)
     locks: list[LockImplementationInput] = Field(default_factory=list)
     bloks: list[BlokImplementationInput] = Field(default_factory=list)
+    assets: list[InspectedAsset] = Field(
+        default_factory=list,
+        description="The files the app brings with it, by the name its bloks call them.",
+    )

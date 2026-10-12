@@ -18,13 +18,18 @@ from arkitekt_spec.declare.blok.walk import (
     FOREACH_ITEMS_PROP,
     BlokVisitor,
     action_key_for,
+    node_context,
     walk_component,
 )
 from arkitekt_spec.declare.catalogs import (
+    HTML_CONTEXT,
+    SCENE_ROOT_COMPONENT,
     CatalogView,
     Diagnostic,
+    asset_path_parts,
     check_call,
     check_component,
+    check_placement,
 )
 from arkitekt_spec.declare.definition.match import build_port_matches
 
@@ -97,7 +102,20 @@ class DependencyIndex:
 
 # Path roots the blok language reads itself; ``self`` is this agent's own key.
 # None of them can name a blok's own UI state.
-RESERVED_ROOTS = frozenset({"self", "state", "actions", "utils"})
+RESERVED_ROOTS = frozenset({"self", "state", "actions", "utils", "event"})
+
+# What a handler's ``event`` is on the wire: the renderer's scope key for the
+# value that triggered the call. Nothing declares its shape.
+EVENT_SCOPE_KEY = "$event"
+
+
+def _bound_paths(node: ComponentNodeInput) -> dict[str, str]:
+    """Per prop key, the path a prop of ``node`` is bound to."""
+    return {
+        prop.key: prop.dynamic_value.path
+        for prop in node.props or ()
+        if prop.dynamic_value is not None and prop.dynamic_value.path is not None
+    }
 
 
 def idle_task_record() -> dict[str, Any]:
@@ -187,6 +205,7 @@ class _ValidationVisitor(BlokVisitor):
             },
             self.catalog,
             context,
+            _bound_paths(node),
         )
 
     def visit_path(
@@ -263,7 +282,19 @@ class _ValidationVisitor(BlokVisitor):
         if root in scope:
             return _resolve_port_match_path(scope[root], path_parts[1:], path, context)
 
+        if root == EVENT_SCOPE_KEY:
+            return None
+
         canonical_root = index.canonical(root)
+
+        if root not in self.local_roots and canonical_root in index.keys:
+            # A dependency's file, not one of its values: which asset it is, and
+            # whether the app has it, is checked where the blok's dependencies are built.
+            try:
+                if asset_path_parts(path) is not None:
+                    return None
+            except ValueError as error:
+                raise ValueError(f"{context}: {error}") from None
 
         if canonical_root in index.state_demands:
             return _resolve_dependency_state_path(
@@ -357,7 +388,30 @@ def validate_blok(
     index = DependencyIndex.from_dependencies(dependencies)
     visitor = _ValidationVisitor(index, catalog, frozenset(local_roots) - index.keys)
     walk_component(component, visitor)
+    if catalog is not None:
+        _check_tree_placement(component, catalog)
     return visitor.diagnostics
+
+
+def check_scene_root(node: ComponentNodeInput) -> None:
+    """The root of a scene blok is the scene itself, whatever catalog is in force."""
+    if node.component != SCENE_ROOT_COMPONENT:
+        raise ValueError(
+            f"{node_context(node)}: the root of a scene blok must be a {SCENE_ROOT_COMPONENT!r}, "
+            f"not {node.component!r}"
+        )
+
+
+def _check_tree_placement(
+    node: ComponentNodeInput,
+    catalog: CatalogView,
+    ancestors: tuple[str, ...] = (),
+    context: str = HTML_CONTEXT,
+) -> None:
+    """Check every node's placement, carrying its ancestors and the context in force."""
+    inner = check_placement(node.component, ancestors, context, catalog, node_context(node))
+    for child in node.children or ():
+        _check_tree_placement(child, catalog, (*ancestors, node.component), inner)
 
 
 class _CatalogVisitor(BlokVisitor):
@@ -385,6 +439,7 @@ class _CatalogVisitor(BlokVisitor):
             },
             self.catalog,
             context,
+            _bound_paths(node),
         )
 
     def visit_util_call(
@@ -440,6 +495,7 @@ def validate_blok_catalog(
     """
     visitor = _CatalogVisitor(catalog)
     walk_component(component, visitor)
+    _check_tree_placement(component, catalog)
     return visitor.diagnostics
 
 

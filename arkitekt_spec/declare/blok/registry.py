@@ -17,13 +17,14 @@ from arkitekt_spec.actions import (
     StateDependencyInput,
     UtilCallInput,
 )
-from arkitekt_spec.declare.blok.validate import RESERVED_ROOTS, idle_task_record
+from arkitekt_spec.declare.blok.validate import EVENT_SCOPE_KEY, RESERVED_ROOTS, idle_task_record
 from arkitekt_spec.declare.blok.walk import (
     BlokVisitor,
     action_key_for,
     bound_calls,
     walk_component,
 )
+from arkitekt_spec.declare.catalogs import asset_path_parts
 from arkitekt_spec.declare.definition.checks import check_blok
 from arkitekt_spec.declare.definition.dependencies import (
     build_action_dependency_input,
@@ -32,6 +33,9 @@ from arkitekt_spec.declare.definition.dependencies import (
 
 if TYPE_CHECKING:
     from arkitekt_spec.declare.app import AppRegistry
+
+# The dependency key a blok's own agent goes by.
+SELF_KEY = "self"
 
 
 def build_declared_bloks(
@@ -69,6 +73,10 @@ def build_declared_bloks(
             description=declaration.description,
             demo_state=demo_state,
             catalog=declaration.catalog,
+            context=declaration.context,
+            default=declaration.default,
+            for_model=declaration.for_model,
+            for_node=declaration.for_node,
         ))
 
     return declared_bloks
@@ -90,6 +98,8 @@ class _ReferenceCollector(BlokVisitor):
         # A ``state.<key>`` reference that names no dependency; resolvable only
         # when the blok has exactly one dependency to attribute it to.
         self.implicit_states: set[str] = set()
+        # ``assets.<dependency>.<name>`` references: (dependency key, asset name).
+        self.assets: set[tuple[str, str]] = set()
 
     def canonical(self, key: str) -> str:
         return self.aliases.get(key, key)
@@ -104,7 +114,7 @@ class _ReferenceCollector(BlokVisitor):
             return
 
         root = path_parts[0]
-        if root == "utils" or root in self.local_roots:
+        if root == "utils" or root == EVENT_SCOPE_KEY or root in self.local_roots:
             return
 
         if root == "state":
@@ -114,6 +124,15 @@ class _ReferenceCollector(BlokVisitor):
                 )
             elif len(path_parts) >= 2:
                 self.implicit_states.add(path_parts[1])
+            return
+
+        named = asset_path_parts(path)
+        if named is not None:
+            dependency, name = named
+            self.assets.add((self.canonical(dependency), name))
+            # The asset is its dependency's: the key has to be one the blok maps
+            # to an agent, even when nothing else of that agent is used.
+            self.states.setdefault(self.canonical(dependency), set())
             return
 
         if len(path_parts) >= 2:
@@ -193,6 +212,18 @@ def _build_dependencies_for_component(
             f"A call cannot be bound to {clashing}: the name is reserved, or already names "
             f"a dependency or the blok's own state."
         )
+
+    for dependency, name in sorted(collector.assets):
+        if dependency != SELF_KEY:
+            raise ValueError(
+                f"Blok names the asset '{name}' of '{dependency}'. Only an app's own "
+                f"assets can be named for now: '@{SELF_KEY}.assets.<name>'."
+            )
+        if name not in app_registry.registered_assets:
+            raise ValueError(
+                f"Blok names the asset '{name}', which this app has not registered. "
+                f"Registered assets: {sorted(app_registry.registered_assets)}"
+            )
 
     called_locals = collector.local_roots & set(collector.actions)
     if called_locals:

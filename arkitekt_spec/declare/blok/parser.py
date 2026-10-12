@@ -24,6 +24,13 @@ BOUND_CALL_STEP = "into"
 _STRUCTURE_IDENTIFIER = re.compile(r"@[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 
 
+EVENT_ROOT = "event"
+"""How a handler's arguments name the value that triggered it."""
+
+EVENT_SCOPE_KEY = "$event"
+"""The path root the renderer publishes that value under."""
+
+
 class BlokParser:
     """Parses XML/BSX string representations enforcing strict namespace paths and collections."""
 
@@ -152,8 +159,11 @@ class BlokParser:
                     f"Invalid state namespace for dynamic value prop '{key}': '{path}'. "
                     f"Expected format: state.dependency_key.nested_path"
                 )
+            # ``$state.dep.path`` and ``@dep.path`` are two spellings of one path. The
+            # servers check a path's first segment against the dependency keys, so the
+            # ``state`` namespace must not reach the wire.
             return ComponentPropInput(
-                key=key, dynamic_value=DynamicValueInput(path=path)
+                key=key, dynamic_value=DynamicValueInput(path=".".join(path_parts[1:]))
             )
 
         # 2. A structure identifier (@package/key) names a kind of object, not a
@@ -397,8 +407,14 @@ class BlokParser:
         """Render a ``Name``/``Attribute`` argument as a ``value_path``.
 
         Blok props keep dotted state paths; subclasses may choose another form.
+        ``event`` names what triggered the handler (``event.value``): the renderer
+        publishes it under ``$event`` for the duration of the call.
         """
-        return cls._extract_path(node)
+        path = cls._extract_path(node)
+        root, _, rest = path.partition(".")
+        if root == EVENT_ROOT:
+            return f"{EVENT_SCOPE_KEY}.{rest}" if rest else EVENT_SCOPE_KEY
+        return path
 
 
 class PortCallParser(BlokParser):

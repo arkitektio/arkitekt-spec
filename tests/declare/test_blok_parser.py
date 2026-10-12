@@ -204,3 +204,23 @@ def test_into_takes_exactly_one_bare_name(expression: str) -> None:
 def test_a_utils_call_cannot_be_bound() -> None:
     with pytest.raises(ValueError, match="Only a call to an agent"):
         bsx('<Button onClick="@utils.gt(1, 2).into(job)" />')
+
+
+def test_a_dollar_state_binding_is_the_same_path_as_its_at_spelling() -> None:
+    """The ``state`` namespace is syntax: the servers refuse it as a path root."""
+    dollar = bsx('<Text value="$state.scope.Stage.x" />').props[0]
+    at = bsx('<Text value="@scope.Stage.x" />').props[0]
+    assert dollar.dynamic_value is not None and at.dynamic_value is not None
+    assert dollar.dynamic_value.path == at.dynamic_value.path == "scope.Stage.x"
+
+
+def test_event_in_a_handler_argument_is_the_renderers_event_scope() -> None:
+    prop = bsx('<Robot onJointChange="@arm.move_joint(name=event.name, value=event.value)" />').props[0]
+    assert prop.agent_call is not None and prop.agent_call.arguments is not None
+    assert [(a.key, a.value_path) for a in prop.agent_call.arguments] == [
+        ("name", "$event.name"),
+        ("value", "$event.value"),
+    ]
+    whole = bsx('<Slider onChange="@arm.set(event)" />').props[0]
+    assert whole.agent_call is not None and whole.agent_call.arguments is not None
+    assert whole.agent_call.arguments[0].value_path == "$event"

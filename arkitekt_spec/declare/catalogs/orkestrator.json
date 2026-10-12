@@ -6,6 +6,10 @@
       "name": "a",
       "description": "A hyperlink.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -91,6 +95,10 @@
       "name": "Accordion",
       "description": "A stack of collapsible sections.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -140,6 +148,10 @@
       "name": "AccordionContent",
       "description": "The body of an AccordionItem.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -159,6 +171,10 @@
       "name": "AccordionItem",
       "description": "One section of an Accordion.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -190,6 +206,10 @@
       "name": "AccordionTrigger",
       "description": "The clickable heading of an AccordionItem.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -221,6 +241,10 @@
       "name": "Alert",
       "description": "A callout that draws attention to a message.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -264,6 +288,10 @@
       "name": "AlertDialog",
       "description": "A modal dialog that interrupts to confirm a decision.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -301,6 +329,10 @@
       "name": "AlertDialogAction",
       "description": "The confirming button of an AlertDialog; closes it when clicked.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -326,6 +358,10 @@
       "name": "AlertDialogCancel",
       "description": "The dismissing button of an AlertDialog.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -345,6 +381,10 @@
       "name": "AlertDialogContent",
       "description": "The modal panel of an AlertDialog.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -364,6 +404,10 @@
       "name": "AlertDialogDescription",
       "description": "Supporting text under an AlertDialogTitle.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -389,6 +433,10 @@
       "name": "AlertDialogFooter",
       "description": "The footer region of an AlertDialogContent.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -408,6 +456,10 @@
       "name": "AlertDialogHeader",
       "description": "The header region of an AlertDialogContent.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -427,6 +479,10 @@
       "name": "AlertDialogTitle",
       "description": "The accessible title of an AlertDialog.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -452,6 +508,10 @@
       "name": "AlertDialogTrigger",
       "description": "The control that opens an AlertDialog.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -486,9 +546,57 @@
       ]
     },
     {
+      "name": "Animate",
+      "description": "Scrubs a named animation clip of the model to a position, for mechanisms a single move or turn cannot describe. Never loops on its own.",
+      "acceptsChildren": false,
+      "context": "SCENE",
+      "childrenContext": null,
+      "downstreamOf": [
+        "Model",
+        "Robot"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "animateTo",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "The position to play to, in the unit of whichever of progress or time is used."
+        },
+        {
+          "key": "clip",
+          "kind": "STRING",
+          "required": true,
+          "description": "The name of an animation clip in the enclosing model."
+        },
+        {
+          "key": "duration",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "How long playing to animateTo takes, in seconds."
+        },
+        {
+          "key": "progress",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "Where in the clip to show, from 0 (start) to 1 (end). Use this or time."
+        },
+        {
+          "key": "time",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "Where in the clip to show, in seconds. Use this or progress."
+        }
+      ]
+    },
+    {
       "name": "article",
       "description": "A self-contained article.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -652,6 +760,10 @@
       "name": "aside",
       "description": "An aside landmark.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -815,6 +927,10 @@
       "name": "AspectRatio",
       "description": "Constrains its content to a fixed aspect ratio.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -837,9 +953,45 @@
       ]
     },
     {
+      "name": "Attach",
+      "description": "While `when` holds, carries a node with another node, keeping its place in the world at the moment of attaching. For picked-up objects.",
+      "acceptsChildren": false,
+      "context": "SCENE",
+      "childrenContext": null,
+      "downstreamOf": [
+        "Model",
+        "Robot"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "node",
+          "kind": "STRING",
+          "required": true,
+          "description": "The name of the node in the enclosing model that this binds."
+        },
+        {
+          "key": "to",
+          "kind": "STRING",
+          "required": true,
+          "description": "What to attach it to: a node of this model, or \"<model id>:<node>\" for a node of another model in the scene."
+        },
+        {
+          "key": "when",
+          "kind": "BOOL",
+          "required": false,
+          "description": "Whether it is attached. When false the node returns to where it was authored."
+        }
+      ]
+    },
+    {
       "name": "audio",
       "description": "An audio player.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "autoPlay",
@@ -883,6 +1035,10 @@
       "name": "Avatar",
       "description": "A user or entity avatar.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "alt",
@@ -912,7 +1068,7 @@
           "key": "src",
           "kind": "ANY",
           "required": false,
-          "description": "Image URL."
+          "description": "Image URL, or an image its app registered as an asset: \"@self.assets.logo\"."
         }
       ]
     },
@@ -920,6 +1076,10 @@
       "name": "Badge",
       "description": "A small status or count label.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -954,9 +1114,69 @@
       ]
     },
     {
+      "name": "Beam",
+      "description": "Draws a beam from one anchor to another, or for a length along an anchor's Z axis, following both as they move.",
+      "acceptsChildren": false,
+      "context": "SCENE",
+      "childrenContext": null,
+      "downstreamOf": [
+        "Model",
+        "Robot"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "color",
+          "kind": "STRING",
+          "required": false,
+          "description": "The color of the beam as a CSS color. Takes precedence over wavelength."
+        },
+        {
+          "key": "end",
+          "kind": "STRING",
+          "required": false,
+          "description": "The node the beam ends at, in this model or as \"<model id>:<node>\". Use this or length."
+        },
+        {
+          "key": "length",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "How far the beam reaches along the start node's own Z axis, in meters. Use this or end."
+        },
+        {
+          "key": "on",
+          "kind": "BOOL",
+          "required": false,
+          "description": "Whether the beam is drawn. Defaults to true."
+        },
+        {
+          "key": "start",
+          "kind": "STRING",
+          "required": true,
+          "description": "The node the beam leaves from."
+        },
+        {
+          "key": "wavelength",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "The wavelength in nanometers, shown as its color."
+        },
+        {
+          "key": "width",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "The diameter of the beam in meters. Defaults to 2 mm."
+        }
+      ]
+    },
+    {
       "name": "blockquote",
       "description": "A block quotation.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -1120,12 +1340,20 @@
       "name": "br",
       "description": "A line break.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": []
     },
     {
       "name": "Breadcrumb",
       "description": "A trail of links back up the hierarchy.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -1145,6 +1373,10 @@
       "name": "BreadcrumbItem",
       "description": "One crumb in a Breadcrumb.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -1182,6 +1414,10 @@
       "name": "BreadcrumbSeparator",
       "description": "The divider between two crumbs.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -1195,6 +1431,10 @@
       "name": "Button",
       "description": "A clickable button.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "checks",
@@ -1268,6 +1508,10 @@
       "name": "ButtonGroup",
       "description": "Groups related buttons into one connected control.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -1293,6 +1537,10 @@
       "name": "Calendar",
       "description": "An inline date picker.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -1336,6 +1584,10 @@
       "name": "caption",
       "description": "A table caption.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -1499,6 +1751,10 @@
       "name": "Card",
       "description": "A bordered surface grouping related content.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "background",
@@ -1572,6 +1828,10 @@
       "name": "CardContent",
       "description": "The body region of a Card.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -1603,6 +1863,10 @@
       "name": "CardDescription",
       "description": "Supporting text under a CardTitle.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -1634,6 +1898,10 @@
       "name": "CardFooter",
       "description": "The footer region of a Card.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -1677,6 +1945,10 @@
       "name": "CardHeader",
       "description": "The header region of a Card.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -1708,6 +1980,10 @@
       "name": "CardTitle",
       "description": "The title of a Card.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -1739,6 +2015,10 @@
       "name": "Carousel",
       "description": "A horizontally scrolling set of slides.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -1770,6 +2050,10 @@
       "name": "CarouselItem",
       "description": "One slide of a Carousel.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -1789,6 +2073,10 @@
       "name": "Chart",
       "description": "A line, bar, area or pie chart over tabular data.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "categoryKey",
@@ -1850,6 +2138,10 @@
       "name": "Checkbox",
       "description": "A checkbox bound to a boolean value.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -1905,6 +2197,10 @@
       "name": "code",
       "description": "An inline code span.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -2068,6 +2364,10 @@
       "name": "Collapsible",
       "description": "A single region that can be shown or hidden.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -2111,6 +2411,10 @@
       "name": "CollapsibleContent",
       "description": "The region a Collapsible shows or hides.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -2130,6 +2434,10 @@
       "name": "CollapsibleTrigger",
       "description": "The control that shows or hides a Collapsible.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -2161,6 +2469,10 @@
       "name": "Column",
       "description": "A vertical flexbox container.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -2300,6 +2612,10 @@
       "name": "ContextMenu",
       "description": "A menu opened by right-clicking its trigger.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -2337,6 +2653,10 @@
       "name": "ContextMenuCheckboxItem",
       "description": "A context-menu item bound to a boolean value.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -2380,6 +2700,10 @@
       "name": "ContextMenuContent",
       "description": "The menu panel of a ContextMenu.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -2399,6 +2723,10 @@
       "name": "ContextMenuItem",
       "description": "One selectable item in a ContextMenu.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -2448,6 +2776,10 @@
       "name": "ContextMenuLabel",
       "description": "A non-interactive heading inside a context menu.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -2473,6 +2805,10 @@
       "name": "ContextMenuSeparator",
       "description": "A divider between context-menu groups.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -2486,6 +2822,10 @@
       "name": "ContextMenuTrigger",
       "description": "The region that opens a ContextMenu on right-click.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -2511,6 +2851,10 @@
       "name": "dd",
       "description": "A description list definition.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -2674,6 +3018,10 @@
       "name": "Dialog",
       "description": "A modal dialog.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -2711,6 +3059,10 @@
       "name": "DialogClose",
       "description": "A control that closes the surrounding Dialog.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -2748,6 +3100,10 @@
       "name": "DialogContent",
       "description": "The modal panel of a Dialog.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -2773,6 +3129,10 @@
       "name": "DialogDescription",
       "description": "Supporting text under a DialogTitle.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -2798,6 +3158,10 @@
       "name": "DialogFooter",
       "description": "The footer region of a DialogContent.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -2817,6 +3181,10 @@
       "name": "DialogHeader",
       "description": "The header region of a DialogContent.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -2836,6 +3204,10 @@
       "name": "DialogTitle",
       "description": "The accessible title of a Dialog.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -2861,6 +3233,10 @@
       "name": "DialogTrigger",
       "description": "The control that opens a Dialog.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -2898,6 +3274,10 @@
       "name": "div",
       "description": "A plain block container.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "background",
@@ -3013,6 +3393,10 @@
       "name": "dl",
       "description": "A description list.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -3176,6 +3560,10 @@
       "name": "Drawer",
       "description": "A panel that slides up from the bottom edge.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -3213,6 +3601,10 @@
       "name": "DrawerContent",
       "description": "The sliding panel of a Drawer.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -3232,6 +3624,10 @@
       "name": "DrawerDescription",
       "description": "Supporting text under a DrawerTitle.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -3257,6 +3653,10 @@
       "name": "DrawerFooter",
       "description": "The footer region of a DrawerContent.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -3276,6 +3676,10 @@
       "name": "DrawerHeader",
       "description": "The header region of a DrawerContent.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -3295,6 +3699,10 @@
       "name": "DrawerTitle",
       "description": "The accessible title of a Drawer.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -3320,6 +3728,10 @@
       "name": "DrawerTrigger",
       "description": "The control that opens a Drawer.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -3357,6 +3769,10 @@
       "name": "DropdownMenu",
       "description": "A menu opened from a button.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -3394,6 +3810,10 @@
       "name": "DropdownMenuCheckboxItem",
       "description": "A menu item bound to a boolean value.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -3437,6 +3857,10 @@
       "name": "DropdownMenuContent",
       "description": "The menu panel of a DropdownMenu.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -3456,6 +3880,10 @@
       "name": "DropdownMenuItem",
       "description": "One selectable item in a DropdownMenu.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -3505,6 +3933,10 @@
       "name": "DropdownMenuLabel",
       "description": "A non-interactive heading inside a menu.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -3530,6 +3962,10 @@
       "name": "DropdownMenuSeparator",
       "description": "A divider between menu groups.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -3543,6 +3979,10 @@
       "name": "DropdownMenuTrigger",
       "description": "The control that opens a DropdownMenu.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -3580,6 +4020,10 @@
       "name": "dt",
       "description": "A description list term.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -3743,6 +4187,10 @@
       "name": "em",
       "description": "Emphasised text.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -3906,6 +4354,10 @@
       "name": "Empty",
       "description": "The placeholder shown when there is nothing to list.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -3943,6 +4395,10 @@
       "name": "Field",
       "description": "A labelled form field with description and error slots.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -3986,6 +4442,10 @@
       "name": "FieldSet",
       "description": "Groups related fields into one form section.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -4005,6 +4465,10 @@
       "name": "figcaption",
       "description": "A figure caption.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -4168,6 +4632,10 @@
       "name": "figure",
       "description": "A figure with optional caption.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -4331,6 +4799,10 @@
       "name": "Flex",
       "description": "A flexbox container with an author-set direction.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -4470,6 +4942,10 @@
       "name": "footer",
       "description": "A footer landmark.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -4632,7 +5108,11 @@
     {
       "name": "foreach",
       "description": "Renders its declared children once per item of a list.",
-      "acceptsChildren": false,
+      "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "items",
@@ -4652,6 +5132,10 @@
       "name": "Fragment",
       "description": "Renders its children without introducing an element.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -4662,9 +5146,51 @@
       ]
     },
     {
+      "name": "Glow",
+      "description": "Switches the emissive output of a node's materials, or the intensity of a punctual light attached to it.",
+      "acceptsChildren": false,
+      "context": "SCENE",
+      "childrenContext": null,
+      "downstreamOf": [
+        "Model",
+        "Robot"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "color",
+          "kind": "STRING",
+          "required": false,
+          "description": "The color of the glow, as a CSS color. Defaults to the material's own emissive color, or white."
+        },
+        {
+          "key": "intensity",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "How strongly. Defaults to 1 for materials, and to the authored intensity for a light."
+        },
+        {
+          "key": "node",
+          "kind": "STRING",
+          "required": true,
+          "description": "The name of the node in the enclosing model that this binds."
+        },
+        {
+          "key": "on",
+          "kind": "BOOL",
+          "required": false,
+          "description": "Whether the node glows."
+        }
+      ]
+    },
+    {
       "name": "Grid",
       "description": "A CSS grid container.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "background",
@@ -4792,6 +5318,10 @@
       "name": "h1",
       "description": "An HTML h1 heading.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -4823,6 +5353,10 @@
       "name": "h2",
       "description": "An HTML h2 heading.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -4854,6 +5388,10 @@
       "name": "h3",
       "description": "An HTML h3 heading.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -4885,6 +5423,10 @@
       "name": "h4",
       "description": "An HTML h4 heading.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -4916,6 +5458,10 @@
       "name": "h5",
       "description": "An HTML h5 heading.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -4947,6 +5493,10 @@
       "name": "h6",
       "description": "An HTML h6 heading.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -4978,6 +5528,10 @@
       "name": "header",
       "description": "A header landmark.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -5141,6 +5695,10 @@
       "name": "Heading",
       "description": "A section heading at an author-chosen level.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -5178,6 +5736,10 @@
       "name": "HoverCard",
       "description": "A rich preview surface shown on hover.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -5215,6 +5777,10 @@
       "name": "HoverCardContent",
       "description": "The floating panel of a HoverCard.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -5252,6 +5818,10 @@
       "name": "HoverCardTrigger",
       "description": "The element a HoverCard previews.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -5289,6 +5859,10 @@
       "name": "hr",
       "description": "A thematic break. Use Separator for the styled shadcn version.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -5308,6 +5882,10 @@
       "name": "Icon",
       "description": "A lucide icon.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -5333,6 +5911,10 @@
       "name": "if",
       "description": "Renders one of two children depending on a condition.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "else",
@@ -5358,6 +5940,10 @@
       "name": "img",
       "description": "An image.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "alt",
@@ -5405,7 +5991,7 @@
           "key": "src",
           "kind": "ANY",
           "required": false,
-          "description": "Image URL."
+          "description": "Image URL, or an image its app registered as an asset: \"@self.assets.logo\"."
         },
         {
           "key": "width",
@@ -5419,6 +6005,10 @@
       "name": "Input",
       "description": "A single-line text input.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "action",
@@ -5486,6 +6076,10 @@
       "name": "InputGroup",
       "description": "Wraps an input with leading or trailing addons.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -5505,6 +6099,10 @@
       "name": "InputGroupAddon",
       "description": "A label, icon or button attached to an InputGroup.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -5542,6 +6140,10 @@
       "name": "InputOTP",
       "description": "A one-time-code input.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -5579,6 +6181,10 @@
       "name": "Item",
       "description": "A list row with a title, description and actions.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -5634,6 +6240,10 @@
       "name": "ItemGroup",
       "description": "A vertical list of Items.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -5653,6 +6263,10 @@
       "name": "Kbd",
       "description": "A keyboard key or shortcut.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -5678,6 +6292,10 @@
       "name": "Label",
       "description": "A label for a form control.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -5709,6 +6327,10 @@
       "name": "li",
       "description": "One list item.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -5872,6 +6494,10 @@
       "name": "main",
       "description": "The main landmark.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -6035,6 +6661,10 @@
       "name": "mark",
       "description": "Highlighted text.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -6198,6 +6828,10 @@
       "name": "Markdown",
       "description": "Renders a Markdown document.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -6217,6 +6851,10 @@
       "name": "Menubar",
       "description": "A horizontal bar of menus.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -6236,6 +6874,10 @@
       "name": "MenubarItem",
       "description": "One item inside a MenubarMenu.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -6273,6 +6915,10 @@
       "name": "MenubarMenu",
       "description": "One menu in a Menubar, with its trigger and items.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -6298,6 +6944,10 @@
       "name": "MenubarSeparator",
       "description": "A divider between menu groups.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -6308,9 +6958,130 @@
       ]
     },
     {
+      "name": "Model",
+      "description": "Places one GLB model in the scene. Its children bind the model's named nodes to state. A model that is missing or refused renders a placeholder that says why.",
+      "acceptsChildren": true,
+      "context": "SCENE",
+      "childrenContext": null,
+      "downstreamOf": [
+        "Scene"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "id",
+          "kind": "STRING",
+          "required": false,
+          "description": "A name other models in the scene address this one by, as in to=\"arm:tool0\"."
+        },
+        {
+          "key": "origin",
+          "kind": "STRING",
+          "required": false,
+          "description": "Where the model sits in the scene, as \"x y z\" in meters."
+        },
+        {
+          "key": "rotation",
+          "kind": "STRING",
+          "required": false,
+          "description": "How the model is turned, as \"x y z\" Euler angles in radians."
+        },
+        {
+          "key": "scale",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "Uniform scale. Defaults to 1; a model is authored in meters."
+        },
+        {
+          "key": "src",
+          "kind": "ASSET",
+          "required": true,
+          "description": "The 3D model to show: an asset its app registered, as in \"@self.assets.scope\"."
+        }
+      ]
+    },
+    {
+      "name": "Move",
+      "description": "Translates a node along an axis by value x scale + offset meters from its authored pose.",
+      "acceptsChildren": false,
+      "context": "SCENE",
+      "childrenContext": null,
+      "downstreamOf": [
+        "Model",
+        "Robot"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "animateTo",
+          "kind": "ANY",
+          "required": false,
+          "description": "Where the part is going. With it, the view moves there at speed (or over duration) and value corrects it."
+        },
+        {
+          "key": "axis",
+          "kind": "STRING",
+          "required": true,
+          "description": "The axis in the node's own frame: \"x\", \"y\", \"z\" or a vector as \"x y z\"."
+        },
+        {
+          "key": "duration",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "How long a move to animateTo takes, in seconds. Ignored when speed is given."
+        },
+        {
+          "key": "gain",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "Exaggerates the motion on screen only, for travel too small to see. Defaults to 1."
+        },
+        {
+          "key": "node",
+          "kind": "STRING",
+          "required": true,
+          "description": "The name of the node in the enclosing model that this binds."
+        },
+        {
+          "key": "offset",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "Added after scale, in meters. Defaults to 0."
+        },
+        {
+          "key": "scale",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "Multiplies the value before it is applied. Defaults to 1."
+        },
+        {
+          "key": "smooth",
+          "kind": "BOOL",
+          "required": false,
+          "description": "Whether to ease toward each new value over 300 ms. Defaults to true."
+        },
+        {
+          "key": "speed",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "How fast it moves to animateTo, in m/s."
+        },
+        {
+          "key": "value",
+          "kind": "ANY",
+          "required": false,
+          "description": "Where the part is, in meters from the pose the model was authored in. A quantity ({magnitude, unit}) is converted."
+        }
+      ]
+    },
+    {
       "name": "nav",
       "description": "A navigation landmark.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -6474,6 +7245,10 @@
       "name": "ol",
       "description": "An ordered list. Children should be li.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -6634,9 +7409,51 @@
       ]
     },
     {
+      "name": "OnClick",
+      "description": "Makes a node and everything beneath it clickable, with a highlight on hover. A click runs an action, opens a blok, or both.",
+      "acceptsChildren": false,
+      "context": "SCENE",
+      "childrenContext": null,
+      "downstreamOf": [
+        "Model",
+        "Robot"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "mode",
+          "kind": "STRING",
+          "required": false,
+          "description": "Where the opened blok shows: \"popout\" as a card on the node, \"panel\" beside the scene. Defaults to popout."
+        },
+        {
+          "key": "node",
+          "kind": "STRING",
+          "required": true,
+          "description": "The name of the node in the enclosing model."
+        },
+        {
+          "key": "onClick",
+          "kind": "CALLBACK",
+          "required": false,
+          "description": "Called when the node is clicked. Arguments may read event.node."
+        },
+        {
+          "key": "open",
+          "kind": "STRING",
+          "required": false,
+          "description": "The name of an html blok to show when the node is clicked."
+        }
+      ]
+    },
+    {
       "name": "p",
       "description": "An HTML paragraph.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -6704,6 +7521,10 @@
       "name": "Pagination",
       "description": "Page navigation controls.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -6723,6 +7544,10 @@
       "name": "PaginationItem",
       "description": "One control inside a Pagination.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "active",
@@ -6757,9 +7582,45 @@
       ]
     },
     {
+      "name": "Popout",
+      "description": "An HTML card anchored to a node that follows it as it moves. Its children are ordinary html components.",
+      "acceptsChildren": true,
+      "context": "SCENE",
+      "childrenContext": "HTML",
+      "downstreamOf": [
+        "Model",
+        "Robot"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "node",
+          "kind": "STRING",
+          "required": true,
+          "description": "The name of the node in the enclosing model."
+        },
+        {
+          "key": "open",
+          "kind": "BOOL",
+          "required": false,
+          "description": "Whether the card shows. When bound it decides alone and trigger is ignored."
+        },
+        {
+          "key": "trigger",
+          "kind": "STRING",
+          "required": false,
+          "description": "What shows the card: a click on the node, the pointer over it, or always. Defaults to click."
+        }
+      ]
+    },
+    {
       "name": "Popover",
       "description": "A surface anchored to a trigger, opened on click.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -6797,6 +7658,10 @@
       "name": "PopoverContent",
       "description": "The floating panel of a Popover.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -6834,6 +7699,10 @@
       "name": "PopoverTrigger",
       "description": "The control that opens a Popover.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -6871,6 +7740,10 @@
       "name": "pre",
       "description": "Preformatted text.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -7034,6 +7907,10 @@
       "name": "progress",
       "description": "A native progress element. Use Progress for the styled version.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -7059,6 +7936,10 @@
       "name": "Progress",
       "description": "A determinate progress bar.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -7084,6 +7965,10 @@
       "name": "RadioGroup",
       "description": "A group of mutually exclusive options.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -7139,6 +8024,10 @@
       "name": "RadioGroupItem",
       "description": "One option inside a RadioGroup.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -7170,6 +8059,10 @@
       "name": "RawInspector",
       "description": "Debug view of a node's raw props.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "name",
@@ -7183,6 +8076,10 @@
       "name": "Resizable",
       "description": "A group of user-resizable panels.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -7208,6 +8105,10 @@
       "name": "ResizableHandle",
       "description": "The drag handle between two ResizablePanels.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -7227,6 +8128,10 @@
       "name": "ResizablePanel",
       "description": "One panel inside a Resizable group.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -7261,9 +8166,160 @@
       ]
     },
     {
+      "name": "Robot",
+      "description": "A Model with a joint table (extras.arkitekt.joints): applies a joint state map to it, including mimic joints, and clamps to limits.",
+      "acceptsChildren": true,
+      "context": "SCENE",
+      "childrenContext": null,
+      "downstreamOf": [
+        "Scene"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "animateTo",
+          "kind": "DICT",
+          "required": false,
+          "description": "Where each joint is going. Joints named here move at speed, or over duration."
+        },
+        {
+          "key": "duration",
+          "kind": "ANY",
+          "required": false,
+          "description": "How long a move to animateTo takes, in seconds: one number or a map by joint name. Ignored where speed is given."
+        },
+        {
+          "key": "id",
+          "kind": "STRING",
+          "required": false,
+          "description": "A name other models in the scene address this one by, as in to=\"arm:tool0\"."
+        },
+        {
+          "key": "joints",
+          "kind": "DICT",
+          "required": false,
+          "description": "Where each joint is: a map of joint name to radians (revolute, continuous) or meters (prismatic). A joint left out keeps its last value."
+        },
+        {
+          "key": "onJointChange",
+          "kind": "CALLBACK",
+          "required": false,
+          "description": "Called when the viewer sets a joint by hand. Arguments may read event.name and event.value."
+        },
+        {
+          "key": "origin",
+          "kind": "STRING",
+          "required": false,
+          "description": "Where the model sits in the scene, as \"x y z\" in meters."
+        },
+        {
+          "key": "rotation",
+          "kind": "STRING",
+          "required": false,
+          "description": "How the model is turned, as \"x y z\" Euler angles in radians."
+        },
+        {
+          "key": "scale",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "Uniform scale. Defaults to 1; a model is authored in meters."
+        },
+        {
+          "key": "speed",
+          "kind": "ANY",
+          "required": false,
+          "description": "How fast joints move to animateTo, in rad/s or m/s: one number for all joints or a map by joint name."
+        },
+        {
+          "key": "src",
+          "kind": "ASSET",
+          "required": true,
+          "description": "The 3D model to show: an asset its app registered, as in \"@self.assets.scope\"."
+        }
+      ]
+    },
+    {
+      "name": "Rotate",
+      "description": "Rotates a node about an axis by value x scale + offset radians from its authored pose.",
+      "acceptsChildren": false,
+      "context": "SCENE",
+      "childrenContext": null,
+      "downstreamOf": [
+        "Model",
+        "Robot"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "animateTo",
+          "kind": "ANY",
+          "required": false,
+          "description": "Where the part is going. With it, the view moves there at speed (or over duration) and value corrects it."
+        },
+        {
+          "key": "axis",
+          "kind": "STRING",
+          "required": true,
+          "description": "The axis in the node's own frame: \"x\", \"y\", \"z\" or a vector as \"x y z\"."
+        },
+        {
+          "key": "duration",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "How long a move to animateTo takes, in seconds. Ignored when speed is given."
+        },
+        {
+          "key": "gain",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "Exaggerates the motion on screen only, for travel too small to see. Defaults to 1."
+        },
+        {
+          "key": "node",
+          "kind": "STRING",
+          "required": true,
+          "description": "The name of the node in the enclosing model that this binds."
+        },
+        {
+          "key": "offset",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "Added after scale, in radians. Defaults to 0."
+        },
+        {
+          "key": "scale",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "Multiplies the value before it is applied. Defaults to 1."
+        },
+        {
+          "key": "smooth",
+          "kind": "BOOL",
+          "required": false,
+          "description": "Whether to ease toward each new value over 300 ms. Defaults to true."
+        },
+        {
+          "key": "speed",
+          "kind": "FLOAT",
+          "required": false,
+          "description": "How fast it moves to animateTo, in rad/s."
+        },
+        {
+          "key": "value",
+          "kind": "ANY",
+          "required": false,
+          "description": "Where the part is, in radians from the pose the model was authored in. A quantity ({magnitude, unit}) is converted."
+        }
+      ]
+    },
+    {
       "name": "Row",
       "description": "A horizontal flexbox container.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -7400,9 +8456,44 @@
       ]
     },
     {
+      "name": "Scene",
+      "description": "Root of a 3D view: one renderer, camera and light rig. Y is up and one unit is one meter. Place Model and Robot inside.",
+      "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": "SCENE",
+      "downstreamOf": [],
+      "notDownstreamOf": [
+        "Scene"
+      ],
+      "props": [
+        {
+          "key": "camera",
+          "kind": "STRING",
+          "required": false,
+          "description": "Where the camera starts looking from; it frames the models whatever their size. Defaults to iso."
+        },
+        {
+          "key": "grid",
+          "kind": "BOOL",
+          "required": false,
+          "description": "Whether the ground grid starts shown; the viewer can switch it. Defaults to true."
+        },
+        {
+          "key": "height",
+          "kind": "STRING",
+          "required": false,
+          "description": "CSS height of the view, e.g. \"24rem\". Omit to fit the element the scene is in (24rem where that has no height of its own)."
+        }
+      ]
+    },
+    {
       "name": "ScrollArea",
       "description": "A scrollable region with styled scrollbars.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -7440,6 +8531,10 @@
       "name": "section",
       "description": "A document section.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -7603,6 +8698,10 @@
       "name": "Select",
       "description": "A dropdown select. Compose SelectTrigger and SelectContent inside it.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -7646,6 +8745,10 @@
       "name": "SelectContent",
       "description": "The popup list of a Select.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -7665,6 +8768,10 @@
       "name": "SelectGroup",
       "description": "Groups related SelectItems.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -7684,6 +8791,10 @@
       "name": "SelectItem",
       "description": "One option inside a SelectContent.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -7715,6 +8826,10 @@
       "name": "SelectLabel",
       "description": "A heading inside a SelectGroup.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -7734,6 +8849,10 @@
       "name": "SelectTrigger",
       "description": "The button that opens a Select.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -7759,6 +8878,10 @@
       "name": "Separator",
       "description": "A dividing line between sections.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -7778,6 +8901,10 @@
       "name": "Sheet",
       "description": "A panel that slides in from an edge.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -7815,6 +8942,10 @@
       "name": "SheetContent",
       "description": "The sliding panel of a Sheet.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -7846,6 +8977,10 @@
       "name": "SheetDescription",
       "description": "Supporting text under a SheetTitle.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -7871,6 +9006,10 @@
       "name": "SheetFooter",
       "description": "The footer region of a SheetContent.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -7890,6 +9029,10 @@
       "name": "SheetHeader",
       "description": "The header region of a SheetContent.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -7909,6 +9052,10 @@
       "name": "SheetTitle",
       "description": "The accessible title of a Sheet.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -7934,6 +9081,10 @@
       "name": "SheetTrigger",
       "description": "The control that opens a Sheet.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -7968,9 +9119,39 @@
       ]
     },
     {
+      "name": "Show",
+      "description": "Shows or hides a node and its whole subtree.",
+      "acceptsChildren": false,
+      "context": "SCENE",
+      "childrenContext": null,
+      "downstreamOf": [
+        "Model",
+        "Robot"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "node",
+          "kind": "STRING",
+          "required": true,
+          "description": "The name of the node in the enclosing model that this binds."
+        },
+        {
+          "key": "when",
+          "kind": "BOOL",
+          "required": false,
+          "description": "Whether the node is visible. Hiding a node hides everything beneath it."
+        }
+      ]
+    },
+    {
       "name": "Skeleton",
       "description": "A placeholder block shown while content loads.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -7996,6 +9177,10 @@
       "name": "Slider",
       "description": "A slider bound to a numeric value.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -8037,7 +9222,7 @@
           "key": "onChange",
           "kind": "CALLBACK",
           "required": false,
-          "description": "Runs while dragging. Arguments may read $event."
+          "description": "Runs while dragging, at most every 150 ms and always with the final value. Arguments may read $event."
         },
         {
           "key": "onCommit",
@@ -8063,6 +9248,10 @@
       "name": "small",
       "description": "Small print.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -8226,6 +9415,10 @@
       "name": "Spacer",
       "description": "Flexible empty space between siblings.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "grow",
@@ -8245,6 +9438,10 @@
       "name": "span",
       "description": "An inline run of text.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -8312,6 +9509,10 @@
       "name": "Spinner",
       "description": "An indeterminate loading indicator.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -8325,6 +9526,10 @@
       "name": "StreamRender",
       "description": "Renders a live lovekit broadcast.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "broadcast",
@@ -8344,6 +9549,10 @@
       "name": "strong",
       "description": "Strongly emphasised text.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -8507,6 +9716,10 @@
       "name": "StructureDisplay",
       "description": "Shows a structure through the display of the module that owns it.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -8544,6 +9757,10 @@
       "name": "StructurePicker",
       "description": "A search-backed picker for one structure of a given identifier. Writes {\"object\", \"__identifier\"}, or null when cleared.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -8593,6 +9810,10 @@
       "name": "StructureViewer",
       "description": "An interactive viewer for a structure (a mikro image or scene), provided by the module that owns it.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -8636,6 +9857,10 @@
       "name": "sub",
       "description": "Subscript text.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -8799,6 +10024,10 @@
       "name": "sup",
       "description": "Superscript text.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -8962,6 +10191,10 @@
       "name": "Switch",
       "description": "A switch bound to a boolean value.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -9017,6 +10250,10 @@
       "name": "table",
       "description": "A plain HTML table. Use Table for the styled shadcn version.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -9180,6 +10417,10 @@
       "name": "Table",
       "description": "A styled data table. Use the lowercase table element for a plain one.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "caption",
@@ -9205,6 +10446,10 @@
       "name": "TableBody",
       "description": "The body row group of a Table.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -9224,6 +10469,10 @@
       "name": "TableCell",
       "description": "A cell of a Table.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -9255,6 +10504,10 @@
       "name": "TableFooter",
       "description": "The footer row group of a Table.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -9274,6 +10527,10 @@
       "name": "TableHead",
       "description": "A header cell of a Table.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -9305,6 +10562,10 @@
       "name": "TableHeader",
       "description": "The header row group of a Table.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -9324,6 +10585,10 @@
       "name": "TableRow",
       "description": "One row of a Table.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -9349,6 +10614,10 @@
       "name": "Tabs",
       "description": "A tabbed surface.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -9392,6 +10661,10 @@
       "name": "TabsContent",
       "description": "The panel shown for one tab.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -9417,6 +10690,10 @@
       "name": "TabsList",
       "description": "The row of tab triggers.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -9436,6 +10713,10 @@
       "name": "TabsTrigger",
       "description": "One tab in a TabsList.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -9473,6 +10754,10 @@
       "name": "tbody",
       "description": "A table body group.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -9636,6 +10921,10 @@
       "name": "td",
       "description": "A table cell.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -9799,6 +11088,10 @@
       "name": "Text",
       "description": "A paragraph of text.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -9866,6 +11159,10 @@
       "name": "Textarea",
       "description": "A multi-line text input.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -9927,6 +11224,10 @@
       "name": "tfoot",
       "description": "A table footer group.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -10090,6 +11391,10 @@
       "name": "th",
       "description": "A table header cell.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -10253,6 +11558,10 @@
       "name": "thead",
       "description": "A table header group.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -10413,9 +11722,39 @@
       ]
     },
     {
+      "name": "Tint",
+      "description": "Overrides the base color of a node. Its materials are copied first, so nodes sharing them are unaffected.",
+      "acceptsChildren": false,
+      "context": "SCENE",
+      "childrenContext": null,
+      "downstreamOf": [
+        "Model",
+        "Robot"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "color",
+          "kind": "STRING",
+          "required": false,
+          "description": "The base color to give the node, as a CSS color. Without it the authored color shows."
+        },
+        {
+          "key": "node",
+          "kind": "STRING",
+          "required": true,
+          "description": "The name of the node in the enclosing model that this binds."
+        }
+      ]
+    },
+    {
       "name": "Toggle",
       "description": "A two-state toggle button.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -10483,6 +11822,10 @@
       "name": "ToggleGroup",
       "description": "A set of toggle buttons. Binds to a string, or to a list when multiple.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -10538,6 +11881,10 @@
       "name": "ToggleGroupItem",
       "description": "One item inside a ToggleGroup.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "className",
@@ -10575,6 +11922,10 @@
       "name": "Tooltip",
       "description": "A short hint shown on hover or focus.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "bind",
@@ -10612,6 +11963,10 @@
       "name": "TooltipContent",
       "description": "The hint shown by a Tooltip.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -10649,6 +12004,10 @@
       "name": "TooltipTrigger",
       "description": "The element a Tooltip describes.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "children",
@@ -10686,6 +12045,10 @@
       "name": "tr",
       "description": "A table row.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -10849,6 +12212,10 @@
       "name": "ul",
       "description": "An unordered list. Children should be li.",
       "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "align",
@@ -11012,6 +12379,10 @@
       "name": "video",
       "description": "A video player.",
       "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "downstreamOf": [],
+      "notDownstreamOf": [],
       "props": [
         {
           "key": "autoPlay",

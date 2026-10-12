@@ -5,6 +5,8 @@ registration data — implementations, states and bloks — together with the ho
 and structure registries.
 """
 
+import hashlib
+import os
 import warnings
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
@@ -23,8 +25,11 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, SkipValidation
 
 from arkitekt_spec.actions import (
     AgentDependencyInput,
+    AssetInput,
+    AssetKind,
     AssignWidgetInput,
     BlokImplementationInput,
+    ComponentContext,
     ComponentNodeInput,
     EffectInput,
     Effects,
@@ -46,8 +51,14 @@ from arkitekt_spec.declare.actors.types import Actifier, DeclaredImplementation
 from arkitekt_spec.declare.agents.hooks.registry import HooksRegistry
 from arkitekt_spec.declare.blok.parser import bsx as parse_bsx
 from arkitekt_spec.declare.blok.registry import build_declared_bloks
-from arkitekt_spec.declare.blok.validate import RESERVED_ROOTS, validate_blok_catalog
+from arkitekt_spec.declare.blok.validate import (
+    RESERVED_ROOTS,
+    check_scene_root,
+    validate_blok_catalog,
+)
 from arkitekt_spec.declare.catalogs import (
+    ASSETS_SEGMENT,
+    MODEL_REF_PATTERN,
     Catalog,
     CatalogView,
     CatalogWarning,
@@ -74,6 +85,7 @@ from arkitekt_spec.declare.structures.types import (
     Shrinker,
     StateDeclaration,
 )
+from arkitekt_spec.inspection import InspectedAsset
 
 T = TypeVar("T")
 P = ParamSpec("P")
@@ -92,6 +104,61 @@ class BlokDeclaration(BaseModel):
     local_state: dict[str, Any] | None = None
     dependencies: list[AgentDependencyInput] | None = None
     catalog: str | None = None
+    context: ComponentContext = ComponentContext.HTML
+    default: bool = False
+    for_model: str | None = None
+    for_node: str | None = None
+
+
+#: How each kind of asset is recognised: the extensions it is written with, and how
+#: its first bytes must start (a WebP also says so at offset 8).
+_ASSET_FORMATS: dict[AssetKind, tuple[frozenset[str], tuple[bytes, ...]]] = {
+    AssetKind.MODEL_3D: (frozenset({".glb"}), (b"glTF",)),
+    AssetKind.IMAGE: (
+        frozenset({".png", ".jpg", ".jpeg", ".webp"}),
+        (b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff", b"RIFF"),
+    ),
+}
+
+
+def _asset_kind(path: Path, data: bytes, kind: AssetKind | None) -> AssetKind:
+    """The kind of the file at ``path``: the one given, or the one its extension says.
+
+    Raises:
+        ValueError: If no kind is given and the extension names none, or the file
+            does not start as a file of that kind does.
+    """
+    if kind is None:
+        kind = next(
+            (
+                candidate
+                for candidate, (extensions, _) in _ASSET_FORMATS.items()
+                if path.suffix.lower() in extensions
+            ),
+            None,
+        )
+        if kind is None:
+            known = sorted(ext for extensions, _ in _ASSET_FORMATS.values() for ext in extensions)
+            raise ValueError(
+                f"Cannot tell what kind of asset '{path.name}' is: say it with kind=, "
+                f"or use one of {known}"
+            )
+    kind = AssetKind(kind)
+    starts = _ASSET_FORMATS[kind][1]
+    if not data.startswith(starts) or (data.startswith(b"RIFF") and data[8:12] != b"WEBP"):
+        raise ValueError(f"'{path.name}' is not a valid {kind.label} file")
+    return kind
+
+
+class AssetDeclaration(BaseModel):
+    """A file :meth:`AppRegistry.register_asset` recorded: what the server is told, and where it is."""
+
+    name: str
+    kind: AssetKind
+    ref: str
+    size: int
+    path: Path
+    """Where the file is on this machine. Never sent."""
 
 
 def _owner_among(
@@ -167,6 +234,10 @@ class AppRegistry(BaseModel):
 
     # --- bloks (formerly BlokRegistry) ---
     registered_bloks: dict[str, "BlokDeclaration"] = Field(default_factory=dict)
+    registered_assets: dict[str, "AssetDeclaration"] = Field(default_factory=dict)
+    """The files the app brings itself, by name: a run uploads what the server lacks."""
+    root: Path | None = Field(default=None, exclude=True)
+    """The app's directory, which asset paths are relative to. The working directory when unset."""
     declared_catalogs: dict[str, Catalog] = Field(default_factory=dict)
 
     # --- other registries kept as composed fields ---
@@ -507,6 +578,11 @@ class AppRegistry(BaseModel):
             required_locks: Locks an action must hold to change it.
         """
         self._refuse_if_frozen(f"the state '{state.interface}'")
+        if state.interface == ASSETS_SEGMENT:
+            raise ValueError(
+                f"A state cannot be called '{ASSETS_SEGMENT}': '@self.{ASSETS_SEGMENT}.<name>' "
+                "names a file the app registered."
+            )
         self.states[state.interface] = state
         self.state_registry_schemas[state.interface] = registry
         self.state_classes_interfaces[cls] = state.interface
@@ -544,6 +620,10 @@ class AppRegistry(BaseModel):
         dependencies: "Mapping[str, type[Any]] | Sequence[AgentDependencyInput] | None" = None,
         catalog: str | None = None,
         local_state: dict[str, Any] | None = None,
+        context: ComponentContext | str = ComponentContext.HTML,
+        default: bool = False,
+        for_model: str | None = None,
+        for_node: str | None = None,
     ) -> None:
         """Register a blok component tree in the registry.
 
@@ -570,6 +650,16 @@ class AppRegistry(BaseModel):
                 may bind controls to (``bind="form.iterations"``) and read back
                 in a call (``@self.run(iterations=form.iterations)``). It never
                 reaches the agent's state.
+            context: The renderer for the blok's root: ``"html"`` for a panel, or
+                ``"scene"`` for a full 3D view, whose root must be a ``Scene``.
+            default: Whether this is the app's default blok for its context: the
+                panel, or the 3D view, a client shows for the app without being
+                told which. Declaring another default replaces it.
+            for_model: The model (``"sha256:..."``) this blok decorates. A viewer
+                showing that model, in any app's scene, offers this blok where
+                ``for_node`` is clicked. Html bloks only.
+            for_node: The node of ``for_model`` to attach to; the model's root
+                when left out.
 
         Raises:
             ValueError: If the name or component is missing, a reference does not
@@ -599,6 +689,26 @@ class AppRegistry(BaseModel):
             raise ValueError(
                 f"Blok '{name}' names {shadowed} in both demo_state and local_state"
             )
+        context = ComponentContext(context.upper()) if isinstance(context, str) else context
+        if for_node is not None and for_model is None:
+            raise ValueError(f"Blok '{name}' names for_node without a for_model")
+        if for_model is not None:
+            if not MODEL_REF_PATTERN.fullmatch(for_model):
+                raise ValueError(
+                    f"Blok '{name}': for_model must be 'sha256:' and 64 lowercase hex characters, not {for_model!r}"
+                )
+            if context != ComponentContext.HTML:
+                raise ValueError(f"Blok '{name}': only an html blok can decorate a model")
+        replaced = [
+            other
+            for other, declaration in self.registered_bloks.items()
+            if default and other != name and declaration.default and declaration.context == context
+        ]
+        for other in replaced:
+            # At most one default per context: the newly declared one replaces it.
+            self.registered_bloks[other] = self.registered_bloks[other].model_copy(update={"default": False})
+        if context == ComponentContext.SCENE:
+            check_scene_root(component)
         # Catalog rules only: references need the dependencies that
         # ``build_declared_bloks`` infers later, and are checked there.
         for diagnostic in validate_blok_catalog(component, self.catalog_view(catalog)):
@@ -613,6 +723,85 @@ class AppRegistry(BaseModel):
             local_state=local_state,
             dependencies=resolved_dependencies,
             catalog=catalog,
+            context=context,
+            default=default,
+            for_model=for_model,
+            for_node=for_node,
+        )
+
+    def register_asset(
+        self, name: str, path: str | Path, kind: AssetKind | None = None
+    ) -> None:
+        """Register a file the app brings with it, under the name its bloks call it by.
+
+        A blok names it as ``@self.assets.<name>``: a scene blok's model, an image
+        in a panel. When the app runs, a file the server does not hold yet is
+        uploaded; the server checks it against its hash and the rules of its kind.
+
+        Args:
+            name: What bloks call the asset. An identifier, unique within the app.
+            path: The file, relative to the app's directory (:attr:`root`). It is
+                read now, and again when it is uploaded.
+            kind: What the file is. Told from the extension when left out
+                (``.glb`` is a 3D model; ``.png``, ``.jpg``, ``.jpeg`` and
+                ``.webp`` are images).
+
+        Raises:
+            ValueError: If the name is not an identifier or is taken by another
+                file, the path is absolute or leaves the app's directory, or the
+                file is not of its kind.
+            FileNotFoundError: If there is no file at ``path``.
+        """
+        if not name.isidentifier():
+            raise ValueError(
+                f"An asset's name is an identifier, as it is written in "
+                f"'@self.assets.<name>': {name!r} is not one"
+            )
+        relative = Path(path)
+        root = (self.root or Path.cwd()).resolve()
+        file = (root / relative).resolve()
+        if relative.is_absolute() or not file.is_relative_to(root):
+            raise ValueError(
+                f"The asset '{name}' must be a file inside the app's directory "
+                f"({root}), given relative to it: {str(path)!r} is not"
+            )
+        data = file.read_bytes()
+        declaration = AssetDeclaration(
+            name=name,
+            kind=_asset_kind(file, data, kind),
+            ref="sha256:" + hashlib.sha256(data).hexdigest(),
+            size=len(data),
+            path=file,
+        )
+        existing = self.registered_assets.get(name)
+        if existing == declaration:
+            return
+        if existing is not None:
+            raise ValueError(
+                f"The asset '{name}' is already registered as {existing.path.name}"
+            )
+        self._refuse_if_frozen(f"the asset '{name}'")
+        self.registered_assets[name] = declaration
+
+    def get_inspected_assets(self) -> list[InspectedAsset]:
+        """The registered assets with where each is, relative to the app's directory, in name order."""
+        root = (self.root or Path.cwd()).resolve()
+        return [
+            InspectedAsset(
+                name=asset.name,
+                kind=asset.kind,
+                ref=asset.ref,
+                size=asset.size,
+                path=Path(os.path.relpath(asset.path, root)).as_posix(),
+            )
+            for _, asset in sorted(self.registered_assets.items())
+        ]
+
+    def get_declared_assets(self) -> tuple[AssetInput, ...]:
+        """The registered assets as the server is told of them, in name order."""
+        return tuple(
+            AssetInput(name=asset.name, kind=asset.kind, ref=asset.ref, size=asset.size)
+            for _, asset in sorted(self.registered_assets.items())
         )
 
     def declare_ui_catalog(
@@ -726,19 +915,23 @@ class AppRegistry(BaseModel):
         """
         from arkitekt_spec.declare.definition.checks import check_agent_input
 
+        # Passed only when there is one, so that an app declaring no description
+        # (or no assets) leaves the field *unset* rather than sending an explicit
+        # null: the declaration is dumped with ``exclude_unset``, so this is what
+        # keeps such an agent's wire bytes (and its definition hash) exactly what
+        # they were before the field existed.
+        optional: dict[str, Any] = {}
+        if description is not None:
+            optional["description"] = description
+        if self.registered_assets:
+            optional["assets"] = self.get_declared_assets()
         return check_agent_input(ImplementAgentInput(
             name=name,
-            # Passed only when there is one, so that an app declaring no
-            # description leaves the field *unset* rather than sending an
-            # explicit null: the declaration is dumped with ``exclude_unset``,
-            # so this is what keeps such an agent's wire bytes (and its
-            # definition hash) exactly what they were before descriptions
-            # existed.
-            **({"description": description} if description is not None else {}),
             implementations=tuple(self.get_implementations()),
             states=tuple(self.states.values()),
             locks=tuple(self.get_locks()),
             bloks=tuple(self.get_declared_bloks().values()),
+            **optional,
         ))
 
     # ------------------------------------------------------------------ #
@@ -810,6 +1003,12 @@ class AppRegistry(BaseModel):
             if name in self.registered_bloks:
                 raise ValueError(f"Two services both declare the blok '{name}'.")
             self.registered_bloks[name] = blok
+
+        for name, asset in other.registered_assets.items():
+            existing = self.registered_assets.get(name)
+            if existing is not None and existing.ref != asset.ref:
+                raise ValueError(f"Two services both declare the asset '{name}', differently.")
+            self.registered_assets[name] = asset
 
         for name, catalog in other.declared_catalogs.items():
             existing = self.declared_catalogs.get(name)
@@ -889,6 +1088,8 @@ class AppRegistry(BaseModel):
             state_interface_classes=dict(self.state_interface_classes),
             state_classes_interfaces=dict(self.state_classes_interfaces),
             registered_bloks=dict(self.registered_bloks),
+            registered_assets=dict(self.registered_assets),
+            root=self.root,
             declared_catalogs=dict(self.declared_catalogs),
             hooks_registry=HooksRegistry.model_construct(
                 background_worker=dict(self.hooks_registry.background_worker),

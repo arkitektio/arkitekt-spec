@@ -98,7 +98,7 @@ def test_every_correction_is_still_needed() -> None:
 
 
 def test_a_loop_has_a_body() -> None:
-    """The one correction there is: the app renders a ``foreach``'s children."""
+    """The app renders a ``foreach``'s children, and since it says so, nothing here corrects it."""
     registry = AppRegistry()
 
     @registry.state
@@ -194,3 +194,97 @@ def test_an_operation_of_the_app_is_called_by_keyword() -> None:
     """
     with pytest.raises(ValueError, match=r"'math.round' does not accept arguments \['0', '1'\]"):
         AppRegistry().register_blok("panel", '<span text="@utils.math.round(1.234, 2)" />')
+
+
+# -- the 3D vocabulary ---------------------------------------------------------------
+
+REF = "sha256:" + "9f" * 32
+SRC = "@self.assets.scope"
+
+
+def _scope() -> AppRegistry:
+    registry = AppRegistry(root=Path(__file__).parents[1] / "fixtures")
+    registry.register_asset("scope", "scope.glb")
+
+    @registry.state
+    class Stage:
+        x: float
+        target_x: float
+        speed: float
+        mounted: bool
+
+    return registry
+
+
+SCOPE = f"""
+<Scene>
+  <Model id="scope" src="{SRC}">
+    <Move node="stage_x" axis="x" value="@self.Stage.x" animateTo="@self.Stage.target_x" speed="@self.Stage.speed" />
+    <Show node="incubator" when="@self.Stage.mounted" />
+    <Popout node="laser_out" trigger="hover">
+      <Card><CardContent><Badge text="Laser" /></CardContent></Card>
+    </Popout>
+  </Model>
+</Scene>
+"""
+
+
+def test_a_scene_blok_registers_and_carries_its_context_and_default() -> None:
+    registry = _scope()
+    registry.register_blok("scope_3d", SCOPE, context="scene", default=True)
+    registry.register_blok("turret_panel", "<Card />", default=True, for_model=REF, for_node="turret")
+
+    declared = build_declared_bloks(registry)
+    wire = declared["scope_3d"].model_dump(mode="json", by_alias=True, exclude_none=True)
+    assert (wire["context"], wire["default"]) == ("SCENE", True)
+    panel = declared["turret_panel"].model_dump(mode="json", by_alias=True, exclude_none=True)
+    assert (panel["context"], panel["forModel"], panel["forNode"]) == ("HTML", REF, "turret")
+
+
+def test_a_new_default_replaces_the_previous_one_of_its_context() -> None:
+    registry = _scope()
+    registry.register_blok("first", "<Card />", default=True)
+    registry.register_blok("view", SCOPE, context="scene", default=True)
+    registry.register_blok("second", "<Card />", default=True)
+
+    defaults = {name for name, declaration in registry.registered_bloks.items() if declaration.default}
+    assert defaults == {"view", "second"}
+
+
+@pytest.mark.parametrize(
+    ("tree", "options", "message"),
+    [
+        ("<Card />", {"context": "scene"}, "the root of a scene blok must be a 'Scene', not 'Card'"),
+        (f"<Card>{SCOPE}</Card>", {"context": "scene"}, "the root of a scene blok must be a 'Scene', not 'Card'"),
+        ("<Stage />", {"context": "scene", "catalog": "elsewhere"}, "the root of a scene blok must be a 'Scene', not 'Stage'"),
+        (f'<Model src="{SRC}" />', {}, "is a scene component and cannot be placed in the html context"),
+        (f'<Scene><Model src="{REF}" /></Scene>', {}, "is an ASSET prop and must name an asset"),
+        ('<Scene><Model src="@self.Stage.x" /></Scene>', {}, "is an ASSET prop and must name an asset"),
+        ('<Scene><Move node="a" axis="x" /></Scene>', {}, r"must be inside one of \['Model', 'Robot'\]"),
+        (f'<Scene><Model src="{SRC}"><Badge text="x" /></Model></Scene>', {}, "is a html component and cannot be placed in the scene context"),
+        ("<Card />", {"for_model": "9f2c"}, "for_model must be 'sha256:'"),
+        ("<Card />", {"for_node": "turret"}, "for_node without a for_model"),
+        (SCOPE, {"context": "scene", "for_model": REF}, "only an html blok can decorate a model"),
+    ],
+)
+def test_a_scene_blok_that_breaks_the_rules_is_refused(tree: str, options: dict, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        _scope().register_blok("bad", tree, **options)
+
+
+def test_a_handler_reading_the_event_declares_no_dependency_for_it() -> None:
+    """``event`` is what triggered the handler, not a state of some agent."""
+    registry = _scope()
+
+    @registry.register
+    def move_joint(name: str, position: float) -> None:
+        """Move one joint."""
+
+    registry.register_blok(
+        "arm_3d",
+        f"""<Scene><Robot src="{SRC}"
+              onJointChange="@self.move_joint(name=event.name, position=event.value)" /></Scene>""",
+        context="scene",
+    )
+    blok = build_declared_bloks(registry)["arm_3d"]
+    assert [dependency.key for dependency in blok.dependencies] == ["self"]

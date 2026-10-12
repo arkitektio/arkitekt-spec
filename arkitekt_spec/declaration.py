@@ -12,9 +12,12 @@ shapes, each read by a different party:
 so none of them can say something the others do not.
 """
 
+from typing import Any
+
 from pydantic import Field
 
 from arkitekt_spec.actions import (
+    AssetInput,
     BlokImplementationInput,
     ImplementAgentInput,
     ImplementationInput,
@@ -22,7 +25,7 @@ from arkitekt_spec.actions import (
     StateImplementationInput,
 )
 from arkitekt_spec.base import WireModel
-from arkitekt_spec.inspection import Inspection
+from arkitekt_spec.inspection import InspectedAsset, Inspection
 from arkitekt_spec.manifest import AppManifest, Requirement
 
 
@@ -37,6 +40,7 @@ class AppDeclaration(WireModel):
     states: list[StateImplementationInput] = Field(default_factory=list)
     locks: list[LockImplementationInput] = Field(default_factory=list)
     bloks: list[BlokImplementationInput] = Field(default_factory=list)
+    assets: list[InspectedAsset] = Field(default_factory=list)
 
     def to_inspection(self, size: int | None = None) -> Inspection:
         """The declaration as a built image records it (``deployments.yaml``)."""
@@ -48,6 +52,7 @@ class AppDeclaration(WireModel):
             states=list(self.states),
             locks=list(self.locks),
             bloks=list(self.bloks),
+            assets=list(self.assets),
         )
 
     def to_agent_input(self, name: str | None = None) -> ImplementAgentInput:
@@ -56,15 +61,20 @@ class AppDeclaration(WireModel):
         ``description`` is only set when the app has one, so an undescribed app
         leaves the field unset rather than sending an explicit null.
         """
+        # Set only when there is something to say: an explicit null is not "unset".
+        optional: dict[str, Any] = {}
+        if self.manifest.description is not None:
+            optional["description"] = self.manifest.description
+        if self.assets:
+            # Without the paths, which are this machine's.
+            optional["assets"] = tuple(
+                AssetInput(name=a.name, kind=a.kind, ref=a.ref, size=a.size) for a in self.assets
+            )
         return ImplementAgentInput(
             name=name,
-            **(
-                {"description": self.manifest.description}
-                if self.manifest.description is not None
-                else {}
-            ),
             implementations=tuple(self.implementations),
             states=tuple(self.states),
             locks=tuple(self.locks),
             bloks=tuple(self.bloks),
+            **optional,
         )

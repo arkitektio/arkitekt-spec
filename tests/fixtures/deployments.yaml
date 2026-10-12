@@ -5,6 +5,7 @@ app_images:
     buildAt: '2026-09-28T12:00:00'
     imageString: jhnnsrs/starmist:0.1.0-vanilla
   inspection:
+    assets: []
     bloks: []
     description: StarDist nucleus segmentation with the pretrained 2D models
     implementations:

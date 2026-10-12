@@ -886,6 +886,15 @@
       "title": "ArgPortInput",
       "type": "object"
     },
+    "AssetKind": {
+      "description": "What a file an app registers as an asset is.",
+      "enum": [
+        "MODEL_3D",
+        "IMAGE"
+      ],
+      "title": "AssetKind",
+      "type": "string"
+    },
     "BlokImplementationInput": {
       "additionalProperties": false,
       "description": "Which locks does the agent provide in general",
@@ -910,6 +919,17 @@
           },
           "title": "Components",
           "type": "array"
+        },
+        "context": {
+          "$ref": "#/$defs/ComponentContext",
+          "default": "HTML",
+          "description": "The renderer for this Blok's root: HTML for panels and dashboards, SCENE for a full 3D view whose one root is the Scene component."
+        },
+        "default": {
+          "default": false,
+          "description": "Whether this Blok is its agent's default for its context. A newly declared default replaces the previous one.",
+          "title": "Default",
+          "type": "boolean"
         },
         "demo_state": {
           "anyOf": [
@@ -962,6 +982,32 @@
           "default": null,
           "description": "A human-readable description about this Blok's purpose and functionality.",
           "title": "Description"
+        },
+        "for_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The model ('sha256:...') this Blok decorates: viewers showing that model offer this Blok at `for_node`. HTML bloks only.",
+          "title": "For Model"
+        },
+        "for_node": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The node of `for_model` this Blok attaches to; the model's root when absent.",
+          "title": "For Node"
         },
         "key": {
           "description": "The key of this Blok implementation.",
@@ -1076,6 +1122,15 @@
       },
       "title": "ChoiceReturnWidgetInput",
       "type": "object"
+    },
+    "ComponentContext": {
+      "description": "The renderer a blok component lives in. A blok's tree starts in HTML.",
+      "enum": [
+        "HTML",
+        "SCENE"
+      ],
+      "title": "ComponentContext",
+      "type": "string"
     },
     "ComponentNodeInput": {
       "additionalProperties": false,
@@ -1989,9 +2044,56 @@
       "title": "ImplementationInput",
       "type": "object"
     },
+    "InspectedAsset": {
+      "additionalProperties": false,
+      "description": "A file the app brings, as its image holds it: what the server is told, and where it is.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/AssetKind",
+          "description": "What the file is."
+        },
+        "name": {
+          "description": "The name bloks refer to the asset by, as in `@self.assets.<name>`. Unique within the agent.",
+          "title": "Name",
+          "type": "string"
+        },
+        "path": {
+          "description": "Where the file is, relative to the app's directory, with forward slashes.",
+          "title": "Path",
+          "type": "string"
+        },
+        "ref": {
+          "description": "'sha256:' and the hex SHA-256 of the file's exact bytes.",
+          "title": "Ref",
+          "type": "string"
+        },
+        "size": {
+          "description": "The size of the file in bytes.",
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "ref",
+        "size",
+        "path"
+      ],
+      "title": "InspectedAsset",
+      "type": "object"
+    },
     "Inspection": {
       "description": "The declaration an app image makes, plus the services it requires.\n\nThe envelope reads across versions (unknown keys ignored, see\n:class:`~arkitekt_spec.base.WireModel`). The entries are the action language of\n:mod:`arkitekt_spec.actions`, which refuses unknown keys: a malformed definition\nfails where it is read rather than being stored half-understood.",
       "properties": {
+        "assets": {
+          "description": "The files the app brings with it, by the name its bloks call them.",
+          "items": {
+            "$ref": "#/$defs/InspectedAsset"
+          },
+          "title": "Assets",
+          "type": "array"
+        },
         "bloks": {
           "items": {
             "$ref": "#/$defs/BlokImplementationInput"

@@ -8,7 +8,13 @@ from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.blok import bsx
 from arkitekt_spec.declare.blok.registry import build_declared_bloks
 from arkitekt_spec.declare.blok.validate import validate_blok_catalog
-from arkitekt_spec.declare.catalogs import UNKNOWN_OPERATION, CatalogWarning
+from arkitekt_spec.declare.catalogs import (
+    HTML_CONTEXT,
+    SCENE_CONTEXT,
+    UNKNOWN_OPERATION,
+    CatalogWarning,
+    ComponentSpec,
+)
 
 from .catalog_cases import BOX, CLAMP, FOREACH, SLIDER, base_view, electron_view
 
@@ -153,3 +159,64 @@ def test_findings_carry_the_unknown_operation_code() -> None:
     tree = bsx('<Box><Slider min="@utils.nosuchop(1)" /></Box>')
     findings = validate_blok_catalog(tree, electron_view())
     assert [f.code for f in findings] == [UNKNOWN_OPERATION]
+
+
+def _scene_registry() -> AppRegistry:
+    registry = AppRegistry()
+    registry.declare_ui_catalog(
+        "electron",
+        components=[
+            BOX,
+            ComponentSpec(name="Label"),
+            ComponentSpec(
+                name="Scene",
+                accepts_children=True,
+                children_context=SCENE_CONTEXT,
+                not_downstream_of=("Scene",),
+            ),
+            ComponentSpec(
+                name="Model",
+                accepts_children=True,
+                context=SCENE_CONTEXT,
+                downstream_of=("Scene",),
+            ),
+            ComponentSpec(name="Move", context=SCENE_CONTEXT, downstream_of=("Model", "Robot")),
+            ComponentSpec(
+                name="Popout",
+                accepts_children=True,
+                context=SCENE_CONTEXT,
+                children_context=HTML_CONTEXT,
+                downstream_of=("Model", "Robot"),
+            ),
+        ],
+        operations=[],
+    )
+    return registry
+
+
+def test_a_tree_that_bridges_into_a_scene_and_back_is_accepted() -> None:
+    _scene_registry().register_blok(
+        "view",
+        "<Box><Scene><Model><Move /><Popout><Box><Label /></Box></Popout></Model></Scene></Box>",
+        catalog="electron",
+    )
+
+
+@pytest.mark.parametrize(
+    ("tree", "message"),
+    [
+        ("<Model />", "component 'Model' is a scene component and cannot be placed in the html context"),
+        (
+            "<Scene><Label /></Scene>",
+            "component 'Label' is a html component and cannot be placed in the scene context",
+        ),
+        ("<Scene><Move /></Scene>", r"component 'Move' must be inside one of \['Model', 'Robot'\]"),
+        (
+            "<Scene><Model><Popout><Scene /></Popout></Model></Scene>",
+            r"component 'Scene' must not be inside \['Scene'\]",
+        ),
+    ],
+)
+def test_a_component_is_held_to_its_declared_placement(tree: str, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        _scene_registry().register_blok("bad", tree, catalog="electron")
