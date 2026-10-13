@@ -101,6 +101,12 @@ def SearchWidget(
     registered helper that can run the query). The query needs to follow
     the SearchQuery type.
 
+    A query may also declare ``$requires``: the frontend then passes the
+    ``requires`` of the port the widget sits on (``[{key, operator, value}]``),
+    so a structure's one default widget offers each port only what that port
+    accepts. The service decides the variable's input type; its fields are a
+    port constraint's.
+
     Args:
         query (SearchQuery): The serach query as a search query object or string
         ward (str): The ward key
@@ -176,6 +182,61 @@ def CustomWidget(
         props=tuple(props) if props else None,
         dependencies=tuple(dependencies or ()),
         fallback=fallback,
+    )
+
+
+def StructurePicker(
+    query: SearchQuery | str,
+    ward: str,
+    dependencies: list[str] | None = None,
+    *,
+    placeholder: str | None = None,
+    fallback: AssignWidgetInput | None = None,
+) -> AssignWidgetInput:
+    """A picker for one structure, fed by a GraphQL query: the catalog's ``StructurePicker``.
+
+    The query is part of the widget: it is run on ``ward`` and follows the
+    ``SearchQuery`` shape (``$search``, ``$values``, a list aliased ``options``
+    with ``value`` and ``label``; optionally ``description``, ``$limit`` and
+    ``$offset`` for paging, and ``$requires``, which is handed the constraints
+    of the port the widget sits on). Every other variable it declares must be
+    one of ``dependencies``: the argument of that name is what it receives, a
+    structure as its id. The user can lift what such a variable narrows the
+    list to, and is offered to when it leaves nothing.
+
+        lens: Annotated[Volume, StructurePicker(LENSES_REACHABLE_FROM_PATH, "mikro", ["path"])]
+
+    A frontend without the component renders the ``fallback``, which is the
+    plain search over the same query unless another is given.
+
+    Args:
+        query (SearchQuery): The query that lists the candidates
+        ward (str): The service that runs it, by its key
+        dependencies (list[str], optional): The arguments the query's own variables read
+        placeholder (str, optional): Shown while nothing is selected
+        fallback (AssignWidgetInput, optional): Widget for a UI whose catalog
+            has no ``StructurePicker``; the plain search by default
+
+    Returns:
+        AssignWidgetInput: The widget input
+    """
+    # The plain search over the same query: it checks the query's shape and that
+    # every variable is backed, and is what a UI without the component renders.
+    normalized = validate_search_query(query)
+    search = SearchWidget(query=normalized, ward=ward, dependencies=dependencies)
+    props = [
+        # Reads and writes the port's own value, which a widget's props reach as `value`.
+        ComponentPropInput(key="bind", static_value="value"),
+        ComponentPropInput(key="query", static_value=normalized),
+        ComponentPropInput(key="ward", static_value=ward),
+    ]
+    if placeholder is not None:
+        props.append(ComponentPropInput(key="placeholder", static_value=placeholder))
+    return CustomWidget(
+        "StructurePicker",
+        props=props,
+        dependencies=dependencies,
+        fallback=fallback or search,
     )
 
 

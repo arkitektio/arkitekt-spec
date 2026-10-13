@@ -171,3 +171,14 @@ def test_dependency_resolves_to_return_port(
     widget = definition.args[0].widget
     assert widget is not None
     assert widget.dependencies == ("return0",)
+
+
+def test_search_widget_accepts_the_ports_own_requires() -> None:
+    """$requires is filled by the frontend from the port the widget sits on, so it needs no filter or dependency either."""
+    query = (
+        "query search($search: String, $values: [ID], $requires: [DescriptorConstraintInput!]) {"
+        " options: lenses(filters: {search: $search, ids: $values, requires: $requires}) { value: id label } }"
+    )
+    widget = SearchWidget(query=query, ward="mikro")
+    assert "$requires: [DescriptorConstraintInput!]" in widget.query
+    assert widget.filters is None and widget.dependencies == ()

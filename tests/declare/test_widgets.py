@@ -128,3 +128,35 @@ def test_state_choice_needs_exactly_one_pointer() -> None:
         StateChoiceAssignWidgetInput()
     with pytest.raises(ValueError, match="exactly one of state_path or state_call"):
         StateChoiceAssignWidgetInput(state_path="/x", state_call=call)
+
+
+def test_structure_picker_is_the_catalog_picker_carrying_its_own_query() -> None:
+    """The query is a prop of the component; the plain search over it is the fallback."""
+    from arkitekt_spec.declare.widgets import StructurePicker
+
+    query = (
+        "query Lenses($search: String, $values: [ID!], $requires: [DescriptorConstraintInput!], $path: ID) {"
+        " options: lenses(filters: {search: $search, ids: $values, requires: $requires, reachableFrom: $path}) { value: id label } }"
+    )
+    widget = StructurePicker(query, "mikro", ["path"], placeholder="Pick a volume")
+
+    assert widget.kind == "CUSTOM" and widget.component == "StructurePicker"
+    assert widget.dependencies == ("path",)
+    props = {prop.key: prop.static_value for prop in widget.props}
+    assert props["bind"] == "value" and props["ward"] == "mikro" and props["placeholder"] == "Pick a volume"
+    assert "$path: ID" in props["query"] and "reachableFrom: $path" in props["query"]
+    # A UI without the component still gets a working search over the same query.
+    assert widget.fallback.kind == "SEARCH"
+    assert widget.fallback.query == props["query"] and widget.fallback.dependencies == ("path",)
+
+
+def test_structure_picker_refuses_a_variable_no_argument_backs() -> None:
+    """A variable the picker does not supply must be one of its dependencies, as for a search."""
+    from arkitekt_spec.declare.widgets import StringWidget, StructurePicker
+
+    query = "query Lenses($search: String, $values: [ID!], $path: ID) { options: lenses(filters: {search: $search, ids: $values, reachableFrom: $path}) { value: id label } }"
+    with pytest.raises(ValueError, match="path"):
+        StructurePicker(query, "mikro")
+
+    custom = StructurePicker(query, "mikro", ["path"], fallback=StringWidget())
+    assert custom.fallback.kind == "STRING"
