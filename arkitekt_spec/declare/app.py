@@ -9,7 +9,7 @@ import hashlib
 import os
 import warnings
 from collections.abc import Callable, Mapping, Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import (
     TYPE_CHECKING,
     Annotated,
@@ -20,10 +20,12 @@ from typing import (
     dataclass_transform,
     overload,
 )
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, SkipValidation
 
 from arkitekt_spec.actions import (
+    ASSET_SOURCE_MAX_LENGTH,
     AgentDependencyInput,
     AssetInput,
     AssetKind,
@@ -45,6 +47,7 @@ from arkitekt_spec.actions import (
     TestTargetInput,
     TrackInput,
     ValidatorInput,
+    is_asset_source,
 )
 from arkitekt_spec.declare.actors.policy import KEEP, DisconnectPolicy
 from arkitekt_spec.declare.actors.types import Actifier, DeclaredImplementation
@@ -150,15 +153,70 @@ def _asset_kind(path: Path, data: bytes, kind: AssetKind | None) -> AssetKind:
     return kind
 
 
+def _sourced_asset(
+    name: str, source: str, ref: str | None, kind: AssetKind | None
+) -> "AssetDeclaration":
+    """The declaration of a file the app does not hold: where to fetch it, and its hash.
+
+    Nothing is fetched, so the kind is told from the extension the URL's path ends
+    in (a query string does not disturb it) and the bytes are the server's to check.
+
+    Raises:
+        ValueError: If the source is not an https URL, the reference is missing or
+            malformed, or no kind is given and the URL's extension names none.
+    """
+    if not is_asset_source(source):
+        raise ValueError(
+            f"The asset '{name}': a source is an https URL of at most "
+            f"{ASSET_SOURCE_MAX_LENGTH} characters, not {source!r}"
+        )
+    if ref is None or not MODEL_REF_PATTERN.fullmatch(ref):
+        raise ValueError(
+            f"The asset '{name}' names a source, so it needs the hash of the file "
+            f"there: ref='sha256:' and 64 lowercase hex characters, not {ref!r}"
+        )
+    if kind is None:
+        suffix = PurePosixPath(urlparse(source).path).suffix.lower()
+        kind = next(
+            (
+                candidate
+                for candidate, (extensions, _) in _ASSET_FORMATS.items()
+                if suffix in extensions
+            ),
+            None,
+        )
+        if kind is None:
+            raise ValueError(
+                f"Cannot tell what kind of asset '{name}' is from {source!r}: "
+                f"say it with kind="
+            )
+    return AssetDeclaration(name=name, kind=AssetKind(kind), ref=ref, source=source)
+
+
 class AssetDeclaration(BaseModel):
     """A file :meth:`AppRegistry.register_asset` recorded: what the server is told, and where it is."""
 
     name: str
     kind: AssetKind
     ref: str
-    size: int
-    path: Path
-    """Where the file is on this machine. Never sent."""
+    size: int | None = None
+    """The file's size; unknown for a file the app does not hold."""
+    path: Path | None = None
+    """Where the file is on this machine. Never sent. None for a file the app does not hold."""
+    source: str | None = None
+    """The https URL a file the app does not hold is fetched from."""
+
+    @property
+    def where(self) -> str:
+        """The file as it is named to a person: its file name, or its source."""
+        return self.path.name if self.path is not None else str(self.source)
+
+    def as_input(self) -> AssetInput:
+        """What the server is told: the size of a held file, the source of one that is not."""
+        said: dict[str, Any] = (
+            {"size": self.size} if self.source is None else {"source": self.source}
+        )
+        return AssetInput(name=self.name, kind=self.kind, ref=self.ref, **said)
 
 
 def _owner_among(
@@ -730,13 +788,25 @@ class AppRegistry(BaseModel):
         )
 
     def register_asset(
-        self, name: str, path: str | Path, kind: AssetKind | None = None
+        self,
+        name: str,
+        path: str | Path | None = None,
+        kind: AssetKind | None = None,
+        *,
+        source: str | None = None,
+        ref: str | None = None,
     ) -> None:
-        """Register a file the app brings with it, under the name its bloks call it by.
+        """Register a file the app uses, under the name its bloks call it by.
 
         A blok names it as ``@self.assets.<name>``: a scene blok's model, an image
-        in a panel. When the app runs, a file the server does not hold yet is
-        uploaded; the server checks it against its hash and the rules of its kind.
+        in a panel. The file is either one the app brings (``path``) or one it only
+        says where to fetch (``source`` with its ``ref``).
+
+        A file the app brings is uploaded when the app runs, if the server does not
+        hold it yet. A file it names a source for is never fetched by the app: an
+        admin of the organization adds it from their client, which fetches it from
+        the source. Either way the server checks the bytes against the hash and the
+        rules of the kind.
 
         Args:
             name: What bloks call the asset. An identifier, unique within the app.
@@ -745,17 +815,36 @@ class AppRegistry(BaseModel):
             kind: What the file is. Told from the extension when left out
                 (``.glb`` is a 3D model; ``.png``, ``.jpg``, ``.jpeg`` and
                 ``.webp`` are images).
+            source: The https URL the file is fetched from, instead of ``path``.
+            ref: The file at ``source``: ``"sha256:"`` and the hex SHA-256 of its
+                exact bytes. Required with ``source``, since nothing is fetched
+                here to compute it.
 
         Raises:
             ValueError: If the name is not an identifier or is taken by another
-                file, the path is absolute or leaves the app's directory, or the
-                file is not of its kind.
+                file, not exactly one of ``path`` and ``source`` is given, the
+                path is absolute or leaves the app's directory, the file is not
+                of its kind, or the source or its reference is malformed.
             FileNotFoundError: If there is no file at ``path``.
         """
         if not name.isidentifier():
             raise ValueError(
                 f"An asset's name is an identifier, as it is written in "
                 f"'@self.assets.<name>': {name!r} is not one"
+            )
+        if (path is None) == (source is None):
+            raise ValueError(
+                f"The asset '{name}' is a file the app brings (a path) or one it "
+                f"says where to fetch (source= with ref=): give exactly one"
+            )
+        if source is not None:
+            self._record_asset(_sourced_asset(name, source, ref, kind))
+            return
+        assert path is not None, "exactly one of path and source is given"
+        if ref is not None:
+            raise ValueError(
+                f"The asset '{name}': a ref pins a file fetched from a source; "
+                f"the reference of a file the app brings is computed from it"
             )
         relative = Path(path)
         root = (self.root or Path.cwd()).resolve()
@@ -766,42 +855,43 @@ class AppRegistry(BaseModel):
                 f"({root}), given relative to it: {str(path)!r} is not"
             )
         data = file.read_bytes()
-        declaration = AssetDeclaration(
-            name=name,
-            kind=_asset_kind(file, data, kind),
-            ref="sha256:" + hashlib.sha256(data).hexdigest(),
-            size=len(data),
-            path=file,
+        self._record_asset(
+            AssetDeclaration(
+                name=name,
+                kind=_asset_kind(file, data, kind),
+                ref="sha256:" + hashlib.sha256(data).hexdigest(),
+                size=len(data),
+                path=file,
+            )
         )
-        existing = self.registered_assets.get(name)
+
+    def _record_asset(self, declaration: "AssetDeclaration") -> None:
+        """Keep a declaration under its name; the same one again is no change."""
+        existing = self.registered_assets.get(declaration.name)
         if existing == declaration:
             return
         if existing is not None:
             raise ValueError(
-                f"The asset '{name}' is already registered as {existing.path.name}"
+                f"The asset '{declaration.name}' is already registered as {existing.where}"
             )
-        self._refuse_if_frozen(f"the asset '{name}'")
-        self.registered_assets[name] = declaration
+        self._refuse_if_frozen(f"the asset '{declaration.name}'")
+        self.registered_assets[declaration.name] = declaration
 
     def get_inspected_assets(self) -> list[InspectedAsset]:
         """The registered assets with where each is, relative to the app's directory, in name order."""
         root = (self.root or Path.cwd()).resolve()
-        return [
-            InspectedAsset(
-                name=asset.name,
-                kind=asset.kind,
-                ref=asset.ref,
-                size=asset.size,
-                path=Path(os.path.relpath(asset.path, root)).as_posix(),
-            )
-            for _, asset in sorted(self.registered_assets.items())
-        ]
+        inspected: list[InspectedAsset] = []
+        for _, asset in sorted(self.registered_assets.items()):
+            said: dict[str, Any] = asset.as_input().model_dump(exclude_none=True)
+            if asset.path is not None:
+                said["path"] = Path(os.path.relpath(asset.path, root)).as_posix()
+            inspected.append(InspectedAsset(**said))
+        return inspected
 
     def get_declared_assets(self) -> tuple[AssetInput, ...]:
         """The registered assets as the server is told of them, in name order."""
         return tuple(
-            AssetInput(name=asset.name, kind=asset.kind, ref=asset.ref, size=asset.size)
-            for _, asset in sorted(self.registered_assets.items())
+            asset.as_input() for _, asset in sorted(self.registered_assets.items())
         )
 
     def declare_ui_catalog(

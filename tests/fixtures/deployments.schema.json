@@ -2165,9 +2165,17 @@
           "type": "string"
         },
         "path": {
-          "description": "Where the file is, relative to the app's directory, with forward slashes.",
-          "title": "Path",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where the file is, relative to the app's directory, with forward slashes. Absent for a file the image does not hold: that one names a `source`.",
+          "title": "Path"
         },
         "ref": {
           "description": "'sha256:' and the hex SHA-256 of the file's exact bytes.",
@@ -2175,17 +2183,36 @@
           "type": "string"
         },
         "size": {
-          "description": "The size of the file in bytes.",
-          "title": "Size",
-          "type": "integer"
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The size of the file in bytes. Required unless the asset names a `source`: an agent knows the size of a file it holds.",
+          "title": "Size"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The https URL the file can be fetched from. Given instead of holding the file: the agent uploads nothing, an admin's client fetches it.",
+          "title": "Source"
         }
       },
       "required": [
         "name",
         "kind",
-        "ref",
-        "size",
-        "path"
+        "ref"
       ],
       "title": "InspectedAsset",
       "type": "object"

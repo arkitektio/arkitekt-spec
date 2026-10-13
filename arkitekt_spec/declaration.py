@@ -68,7 +68,7 @@ class AppDeclaration(WireModel):
         if self.assets:
             # Without the paths, which are this machine's.
             optional["assets"] = tuple(
-                AssetInput(name=a.name, kind=a.kind, ref=a.ref, size=a.size) for a in self.assets
+                AssetInput(**a.model_dump(exclude={"path"}, exclude_none=True)) for a in self.assets
             )
         return ImplementAgentInput(
             name=name,

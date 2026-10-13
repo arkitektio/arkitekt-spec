@@ -32,7 +32,7 @@ def test_an_asset_is_registered_by_name_and_told_to_the_server_without_its_path(
     assert [(asset.name, asset.kind) for asset in declared] == [("icon", "IMAGE"), ("logo", "IMAGE"), ("scope", "MODEL_3D")]
     scope = declared[2]
     assert scope.ref == "sha256:" + hashlib.sha256(GLB).hexdigest() and scope.size == len(GLB)
-    assert set(scope.model_dump()) == {"name", "kind", "ref", "size"}
+    assert set(scope.model_dump(exclude_unset=True)) == {"name", "kind", "ref", "size"}
     assert AssetKind.MODEL_3D.label == "3D model"
 
 
@@ -143,8 +143,51 @@ def test_an_app_dump_lists_its_assets_with_their_paths_and_hashes(registry: AppR
 
     dumped = declaration.to_inspection().model_dump(mode="json")["assets"]
     assert dumped == [
-        {"name": "logo", "kind": "IMAGE", "ref": "sha256:" + hashlib.sha256(PNG).hexdigest(), "size": len(PNG), "path": "logo.png"},
-        {"name": "scope", "kind": "MODEL_3D", "ref": "sha256:" + hashlib.sha256(GLB).hexdigest(), "size": len(GLB), "path": "models/scope.glb"},
+        {"name": "logo", "kind": "IMAGE", "ref": "sha256:" + hashlib.sha256(PNG).hexdigest(), "size": len(PNG), "source": None, "path": "logo.png"},
+        {"name": "scope", "kind": "MODEL_3D", "ref": "sha256:" + hashlib.sha256(GLB).hexdigest(), "size": len(GLB), "source": None, "path": "models/scope.glb"},
     ]
     # The server is told everything but where the files are on this machine.
-    assert [set(asset.model_dump()) for asset in declaration.to_agent_input().assets] == [{"name", "kind", "ref", "size"}] * 2
+    assert [set(asset.model_dump(exclude_unset=True)) for asset in declaration.to_agent_input().assets] == [{"name", "kind", "ref", "size"}] * 2
+
+
+REF = "sha256:" + "9f" * 32
+SOURCE = "https://vendor.example/models/ur5.glb"
+
+
+def test_a_file_the_app_does_not_hold_is_named_by_its_source_and_hash(registry: AppRegistry) -> None:
+    registry.register_asset("robot", source=SOURCE + "?download=1", ref=REF)
+    registry.register_asset("badge", source="https://vendor.example/get/42", ref=REF, kind=AssetKind.IMAGE)
+
+    badge, robot = registry.to_implement_agent_input(name="app").assets
+    assert robot.model_dump(exclude_unset=True) == {"name": "robot", "kind": "MODEL_3D", "ref": REF, "source": SOURCE + "?download=1"}
+    assert (badge.kind, badge.size) == ("IMAGE", None)
+    assert registry.registered_assets["robot"].path is None
+
+    registry.register_blok("view", '<Scene><Model src="@self.assets.robot" /></Scene>', context="scene")
+    inspected = {asset.name: asset for asset in registry.get_inspected_assets()}
+    assert inspected["robot"].path is None and inspected["robot"].source == SOURCE + "?download=1"
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        ({}, "give exactly one"),
+        ({"path": "models/scope.glb", "source": SOURCE, "ref": REF}, "give exactly one"),
+        ({"path": "models/scope.glb", "ref": REF}, "a ref pins a file fetched from a source"),
+        ({"source": SOURCE}, "needs the hash of the file"),
+        ({"source": SOURCE, "ref": "9f2c"}, "needs the hash of the file"),
+        ({"source": "http://vendor.example/ur5.glb", "ref": REF}, "a source is an https URL"),
+        ({"source": "https://vendor.example/" + "a" * 2000, "ref": REF}, "a source is an https URL"),
+        ({"source": "https://vendor.example/get/42", "ref": REF}, "Cannot tell what kind"),
+    ],
+)
+def test_an_asset_is_a_file_or_a_source_with_its_hash(registry: AppRegistry, arguments: dict, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        registry.register_asset("robot", **arguments)
+
+
+def test_a_name_is_one_source(registry: AppRegistry) -> None:
+    registry.register_asset("robot", source=SOURCE, ref=REF)
+    registry.register_asset("robot", source=SOURCE, ref=REF)
+    with pytest.raises(ValueError, match="already registered as https://vendor.example/models/ur5.glb"):
+        registry.register_asset("robot", "models/scope.glb")

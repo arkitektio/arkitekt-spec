@@ -16,8 +16,9 @@ from arkitekt_spec.manifest import Requirement
 class InspectedAsset(AssetInput):
     """A file the app brings, as its image holds it: what the server is told, and where it is."""
 
-    path: str = Field(
-        description="Where the file is, relative to the app's directory, with forward slashes.",
+    path: str | None = Field(
+        default=None,
+        description="Where the file is, relative to the app's directory, with forward slashes. Absent for a file the image does not hold: that one names a `source`.",
     )
 
 

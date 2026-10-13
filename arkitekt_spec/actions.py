@@ -1094,6 +1094,18 @@ class AssetKind(str, Enum):
         return {"MODEL_3D": "3D model", "IMAGE": "image"}[self.value]
 
 
+#: The longest ``source`` an asset may name.
+ASSET_SOURCE_MAX_LENGTH = 2000
+
+
+def is_asset_source(source: str) -> bool:
+    """Whether ``source`` is a URL an asset may be fetched from: https, and not overlong."""
+    return (
+        source.startswith("https://")
+        and len("https://") < len(source) <= ASSET_SOURCE_MAX_LENGTH
+    )
+
+
 class AssetInput(ActionModel):
     """A file an agent brings with it: the name its bloks call it by, and what the bytes are."""
 
@@ -1104,10 +1116,29 @@ class AssetInput(ActionModel):
     ref: str = Field(
         description="'sha256:' and the hex SHA-256 of the file's exact bytes.",
     )
-    size: int = Field(description="The size of the file in bytes.")
+    size: int | None = Field(
+        default=None,
+        description="The size of the file in bytes. Required unless the asset names a `source`: an agent knows the size of a file it holds.",
+    )
+    source: str | None = Field(
+        default=None,
+        description="The https URL the file can be fetched from. Given instead of holding the file: the agent uploads nothing, an admin's client fetches it.",
+    )
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )
+
+    @model_validator(mode="after")
+    def _held_or_sourced(self) -> "AssetInput":
+        if self.source is not None and not is_asset_source(self.source):
+            raise ValueError(
+                f"Asset {self.name!r}: a source is an https URL of at most {ASSET_SOURCE_MAX_LENGTH} characters"
+            )
+        if (self.size is None and self.source is None) or (
+            self.size is not None and self.size <= 0
+        ):
+            raise ValueError(f"Asset {self.name!r}: an asset has a size")
+        return self
 
 
 class ImplementAgentInput(AgentRules, ActionModel):
