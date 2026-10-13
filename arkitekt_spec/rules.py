@@ -166,7 +166,7 @@ def resolve_port_path(path: str, ports: Iterable[Any]) -> bool:
 
 
 def check_demo_state(dependencies: Iterable[Any] | None, demo_state: Any) -> None:  # noqa: ANN401
-    """A blok's ``demo_state`` names exactly the states each dependency references."""
+    """A blok's ``demo_state`` names the states each dependency references, and nothing but those and its actions."""
     if not isinstance(demo_state, Mapping):
         return
     states: Mapping[str, Any] = demo_state  # pyright: ignore[reportUnknownVariableType]
@@ -180,7 +180,9 @@ def check_demo_state(dependencies: Iterable[Any] | None, demo_state: Any) -> Non
                 raise ValueError(
                     f"demo_state for '{dependency.key}' missing key '{state_key}' referenced in blok"
                 )
-        extra = set(demo.keys()) - state_keys
+        # An action the blok demands may hold its latest task (``self.blur.latest``).
+        action_keys = {demand.key for demand in dependency.action_dependencies or ()}
+        extra = set(demo.keys()) - state_keys - action_keys
         if extra:
             raise ValueError(
                 f"demo_state for '{dependency.key}' has extra keys not referenced in blok: "

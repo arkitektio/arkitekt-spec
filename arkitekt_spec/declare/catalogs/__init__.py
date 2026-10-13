@@ -64,6 +64,23 @@ def asset_path_parts(path: str) -> tuple[str, str] | None:
         raise ValueError(f"an asset is named '<dependency>.assets.<name>', not {path!r}")
     return parts[0], parts[2]
 
+LATEST_SEGMENT = "latest"
+"""What follows an action's key in the path of its latest task (``self.blur.latest.progress``)."""
+
+
+def latest_task_path_parts(path: str) -> tuple[str, str, list[str]] | None:
+    """The ``(dependency key, name, rest)`` of ``<dependency>.<name>.latest...``, or None.
+
+    The spelling alone: whether ``name`` is an action of the dependency, and so
+    whether the path reads a task at all, is for the caller to say. A state is
+    read the same way and may have a field called ``latest``.
+    """
+    parts = path.split(".")
+    if len(parts) < 3 or parts[2] != LATEST_SEGMENT or not all(parts[:2]):
+        return None
+    return parts[0], parts[1], parts[3:]
+
+
 HTML_CONTEXT = "HTML"
 SCENE_CONTEXT = "SCENE"
 COMPONENT_CONTEXTS = (HTML_CONTEXT, SCENE_CONTEXT)

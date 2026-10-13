@@ -503,3 +503,89 @@ def test_a_bound_call_to_another_app_is_read_but_not_looked_into(registry: AppRe
     )
 
     assert sorted(registry.get_declared_bloks()["remote"].demo_state) == ["job"]
+
+
+# --- an action's latest task ------------------------------------------------
+
+
+LATEST_BLOK = """
+<Card>
+    <Progress value="@self.blur.latest.progress" />
+    <Text text="@self.blur.latest.message" />
+    <Text text="@self.blur.latest.result" />
+</Card>
+"""
+
+
+def test_an_actions_latest_task_is_read_without_calling_it(pipeline: AppRegistry) -> None:
+    pipeline.register_blok("ui", LATEST_BLOK)
+
+    blok = pipeline.to_implement_agent_input().bloks[0]
+
+    # The task is the action's: demanded like a call to it, and no state.
+    dependency = blok.dependencies[0]
+    assert [d.key for d in blok.dependencies] == ["self"]
+    assert [demand.key for demand in dependency.action_dependencies] == ["blur"]
+    assert dependency.state_dependencies is None
+
+
+def test_an_action_that_has_not_run_reads_as_an_idle_record(pipeline: AppRegistry) -> None:
+    pipeline.register_blok("ui", LATEST_BLOK)
+
+    demo_state = pipeline.get_declared_bloks()["ui"].demo_state
+    assert demo_state == {"self": {"blur": {"latest": demo_state["self"]["blur"]["latest"]}}}
+    assert demo_state["self"]["blur"]["latest"]["status"] == "idle"
+    assert demo_state["self"]["blur"]["latest"]["progress"] == 0
+
+
+@pytest.mark.parametrize(
+    ("path", "problem"),
+    [
+        ("self.blur.latest.progres", "'progres' does not exist"),
+        ("self.blur.latest.result.nope", "'nope' does not exist"),
+        ("self.nope.latest.progress", "unknown state 'nope'"),
+    ],
+)
+def test_an_actions_latest_task_is_typed(pipeline: AppRegistry, path: str, problem: str) -> None:
+    pipeline.register_blok("ui", f'<Text text="@{path}" />')
+
+    with pytest.raises(ValueError, match=problem):
+        pipeline.get_declared_bloks()
+
+
+def test_a_latest_task_is_read_beside_a_call_and_a_state(runner: AppRegistry) -> None:
+    @runner.register
+    def blur(sigma: int) -> str:
+        """Blur."""
+        return "blurred"
+
+    state_key = next(iter(runner.states))
+    field = runner.states[state_key].definition.ports[0].key
+    runner.register_blok(
+        "ui",
+        f"""
+        <Row>
+            <Button onClick="@self.blur(sigma=2)" disabled="@self.blur.latest.running" />
+            <Text text="@self.{state_key}.{field}" />
+        </Row>
+        """,
+    )
+
+    blok = runner.to_implement_agent_input().bloks[0]
+    dependency = blok.dependencies[0]
+    assert [demand.key for demand in dependency.action_dependencies] == ["blur"]
+    assert [demand.key for demand in dependency.state_dependencies] == [state_key]
+    assert set(blok.demo_state["self"]) == {"blur", state_key}
+
+
+def test_a_state_and_an_action_of_one_name_make_latest_ambiguous(runner: AppRegistry) -> None:
+    state_key = next(iter(runner.states))
+
+    @runner.register(interface=state_key)
+    def clash() -> None:
+        """Clash."""
+
+    runner.register_blok("ui", f'<Text text="@self.{state_key}.latest.progress" />')
+
+    with pytest.raises(ValueError, match="could be the latest task"):
+        runner.get_declared_bloks()

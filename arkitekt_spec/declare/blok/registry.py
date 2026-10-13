@@ -1,6 +1,6 @@
 """Turn registered blok declarations into the inputs the agent uploads."""
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -17,14 +17,19 @@ from arkitekt_spec.actions import (
     StateDependencyInput,
     UtilCallInput,
 )
-from arkitekt_spec.declare.blok.validate import EVENT_SCOPE_KEY, RESERVED_ROOTS, idle_task_record
+from arkitekt_spec.declare.blok.validate import (
+    EVENT_SCOPE_KEY,
+    RESERVED_ROOTS,
+    idle_task_record,
+    latest_task_reads,
+)
 from arkitekt_spec.declare.blok.walk import (
     BlokVisitor,
     action_key_for,
     bound_calls,
     walk_component,
 )
-from arkitekt_spec.declare.catalogs import asset_path_parts
+from arkitekt_spec.declare.catalogs import LATEST_SEGMENT, asset_path_parts, latest_task_path_parts
 from arkitekt_spec.declare.definition.checks import check_blok
 from arkitekt_spec.declare.definition.dependencies import (
     build_action_dependency_input,
@@ -65,6 +70,13 @@ def build_declared_bloks(
         if bound:
             # A call that has not run yet: what the renderer shows until it does.
             demo_state = {**demo_state, **{name: idle_task_record() for name in bound}}
+        for dependency_key, action_key in sorted(latest_task_reads(declaration.component, dependencies)):
+            # An action that has not run yet reads like a call that has not: idle.
+            of_dependency = dict(demo_state.get(dependency_key) or {})
+            of_action = dict(of_dependency.get(action_key) or {})
+            of_action.setdefault(LATEST_SEGMENT, idle_task_record())
+            of_dependency[action_key] = of_action
+            demo_state = {**demo_state, dependency_key: of_dependency}
 
         declared_bloks[blok_key] = check_blok(BlokImplementationInput(
             key=blok_key,
@@ -86,9 +98,15 @@ class _ReferenceCollector(BlokVisitor):
     """Collects the dependency keys, actions and states a blok tree references."""
 
     def __init__(
-        self, aliases: dict[str, str], local_roots: frozenset[str] = frozenset()
+        self,
+        aliases: dict[str, str],
+        local_roots: frozenset[str] = frozenset(),
+        names_of: Callable[[str], tuple[Collection[str], Collection[str]]] | None = None,
     ) -> None:
         self.aliases = aliases
+        # Per dependency key, the actions and the states it has to offer: what
+        # tells ``self.blur.latest`` (a task) from ``self.stage.latest`` (a field).
+        self.names_of = names_of
         # Roots of the blok's own UI state: they name no dependency.
         self.local_roots = local_roots
         # Names calls are bound to (``.into(name)``).
@@ -134,6 +152,20 @@ class _ReferenceCollector(BlokVisitor):
             # to an agent, even when nothing else of that agent is used.
             self.states.setdefault(self.canonical(dependency), set())
             return
+
+        latest = latest_task_path_parts(path)
+        if latest is not None and self.names_of is not None:
+            dependency, name = self.canonical(latest[0]), latest[1]
+            actions, states = self.names_of(dependency)
+            if name in actions and name in states:
+                raise ValueError(
+                    f"'{path}' in {context} could be the latest task of the action '{name}' "
+                    f"or the field '{LATEST_SEGMENT}' of the state '{name}'. Rename one of them."
+                )
+            if name in actions:
+                # The latest task of an action is the action's: demanded like a call to it.
+                self.actions.setdefault(dependency, set()).add(name)
+                return
 
         if len(path_parts) >= 2:
             self.states.setdefault(self.canonical(root), set()).add(path_parts[1])
@@ -196,7 +228,16 @@ def _build_dependencies_for_component(
         if dependency.app is not None
     }
 
-    collector = _ReferenceCollector(aliases, frozenset(local_state or ()))
+    def names_of(dependency_key: str) -> tuple[Collection[str], Collection[str]]:
+        explicit = explicit_by_key.get(dependency_key)
+        if explicit is None:
+            return app_registry.implementations.keys(), app_registry.states.keys()
+        return (
+            {demand.key for demand in explicit.action_dependencies or ()},
+            {demand.key for demand in explicit.state_dependencies or ()},
+        )
+
+    collector = _ReferenceCollector(aliases, frozenset(local_state or ()), names_of)
     walk_component(component, collector)
 
     taken = (

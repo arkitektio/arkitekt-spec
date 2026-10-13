@@ -23,6 +23,7 @@ from arkitekt_spec.declare.blok.walk import (
 )
 from arkitekt_spec.declare.catalogs import (
     HTML_CONTEXT,
+    LATEST_SEGMENT,
     SCENE_ROOT_COMPONENT,
     CatalogView,
     Diagnostic,
@@ -30,6 +31,7 @@ from arkitekt_spec.declare.catalogs import (
     check_call,
     check_component,
     check_placement,
+    latest_task_path_parts,
 )
 from arkitekt_spec.declare.definition.match import build_port_matches
 
@@ -156,6 +158,59 @@ def _task_record_match(
         key=name,
         children=(*fields, result, PortMatchInput(key="returns", children=returns)),
     )
+
+
+def latest_task_read(index: DependencyIndex, path: str) -> tuple[str, str, list[str]] | None:
+    """The ``(dependency key, action key, rest)`` of a path that reads an action's latest task.
+
+    ``<dependency>.<action>.latest`` is the task the action last ran as: the same
+    record a bound call holds, without the blok having started the run. It is one
+    only where the dependency demands that action; a demanded state of the same
+    name is read as the state it always was.
+    """
+    named = latest_task_path_parts(path)
+    if named is None:
+        return None
+    dependency = index.canonical(named[0])
+    if named[1] not in index.action_returns.get(dependency, {}):
+        return None
+    if named[1] in index.state_demands.get(dependency, {}):
+        return None
+    return dependency, named[1], named[2]
+
+
+def latest_task_reads(
+    component: ComponentNodeInput, dependencies: Iterable[AgentDependencyInput]
+) -> set[tuple[str, str]]:
+    """Every ``(dependency key, action key)`` whose latest task the tree reads."""
+    index = DependencyIndex.from_dependencies(dependencies)
+    found: set[tuple[str, str]] = set()
+
+    class _Reads(BlokVisitor):
+        def visit_path(self, path: str, scope: dict[str, Any], context: str) -> None:
+            if path.split(".")[0] in scope:
+                return
+            read = latest_task_read(index, path)
+            if read is not None:
+                found.add(read[:2])
+
+        def visit_component(self, node: ComponentNodeInput, scope: dict[str, Any], context: str) -> None:
+            return None
+
+        def visit_agent_call(self, call: AgentProbeInput, scope: dict[str, Any], context: str) -> None:
+            return None
+
+        def visit_util_call(self, call: UtilCallInput, scope: dict[str, Any], context: str) -> None:
+            return None
+
+        def declare_foreach_local(self, name: str, items_path: str, scope: dict[str, Any], context: str) -> None:
+            self.visit_path(items_path, scope, context)
+
+        def declare_bound_call(self, name: str, call: AgentProbeInput, context: str) -> None:
+            return None
+
+    walk_component(component, _Reads())
+    return found
 
 
 def local_roots_of(
@@ -295,6 +350,15 @@ class _ValidationVisitor(BlokVisitor):
                     return None
             except ValueError as error:
                 raise ValueError(f"{context}: {error}") from None
+
+        if root not in self.local_roots and canonical_root in index.keys:
+            latest = latest_task_read(index, path)
+            if latest is not None:
+                _, action, rest = latest
+                returns = index.action_returns[canonical_root][action]
+                return _resolve_port_match_path(
+                    _task_record_match(LATEST_SEGMENT, returns), rest, path, context
+                )
 
         if canonical_root in index.state_demands:
             return _resolve_dependency_state_path(
