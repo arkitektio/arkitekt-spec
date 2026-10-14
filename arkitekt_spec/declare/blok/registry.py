@@ -66,17 +66,7 @@ def build_declared_bloks(
             # demo_state key as a path root, and the renderer seeds its data
             # model from it.
             demo_state = {**demo_state, **declaration.local_state}
-        bound = bound_calls(declaration.component)
-        if bound:
-            # A call that has not run yet: what the renderer shows until it does.
-            demo_state = {**demo_state, **{name: idle_task_record() for name in bound}}
-        for dependency_key, action_key in sorted(latest_task_reads(declaration.component, dependencies)):
-            # An action that has not run yet reads like a call that has not: idle.
-            of_dependency = dict(demo_state.get(dependency_key) or {})
-            of_action = dict(of_dependency.get(action_key) or {})
-            of_action.setdefault(LATEST_SEGMENT, idle_task_record())
-            of_dependency[action_key] = of_action
-            demo_state = {**demo_state, dependency_key: of_dependency}
+        demo_state = demo_state_for(declaration.component, dependencies, demo_state)
 
         declared_bloks[blok_key] = check_blok(BlokImplementationInput(
             key=blok_key,
@@ -92,6 +82,28 @@ def build_declared_bloks(
         ))
 
     return declared_bloks
+
+
+def demo_state_for(
+    component: ComponentNodeInput,
+    dependencies: Iterable[AgentDependencyInput],
+    demo_state: Mapping[str, Any],
+) -> dict[str, Any]:
+    """``demo_state`` with the idle task records ``component`` reads added.
+
+    Each name a call is bound to (``.into(run)``) and each action whose latest
+    task the tree reads (``dep.action.latest``) starts as a call that has not run:
+    what the renderer shows until it does. The server takes every top-level key
+    as a path root, so a tree that reads one of these needs it here.
+    """
+    state = {**demo_state, **{name: idle_task_record() for name in bound_calls(component)}}
+    for dependency_key, action_key in sorted(latest_task_reads(component, dependencies)):
+        of_dependency = dict(state.get(dependency_key) or {})
+        of_action = dict(of_dependency.get(action_key) or {})
+        of_action.setdefault(LATEST_SEGMENT, idle_task_record())
+        of_dependency[action_key] = of_action
+        state[dependency_key] = of_dependency
+    return state
 
 
 class _ReferenceCollector(BlokVisitor):
