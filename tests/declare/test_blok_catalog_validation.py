@@ -1,8 +1,7 @@
 """Blok trees validated against a catalog at declaration time."""
 
-import warnings
-
 import re
+import warnings
 
 import pytest
 

@@ -793,7 +793,7 @@ class AppRegistry(BaseModel):
         if context in (ComponentContext.LOGO, ComponentContext.ACTION_LOGO):
             check_logo_complexity(component, demo_state)
         if context == ComponentContext.ACTION_LOGO:
-            check_logo_palette(component, {**(demo_state or {}), **local_state})
+            check_logo_palette(component, {**(demo_state or {}), **(local_state or {})})
         # Catalog rules only: references need the dependencies that
         # ``build_declared_bloks`` infers later, and are checked there.
         for diagnostic in validate_blok_catalog(component, self.catalog_view(catalog)):
