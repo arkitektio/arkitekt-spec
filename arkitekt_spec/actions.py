@@ -153,6 +153,8 @@ class ComponentContext(str, Enum):
     "A 3D view."
     LOGO = "LOGO"
     "An SVG drawing: an agent's logo, which clients render against its demo state."
+    ACTION_LOGO = "ACTION_LOGO"
+    "An action's logo: an SVG in the viewer's palette, drawn against the task the viewer last ran of it (``@task``, null until then)."
 
 
 class PortKind(str, Enum):
@@ -1259,7 +1261,7 @@ class ImplementationInput(ActionModel):
     )
     logo: str | None = Field(
         default=None,
-        description="The key of the agent's logo blok (context LOGO) that draws this action.",
+        description="The key of the agent's action logo blok (context ACTION_LOGO) that draws this action.",
     )
 
     model_config = ConfigDict(

@@ -1148,7 +1148,8 @@
       "enum": [
         "HTML",
         "SCENE",
-        "LOGO"
+        "LOGO",
+        "ACTION_LOGO"
       ],
       "title": "ComponentContext",
       "type": "string"
@@ -1987,7 +1988,7 @@
             }
           ],
           "default": null,
-          "description": "The key of the agent's logo blok (context LOGO) that draws this action.",
+          "description": "The key of the agent's action logo blok (context ACTION_LOGO) that draws this action.",
           "title": "Logo"
         },
         "manipulates": {

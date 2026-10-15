@@ -146,12 +146,12 @@ def code_hash_of(function_or_actor: AnyFunction) -> str | None:
 
 
 def _logo_of(config: RegisterConfig, interface: str, registry: "AppRegistry") -> dict[str, Any]:
-    """The ``logo`` field of an implementation: the logo blok's name, declaring an inline one."""
+    """The ``logo`` field of an implementation: the action logo blok's name, declaring an inline one."""
     if config.logo is None:
         return {}
     if isinstance(config.logo, ComponentNodeInput):
         name = f"{interface}.logo"
-        registry.register_blok(name, config.logo, context=ComponentContext.LOGO)
+        registry.register_blok(name, config.logo, context=ComponentContext.ACTION_LOGO)
         return {"logo": name}
     return {"logo": config.logo}
 
@@ -411,9 +411,9 @@ def declare_implementation(
         execution (Execution): WORKFLOW to call other actions and be resumed
             after a crash; PLAIN otherwise.
         logo (str | ComponentNodeInput | None): The logo that draws the action:
-            the name of a logo blok the app declares, or a tree of its own
-            (``bsx("<SVG>...</SVG>")``), declared as the logo blok
-            ``<interface>.logo``.
+            the name of an action logo blok the app declares, or a tree of its
+            own (``bsx("<ActionLogo>...</ActionLogo>")``), declared as the
+            action logo blok ``<interface>.logo``.
 
     Returns:
         The wrapped function, or a decorator producing it.

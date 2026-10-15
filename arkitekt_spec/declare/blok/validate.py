@@ -18,6 +18,7 @@ from arkitekt_spec.declare.blok.walk import (
     FOREACH_ITEMS_PROP,
     BlokVisitor,
     action_key_for,
+    foreach_parts,
     node_context,
     walk_component,
 )
@@ -29,6 +30,8 @@ from arkitekt_spec.declare.catalogs import (
     LOGO_MAX_FOREACH_ITEMS,
     LOGO_MAX_NODES,
     LOGO_MAX_PATH_DATA,
+    LOGO_PAINT_PROPS,
+    LOGO_PAINT_TOKENS,
     LOGO_PATH_DATA_PROPS,
     CatalogView,
     Diagnostic,
@@ -520,6 +523,73 @@ def check_logo_complexity(node: ComponentNodeInput, demo_state: Mapping[str, Any
             f"{node_context(node)}: a logo holds at most {LOGO_MAX_PATH_DATA} characters of path data, "
             f"this one {path_data}"
         )
+
+
+def check_logo_palette(node: ComponentNodeInput, demo_state: Mapping[str, Any] | None = None) -> None:
+    """A logo paints only with the palette: ``LOGO_PAINT_TOKENS`` or a ``url(#id)``.
+
+    A static paint is checked as written. A bound one is checked as the demo state
+    resolves it, since that is the only state a logo is drawn with: inside a ``foreach``,
+    a path through its ``let`` is resolved for every item. A path the demo state does not
+    hold draws nothing and is not checked.
+
+    Raises:
+        ValueError: If a paint prop is a colour of its own, such as ``#fbbf24``.
+    """
+
+    def visit(current: ComponentNodeInput, scope: Mapping[str, list[Any]]) -> None:
+        for prop in current.props or ():
+            if prop.key not in LOGO_PAINT_PROPS:
+                continue
+            if prop.static_value is not None:
+                values: list[Any] = [prop.static_value]
+            elif prop.dynamic_value is not None and prop.dynamic_value.path:
+                values = _resolve(prop.dynamic_value.path, demo_state, scope)
+            else:
+                values = []
+            for value in values:
+                if not is_logo_paint(value):
+                    raise ValueError(
+                        f"{node_context(current)}: a logo paints with "
+                        f"{'|'.join(LOGO_PAINT_TOKENS)}|url(#…), not {value!r} in {prop.key!r}"
+                    )
+        inner = scope
+        let_name, items_path = foreach_parts(current)
+        if let_name and items_path:
+            items = [item for found in _resolve(items_path, demo_state, scope) if isinstance(found, list) for item in found]
+            inner = {**scope, let_name: items}
+        for child in current.children or ():
+            visit(child, inner)
+
+    visit(node, {})
+
+
+def is_logo_paint(value: Any) -> bool:
+    """A palette token, or a ``url(#id)`` reference to a gradient or clip path."""
+    if not isinstance(value, str):
+        return False
+    paint = value.strip()
+    return paint in LOGO_PAINT_TOKENS or (paint.startswith("url(#") and paint.endswith(")"))
+
+
+def _resolve(path: str, demo_state: Mapping[str, Any] | None, scope: Mapping[str, list[Any]]) -> list[Any]:
+    """What ``path`` holds: one value from the demo state, or one per item of a ``foreach``'s ``let``."""
+    segments = [segment for segment in path.replace("/", ".").split(".") if segment]
+    if not segments:
+        return []
+    if segments[0] in scope:
+        roots, segments = list(scope[segments[0]]), segments[1:]
+    else:
+        roots = [demo_state or {}]
+    found: list[Any] = []
+    for value in roots:
+        for segment in segments:
+            if not isinstance(value, Mapping) or segment not in value:
+                break
+            value = value[segment]
+        else:
+            found.append(value)
+    return found
 
 
 def _demo_items(prop: Any, demo_state: Mapping[str, Any] | None) -> int:

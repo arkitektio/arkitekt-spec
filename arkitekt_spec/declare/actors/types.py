@@ -203,7 +203,7 @@ class RegisterConfig:
     execution: Execution = Execution.PLAIN
     """WORKFLOW may call other actions and is resumed after a crash; PLAIN may not."""
     logo: "str | ComponentNodeInput | None" = None
-    """The logo blok that draws the action: a declared logo blok's name, or a tree (``bsx(...)``)."""
+    """The action logo blok that draws the action: a declared action logo blok's name, or a tree (``bsx(...)``)."""
 
 
 @runtime_checkable

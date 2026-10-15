@@ -2,9 +2,11 @@
 
 import warnings
 
+import re
+
 import pytest
 
-from arkitekt_spec.actions import BlokImplementationInput
+from arkitekt_spec.actions import BlokImplementationInput, ComponentContext
 from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.blok import bsx
 from arkitekt_spec.declare.blok.registry import build_declared_bloks
@@ -240,12 +242,23 @@ def _logo_registry() -> AppRegistry:
                 children_context=LOGO_CONTEXT,
                 not_downstream_of=("SVG",),
             ),
-            ComponentSpec(name="G", accepts_children=True, context=LOGO_CONTEXT, downstream_of=("SVG",)),
+            ComponentSpec(
+                name="ActionLogo",
+                accepts_children=True,
+                props=(PropSpec(key="viewBox", kind="STRING", required=False),),
+                children_context=LOGO_CONTEXT,
+                not_downstream_of=("SVG", "ActionLogo"),
+            ),
+            ComponentSpec(name="G", accepts_children=True, context=LOGO_CONTEXT, downstream_of=("SVG", "ActionLogo")),
             ComponentSpec(
                 name="Path",
-                props=(PropSpec(key="d", kind="STRING", required=True),),
+                props=(
+                    PropSpec(key="d", kind="STRING", required=True),
+                    PropSpec(key="fill", kind="STRING", required=False),
+                    PropSpec(key="stroke", kind="STRING", required=False),
+                ),
                 context=LOGO_CONTEXT,
-                downstream_of=("SVG",),
+                downstream_of=("SVG", "ActionLogo"),
             ),
             ComponentSpec(
                 name="Scene", accepts_children=True, children_context=SCENE_CONTEXT, not_downstream_of=("Scene",)
@@ -354,14 +367,115 @@ def test_an_icon_sized_logo_passes_and_an_html_blok_has_no_such_limit() -> None:
     registry.register_blok("panel", "<Box>" + _logo(paths=300) + "</Box>", catalog="electron")
 
 
+@pytest.mark.parametrize(
+    ("tree", "local_state", "message"),
+    [
+        ('<ActionLogo><Path d="M0 0" fill="#fbbf24" /></ActionLogo>', None, "not '#fbbf24' in 'fill'"),
+        ('<ActionLogo><Path d="M0 0" stroke="currentColor" /></ActionLogo>', None, "not 'currentColor' in 'stroke'"),
+        (
+            '<ActionLogo><Path d="M0 0" fill="@task.tint" /></ActionLogo>',
+            {"task": {"tint": "red"}},
+            "not 'red' in 'fill'",
+        ),
+        (
+            '<ActionLogo><foreach items="@task.lamps" let="#lamp"><Path d="M0 0" fill="@lamp.paint" /></foreach></ActionLogo>',
+            {"task": {"lamps": [{"paint": "brand"}, {"paint": "#00ff00"}]}},
+            "not '#00ff00' in 'fill'",
+        ),
+    ],
+)
+def test_an_action_logo_paints_only_with_the_palette(tree: str, local_state: dict | None, message: str) -> None:
+    registry = _looping_logo_registry()
+    with pytest.raises(ValueError, match=re.escape(message)):
+        registry.register_blok("loud", tree, catalog="looping", context="action_logo", local_state=local_state)
+
+
+def test_palette_tokens_and_references_pass_and_a_logo_keeps_its_own_colours() -> None:
+    registry = _looping_logo_registry()
+    registry.register_blok(
+        "quiet",
+        '<ActionLogo><Path d="M0 0" fill="brand-soft" stroke="ink" /><Path d="M1 1" fill="url(#glow)" stroke="none" />'
+        '<Path d="M2 2" fill="@task.tint" />'
+        '<foreach items="@task.lamps" let="#lamp"><Path d="M0 0" fill="@lamp.paint" /></foreach></ActionLogo>',
+        catalog="looping",
+        context="action_logo",
+        local_state={"task": {"tint": "brand-strong", "lamps": [{"paint": "muted"}]}},
+    )
+    registry.register_blok("logo", '<SVG><Path d="M0 0" fill="#fbbf24" stroke="brand" /></SVG>', catalog="looping", context="logo")
+    registry.register_blok("panel", '<Box><SVG><Path d="M0 0" fill="#fbbf24" /></SVG></Box>', catalog="looping")
+
+
+@pytest.mark.parametrize(
+    ("tree", "context", "message"),
+    [
+        ('<SVG><Path d="M0 0" /></SVG>', "action_logo", "the root of a action_logo blok must be a 'ActionLogo', not 'SVG'"),
+        ('<ActionLogo><Path d="M0 0" /></ActionLogo>', "logo", "the root of a logo blok must be a 'SVG', not 'ActionLogo'"),
+        ('<ActionLogo><SVG /></ActionLogo>', "action_logo", "'SVG'"),
+    ],
+)
+def test_an_action_logo_is_one_action_logo_root(tree: str, context: str, message: str) -> None:
+    with pytest.raises(ValueError, match=re.escape(message)):
+        _logo_registry().register_blok("bad", tree, catalog="electron", context=context)
+
+
+def test_an_action_logo_reads_its_task_and_nothing_of_the_app() -> None:
+    registry = _logo_registry()
+    with pytest.raises(ValueError, match="task is null until it runs"):
+        registry.register_blok(
+            "early", "<ActionLogo />", catalog="electron", context="action_logo", demo_state={"task": {}}
+        )
+
+    registry = _logo_registry()
+    registry.register_action(_act, key="act")
+    registry.register_blok(
+        "nosy", '<ActionLogo><Path d="@self.act.latest.message" /></ActionLogo>', catalog="electron", context="action_logo"
+    )
+    with pytest.raises(ValueError, match=r"an action logo reads only @task, but it reads \['self'\]"):
+        registry.to_implement_agent_input()
+
+
+def test_an_action_logos_task_is_null_on_the_wire() -> None:
+    registry = _logo_registry()
+    registry.register_blok(
+        "busy",
+        """<ActionLogo><Path d="M0 0" fill="brand" stroke="@task.status" /></ActionLogo>""",
+        catalog="electron",
+        context="action_logo",
+    )
+    registry.register_action(_act, key="act", logo="busy")
+    agent = registry.to_implement_agent_input()
+    (blok,) = [blok for blok in agent.bloks or () if blok.key == "busy"]
+    assert blok.context == ComponentContext.ACTION_LOGO
+    assert blok.dependencies in (None, ())
+    assert blok.demo_state == {"task": None}
+
+
+def _looping_logo_registry() -> AppRegistry:
+    registry = _logo_registry()
+    registry.declare_ui_catalog(
+        "looping",
+        components=[
+            *registry.declared_catalogs["electron"].components,
+            ComponentSpec(
+                name="foreach",
+                accepts_children=True,
+                inherits_context=True,
+                props=(PropSpec(key="items", kind="LIST", required=True), PropSpec(key="let", kind="STRING", required=False)),
+            ),
+        ],
+        operations=[],
+    )
+    return registry
+
+
 def _act(amount: float) -> float:
     """Return what it is given."""
     return amount
 
 
-def test_an_action_is_drawn_by_a_logo_blok_the_app_declares() -> None:
+def test_an_action_is_drawn_by_an_action_logo_blok_the_app_declares() -> None:
     registry = _logo_registry()
-    registry.register_blok("crop", _logo(), catalog="electron", context="logo", default=True)
+    registry.register_blok("crop", "<ActionLogo />", catalog="electron", context="action_logo")
     registry.register_action(_act, key="act", logo="crop")
     registry.register_action(_act, key="plain")
 
@@ -377,10 +491,12 @@ def test_an_action_is_drawn_by_a_logo_blok_the_app_declares() -> None:
 def test_an_action_naming_no_declared_logo_is_refused() -> None:
     registry = _logo_registry()
     registry.register_blok("panel", "<Box />", catalog="electron")
+    registry.register_blok("app_logo", _logo(), catalog="electron", context="logo", default=True)
     registry.register_action(_act, key="missing", logo="nowhere")
     registry.register_action(_act, key="not_a_logo", logo="panel")
+    registry.register_action(_act, key="agent_logo", logo="app_logo")
 
-    with pytest.raises(ValueError, match="'nowhere', which is not a logo blok this app declares"):
+    with pytest.raises(ValueError, match="'nowhere', which is not an action logo blok this app declares"):
         registry.to_implement_agent_input()
 
 
@@ -390,14 +506,14 @@ def test_an_action_may_bring_its_own_logo(monkeypatch: pytest.MonkeyPatch) -> No
     registry = _logo_registry()
     # An inline logo is drawn against the standard catalog; this one stands in for it.
     monkeypatch.setattr(app_module, "standard_view", lambda: registry.catalog_view("electron"))
-    registry.register_action(_act, key="act", logo=bsx('<SVG><Path d="M1 1" /></SVG>'))
+    registry.register_action(_act, key="act", logo=bsx('<ActionLogo><Path d="M1 1" fill="brand" /></ActionLogo>'))
 
     agent = registry.to_implement_agent_input()
 
     (implementation,) = agent.implementations or ()
     assert implementation.logo == "act.logo"
     (blok,) = agent.bloks or ()
-    assert (blok.key, blok.context) == ("act.logo", LOGO_CONTEXT)
+    assert (blok.key, blok.context) == ("act.logo", ComponentContext.ACTION_LOGO)
 
 
 

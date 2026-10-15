@@ -104,6 +104,7 @@ def check_blok(blok: BlokImplementationInput) -> BlokImplementationInput:
     """Every component of a blok is valid against the blok's dependencies."""
     from arkitekt_spec.declare.blok.validate import (
         check_logo_complexity,
+        check_logo_palette,
         local_roots_of,
         validate_blok,
     )
@@ -112,23 +113,25 @@ def check_blok(blok: BlokImplementationInput) -> BlokImplementationInput:
     local_roots = local_roots_of(dependencies, blok.demo_state)
     for component in blok.components or ():
         validate_blok(component, dependencies, local_roots=local_roots)
-        if blok.context == ComponentContext.LOGO:
+        if blok.context in (ComponentContext.LOGO, ComponentContext.ACTION_LOGO):
             demo_state = blok.demo_state if isinstance(blok.demo_state, Mapping) else None
             check_logo_complexity(component, demo_state)
+            if blok.context == ComponentContext.ACTION_LOGO:
+                check_logo_palette(component, demo_state)
     return blok
 
 
 def check_agent_input(agent: ImplementAgentInput) -> ImplementAgentInput:
     """Run the rekuest-side checks over a whole declaration, and hand it back."""
     own_states = tuple(agent.states or ())
-    logos = {blok.key for blok in agent.bloks or () if blok.context == ComponentContext.LOGO}
+    logos = {blok.key for blok in agent.bloks or () if blok.context == ComponentContext.ACTION_LOGO}
     for implementation in agent.implementations or ():
         check_implementation(implementation, own_states)
         if implementation.logo is not None and implementation.logo not in logos:
             name = implementation.interface or implementation.definition.name
             raise ValueError(
                 f"implementation '{name}' is drawn by the logo {implementation.logo!r}, "
-                f"which is not a logo blok this app declares (app.blok(..., context=\"logo\"))"
+                f"which is not an action logo blok this app declares (app.blok(..., context=\"action_logo\"))"
             )
     for blok in agent.bloks or ():
         check_blok(blok)

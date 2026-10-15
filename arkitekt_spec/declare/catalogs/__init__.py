@@ -86,8 +86,14 @@ SCENE_CONTEXT = "SCENE"
 LOGO_CONTEXT = "LOGO"
 COMPONENT_CONTEXTS = (HTML_CONTEXT, SCENE_CONTEXT, LOGO_CONTEXT)
 """The renderers a component can live in. A blok's tree starts in the html context."""
-CONTEXT_ROOTS: Mapping[str, str] = {SCENE_CONTEXT: "Scene", LOGO_CONTEXT: "SVG"}
+ACTION_LOGO_CONTEXT = "ACTION_LOGO"
+"""A blok context only, never a component's: an action logo draws the same shapes as a logo."""
+LOGO_CONTEXTS = (LOGO_CONTEXT, ACTION_LOGO_CONTEXT)
+"""The blok contexts held to the size of an icon."""
+CONTEXT_ROOTS: Mapping[str, str] = {SCENE_CONTEXT: "Scene", LOGO_CONTEXT: "SVG", ACTION_LOGO_CONTEXT: "ActionLogo"}
 """The one component a blok of each of these contexts has as its root."""
+ACTION_LOGO_TASK_ROOT = "task"
+"""The path root an action logo reads its task at: null until the viewer runs the action."""
 
 LOGO_MAX_NODES = 200
 """The most components a logo blok may have, counted once each as written."""
@@ -99,6 +105,15 @@ LOGO_MAX_FOREACH_ITEMS = 64
 """The most items a ``foreach`` in a logo blok may draw from the blok's demo state."""
 LOGO_PATH_DATA_PROPS = ("d", "points")
 """The props whose static values are path data."""
+LOGO_PAINT_TOKENS = ("ink", "muted", "brand", "brand-strong", "brand-soft", "surface", "none")
+"""The palette: colours of the viewer's theme, never of the logo's own.
+
+Orkestrator draws each from its brand hue (``var(--logo-<token>)``), so a logo painted
+with them follows the viewer's brand and dark mode. A logo may use them beside any SVG
+colour; an action logo paints with nothing else, but a ``url(#id)`` to a gradient or
+clip path, whose stops are held to the same tokens."""
+LOGO_PAINT_PROPS = ("fill", "stroke", "stopColor")
+"""The props whose values are paint."""
 """The ``CatalogValueKind`` names, hard-coded so this module never imports the generated schema."""
 
 CALLBACK_KIND = "CALLBACK"
@@ -767,8 +782,9 @@ RULES: tuple[Rule, ...] = (
     Rule("component_props", "_check_component", "Unknown or missing required props on a component."),
     Rule("callback_prop_unbound", "_check_component", "A CALLBACK prop not bound via agent_call or util_call."),
     Rule("asset_prop", "_check_asset_prop", "An ASSET prop that is not bound to a <dependency>.assets.<name> path."),
-    Rule("context_root", "validate_components_against_catalogs", "A scene or logo blok whose one root is not its Scene or SVG component."),
+    Rule("context_root", "validate_components_against_catalogs", "A scene, logo or action logo blok whose one root is not its Scene, SVG or ActionLogo component."),
     Rule("logo_complexity", "check_logo_complexity", "A logo blok with too many nodes, too deep a tree, too much path data, or a foreach drawing too many items."),
+    Rule("logo_palette", "check_logo_palette", "An action logo blok painting with a colour of its own instead of a palette token."),
     Rule("component_placement", "_check_placement", "A component outside its context, without a required ancestor, or under a forbidden one."),
     Rule("catalog_conflict", "resolve_operations", "Two catalogs defining one operation or component differently."),
     Rule("base_shadowed", "check_extension_does_not_shadow_base", "A UI catalog redefining a base operation."),

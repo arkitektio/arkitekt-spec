@@ -11,6 +11,7 @@ from arkitekt_spec.actions import (
     AgentDependencyInput,
     AgentProbeInput,
     BlokImplementationInput,
+    ComponentContext,
     ComponentNodeInput,
     PortKind,
     ReturnPortInput,
@@ -57,6 +58,12 @@ def build_declared_bloks(
             local_state=declaration.local_state or {},
             demo_state=declaration.demo_state or {},
         )
+
+        if declaration.context == ComponentContext.ACTION_LOGO and dependencies:
+            raise ValueError(
+                f"Blok '{blok_key}': an action logo reads only @task, but it reads "
+                f"{sorted(dependency.key for dependency in dependencies)}"
+            )
 
         demo_state = declaration.demo_state
         if demo_state is None:

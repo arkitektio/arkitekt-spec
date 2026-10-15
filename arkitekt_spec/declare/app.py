@@ -58,9 +58,11 @@ from arkitekt_spec.declare.blok.validate import (
     RESERVED_ROOTS,
     check_context_root,
     check_logo_complexity,
+    check_logo_palette,
     validate_blok_catalog,
 )
 from arkitekt_spec.declare.catalogs import (
+    ACTION_LOGO_TASK_ROOT,
     ASSETS_SEGMENT,
     MODEL_REF_PATTERN,
     Catalog,
@@ -715,6 +717,10 @@ class AppRegistry(BaseModel):
                 ``"scene"`` for a full 3D view, whose root must be a ``Scene``, or
                 ``"logo"`` for the app's logo, whose root must be an ``SVG``. Clients
                 render a logo against ``demo_state`` only, never the agent's live state.
+                ``"action_logo"`` draws an action (``@app.action(logo=...)``): its root
+                is an ``ActionLogo``, it paints with the palette tokens only, and it
+                reads nothing but ``@task``, the task the viewer last ran of the
+                action, which is null until they run it.
             default: Whether this is the app's default blok for its context: the
                 panel, the 3D view or the logo a client shows for the app without
                 being told which. Declaring another default replaces it.
@@ -755,6 +761,17 @@ class AppRegistry(BaseModel):
                 f"Blok '{name}' names {shadowed} in both demo_state and local_state"
             )
         context = ComponentContext(context.upper()) if isinstance(context, str) else context
+        if context == ComponentContext.ACTION_LOGO:
+            if resolved_dependencies:
+                raise ValueError(f"Blok '{name}': an action logo reads only @task, it has no dependencies")
+            if ACTION_LOGO_TASK_ROOT in (demo_state or ()):
+                raise ValueError(
+                    f"Blok '{name}': an action logo's task is null until it runs; draw a running one "
+                    f"with local_state={{'task': ...}}, not demo_state"
+                )
+            # ``task`` is the action logo's own state: a root the server takes from the
+            # demo state, and the renderer replaces with the viewer's task once there is one.
+            local_state = {ACTION_LOGO_TASK_ROOT: None, **(local_state or {})}
         if for_node is not None and for_model is None:
             raise ValueError(f"Blok '{name}' names for_node without a for_model")
         if for_model is not None:
@@ -773,8 +790,10 @@ class AppRegistry(BaseModel):
             # At most one default per context: the newly declared one replaces it.
             self.registered_bloks[other] = self.registered_bloks[other].model_copy(update={"default": False})
         check_context_root(component, context)
-        if context == ComponentContext.LOGO:
+        if context in (ComponentContext.LOGO, ComponentContext.ACTION_LOGO):
             check_logo_complexity(component, demo_state)
+        if context == ComponentContext.ACTION_LOGO:
+            check_logo_palette(component, {**(demo_state or {}), **local_state})
         # Catalog rules only: references need the dependencies that
         # ``build_declared_bloks`` infers later, and are checked there.
         for diagnostic in validate_blok_catalog(component, self.catalog_view(catalog)):
@@ -1691,10 +1710,10 @@ class AppRegistry(BaseModel):
                 None takes the app's default.
             execution: ``Execution.WORKFLOW`` to call other actions and be resumed
                 after a crash (see :meth:`register_workflow`).
-            logo: The logo that draws the action: the name of a logo blok this
-                app declares (``register_blok(..., context="logo")``), or a tree
-                of its own (``bsx("<SVG>...</SVG>")``). Without one, a client
-                shows the app's default logo.
+            logo: The logo that draws the action: the name of an action logo blok
+                this app declares (``register_blok(..., context="action_logo")``),
+                or a tree of its own (``bsx("<ActionLogo>...</ActionLogo>")``).
+                Without one, a client shows the app's default logo.
 
         Returns:
             The function, still callable as itself.
