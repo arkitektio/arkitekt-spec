@@ -243,6 +243,51 @@
       ]
     },
     {
+      "name": "ActionLogo",
+      "description": "An action's logo: an SVG drawing whose shapes paint with the viewer's palette only. The root of an action logo blok, which reads @task: the viewer's last task of the action, null until they run it.",
+      "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": "LOGO",
+      "inheritsContext": false,
+      "downstreamOf": [],
+      "notDownstreamOf": [
+        "ActionLogo",
+        "SVG"
+      ],
+      "props": [
+        {
+          "key": "height",
+          "kind": "ANY",
+          "required": false,
+          "description": "Height; fills its box when left out."
+        },
+        {
+          "key": "preserveAspectRatio",
+          "kind": "STRING",
+          "required": false,
+          "description": "How the viewBox fits the box, e.g. \"xMidYMid meet\"."
+        },
+        {
+          "key": "title",
+          "kind": "STRING",
+          "required": false,
+          "description": "What the drawing shows, for screen readers and as a tooltip."
+        },
+        {
+          "key": "viewBox",
+          "kind": "STRING",
+          "required": false,
+          "description": "The user coordinate system, \"minX minY width height\", e.g. \"0 0 24 24\"."
+        },
+        {
+          "key": "width",
+          "kind": "ANY",
+          "required": false,
+          "description": "Width; fills its box when left out."
+        }
+      ]
+    },
+    {
       "name": "Alert",
       "description": "A callout that draws attention to a message.",
       "acceptsChildren": true,
@@ -2244,10 +2289,23 @@
       "childrenContext": null,
       "inheritsContext": false,
       "downstreamOf": [
+        "ActionLogo",
         "SVG"
       ],
       "notDownstreamOf": [],
       "props": [
+        {
+          "key": "animate",
+          "kind": "STRING",
+          "required": false,
+          "description": "Plays while the logo is hovered, and while an action logo's task runs: spin, pulse, float, draw (traces the stroke), march (moves a dashed stroke) or blink."
+        },
+        {
+          "key": "animateDelay",
+          "kind": "ANY",
+          "required": false,
+          "description": "Seconds before the animation starts, to stagger shapes."
+        },
         {
           "key": "clipPath",
           "kind": "STRING",
@@ -2270,7 +2328,7 @@
           "key": "fill",
           "kind": "STRING",
           "required": false,
-          "description": "Fill paint: a colour, \"none\", or url(#gradient)."
+          "description": "Fill paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "fillOpacity",
@@ -2306,7 +2364,7 @@
           "key": "stroke",
           "kind": "STRING",
           "required": false,
-          "description": "Stroke paint: a colour, \"none\", or url(#gradient)."
+          "description": "Stroke paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "strokeDasharray",
@@ -2360,6 +2418,7 @@
       "childrenContext": null,
       "inheritsContext": false,
       "downstreamOf": [
+        "ActionLogo",
         "SVG"
       ],
       "notDownstreamOf": [],
@@ -3214,6 +3273,7 @@
       "childrenContext": null,
       "inheritsContext": false,
       "downstreamOf": [
+        "ActionLogo",
         "SVG"
       ],
       "notDownstreamOf": [],
@@ -4421,10 +4481,23 @@
       "childrenContext": null,
       "inheritsContext": false,
       "downstreamOf": [
+        "ActionLogo",
         "SVG"
       ],
       "notDownstreamOf": [],
       "props": [
+        {
+          "key": "animate",
+          "kind": "STRING",
+          "required": false,
+          "description": "Plays while the logo is hovered, and while an action logo's task runs: spin, pulse, float, draw (traces the stroke), march (moves a dashed stroke) or blink."
+        },
+        {
+          "key": "animateDelay",
+          "kind": "ANY",
+          "required": false,
+          "description": "Seconds before the animation starts, to stagger shapes."
+        },
         {
           "key": "clipPath",
           "kind": "STRING",
@@ -4447,7 +4520,7 @@
           "key": "fill",
           "kind": "STRING",
           "required": false,
-          "description": "Fill paint: a colour, \"none\", or url(#gradient)."
+          "description": "Fill paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "fillOpacity",
@@ -4489,7 +4562,7 @@
           "key": "stroke",
           "kind": "STRING",
           "required": false,
-          "description": "Stroke paint: a colour, \"none\", or url(#gradient)."
+          "description": "Stroke paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "strokeDasharray",
@@ -5515,10 +5588,23 @@
       "childrenContext": null,
       "inheritsContext": false,
       "downstreamOf": [
+        "ActionLogo",
         "SVG"
       ],
       "notDownstreamOf": [],
       "props": [
+        {
+          "key": "animate",
+          "kind": "STRING",
+          "required": false,
+          "description": "Plays while the logo is hovered, and while an action logo's task runs: spin, pulse, float, draw (traces the stroke), march (moves a dashed stroke) or blink."
+        },
+        {
+          "key": "animateDelay",
+          "kind": "ANY",
+          "required": false,
+          "description": "Seconds before the animation starts, to stagger shapes."
+        },
         {
           "key": "clipPath",
           "kind": "STRING",
@@ -5529,7 +5615,7 @@
           "key": "fill",
           "kind": "STRING",
           "required": false,
-          "description": "Fill paint: a colour, \"none\", or url(#gradient)."
+          "description": "Fill paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "fillOpacity",
@@ -5559,7 +5645,7 @@
           "key": "stroke",
           "kind": "STRING",
           "required": false,
-          "description": "Stroke paint: a colour, \"none\", or url(#gradient)."
+          "description": "Stroke paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "strokeDasharray",
@@ -6984,10 +7070,23 @@
       "childrenContext": null,
       "inheritsContext": false,
       "downstreamOf": [
+        "ActionLogo",
         "SVG"
       ],
       "notDownstreamOf": [],
       "props": [
+        {
+          "key": "animate",
+          "kind": "STRING",
+          "required": false,
+          "description": "Plays while the logo is hovered, and while an action logo's task runs: spin, pulse, float, draw (traces the stroke), march (moves a dashed stroke) or blink."
+        },
+        {
+          "key": "animateDelay",
+          "kind": "ANY",
+          "required": false,
+          "description": "Seconds before the animation starts, to stagger shapes."
+        },
         {
           "key": "clipPath",
           "kind": "STRING",
@@ -6998,7 +7097,7 @@
           "key": "fill",
           "kind": "STRING",
           "required": false,
-          "description": "Fill paint: a colour, \"none\", or url(#gradient)."
+          "description": "Fill paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "fillOpacity",
@@ -7028,7 +7127,7 @@
           "key": "stroke",
           "kind": "STRING",
           "required": false,
-          "description": "Stroke paint: a colour, \"none\", or url(#gradient)."
+          "description": "Stroke paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "strokeDasharray",
@@ -7106,6 +7205,7 @@
       "childrenContext": null,
       "inheritsContext": false,
       "downstreamOf": [
+        "ActionLogo",
         "SVG"
       ],
       "notDownstreamOf": [],
@@ -8262,10 +8362,23 @@
       "childrenContext": null,
       "inheritsContext": false,
       "downstreamOf": [
+        "ActionLogo",
         "SVG"
       ],
       "notDownstreamOf": [],
       "props": [
+        {
+          "key": "animate",
+          "kind": "STRING",
+          "required": false,
+          "description": "Plays while the logo is hovered, and while an action logo's task runs: spin, pulse, float, draw (traces the stroke), march (moves a dashed stroke) or blink."
+        },
+        {
+          "key": "animateDelay",
+          "kind": "ANY",
+          "required": false,
+          "description": "Seconds before the animation starts, to stagger shapes."
+        },
         {
           "key": "clipPath",
           "kind": "STRING",
@@ -8282,7 +8395,7 @@
           "key": "fill",
           "kind": "STRING",
           "required": false,
-          "description": "Fill paint: a colour, \"none\", or url(#gradient)."
+          "description": "Fill paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "fillOpacity",
@@ -8312,7 +8425,7 @@
           "key": "stroke",
           "kind": "STRING",
           "required": false,
-          "description": "Stroke paint: a colour, \"none\", or url(#gradient)."
+          "description": "Stroke paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "strokeDasharray",
@@ -8366,10 +8479,23 @@
       "childrenContext": null,
       "inheritsContext": false,
       "downstreamOf": [
+        "ActionLogo",
         "SVG"
       ],
       "notDownstreamOf": [],
       "props": [
+        {
+          "key": "animate",
+          "kind": "STRING",
+          "required": false,
+          "description": "Plays while the logo is hovered, and while an action logo's task runs: spin, pulse, float, draw (traces the stroke), march (moves a dashed stroke) or blink."
+        },
+        {
+          "key": "animateDelay",
+          "kind": "ANY",
+          "required": false,
+          "description": "Seconds before the animation starts, to stagger shapes."
+        },
         {
           "key": "clipPath",
           "kind": "STRING",
@@ -8380,7 +8506,7 @@
           "key": "fill",
           "kind": "STRING",
           "required": false,
-          "description": "Fill paint: a colour, \"none\", or url(#gradient)."
+          "description": "Fill paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "fillOpacity",
@@ -8416,7 +8542,7 @@
           "key": "stroke",
           "kind": "STRING",
           "required": false,
-          "description": "Stroke paint: a colour, \"none\", or url(#gradient)."
+          "description": "Stroke paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "strokeDasharray",
@@ -8470,10 +8596,23 @@
       "childrenContext": null,
       "inheritsContext": false,
       "downstreamOf": [
+        "ActionLogo",
         "SVG"
       ],
       "notDownstreamOf": [],
       "props": [
+        {
+          "key": "animate",
+          "kind": "STRING",
+          "required": false,
+          "description": "Plays while the logo is hovered, and while an action logo's task runs: spin, pulse, float, draw (traces the stroke), march (moves a dashed stroke) or blink."
+        },
+        {
+          "key": "animateDelay",
+          "kind": "ANY",
+          "required": false,
+          "description": "Seconds before the animation starts, to stagger shapes."
+        },
         {
           "key": "clipPath",
           "kind": "STRING",
@@ -8484,7 +8623,7 @@
           "key": "fill",
           "kind": "STRING",
           "required": false,
-          "description": "Fill paint: a colour, \"none\", or url(#gradient)."
+          "description": "Fill paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "fillOpacity",
@@ -8520,7 +8659,7 @@
           "key": "stroke",
           "kind": "STRING",
           "required": false,
-          "description": "Stroke paint: a colour, \"none\", or url(#gradient)."
+          "description": "Stroke paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "strokeDasharray",
@@ -8961,6 +9100,7 @@
       "childrenContext": null,
       "inheritsContext": false,
       "downstreamOf": [
+        "ActionLogo",
         "SVG"
       ],
       "notDownstreamOf": [],
@@ -9131,10 +9271,23 @@
       "childrenContext": null,
       "inheritsContext": false,
       "downstreamOf": [
+        "ActionLogo",
         "SVG"
       ],
       "notDownstreamOf": [],
       "props": [
+        {
+          "key": "animate",
+          "kind": "STRING",
+          "required": false,
+          "description": "Plays while the logo is hovered, and while an action logo's task runs: spin, pulse, float, draw (traces the stroke), march (moves a dashed stroke) or blink."
+        },
+        {
+          "key": "animateDelay",
+          "kind": "ANY",
+          "required": false,
+          "description": "Seconds before the animation starts, to stagger shapes."
+        },
         {
           "key": "clipPath",
           "kind": "STRING",
@@ -9145,7 +9298,7 @@
           "key": "fill",
           "kind": "STRING",
           "required": false,
-          "description": "Fill paint: a colour, \"none\", or url(#gradient)."
+          "description": "Fill paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "fillOpacity",
@@ -9193,7 +9346,7 @@
           "key": "stroke",
           "kind": "STRING",
           "required": false,
-          "description": "Stroke paint: a colour, \"none\", or url(#gradient)."
+          "description": "Stroke paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "strokeDasharray",
@@ -10760,7 +10913,7 @@
           "key": "stopColor",
           "kind": "STRING",
           "required": false,
-          "description": "The colour at this stop."
+          "description": "The colour at this stop: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "stopOpacity",
@@ -11469,6 +11622,7 @@
       "inheritsContext": false,
       "downstreamOf": [],
       "notDownstreamOf": [
+        "ActionLogo",
         "SVG"
       ],
       "props": [
@@ -11512,10 +11666,23 @@
       "childrenContext": null,
       "inheritsContext": false,
       "downstreamOf": [
+        "ActionLogo",
         "SVG"
       ],
       "notDownstreamOf": [],
       "props": [
+        {
+          "key": "animate",
+          "kind": "STRING",
+          "required": false,
+          "description": "Plays while the logo is hovered, and while an action logo's task runs: spin, pulse, float, draw (traces the stroke), march (moves a dashed stroke) or blink."
+        },
+        {
+          "key": "animateDelay",
+          "kind": "ANY",
+          "required": false,
+          "description": "Seconds before the animation starts, to stagger shapes."
+        },
         {
           "key": "clipPath",
           "kind": "STRING",
@@ -11532,7 +11699,7 @@
           "key": "fill",
           "kind": "STRING",
           "required": false,
-          "description": "Fill paint: a colour, \"none\", or url(#gradient)."
+          "description": "Fill paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "fillOpacity",
@@ -11580,7 +11747,7 @@
           "key": "stroke",
           "kind": "STRING",
           "required": false,
-          "description": "Stroke paint: a colour, \"none\", or url(#gradient)."
+          "description": "Stroke paint: ink, muted, brand, brand-strong, brand-soft, surface, none (the viewer's palette), url(#gradient), or under an SVG any colour."
         },
         {
           "key": "strokeDasharray",
