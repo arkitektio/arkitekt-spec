@@ -785,8 +785,13 @@ class BlokImplementationInput(BlokRules, ActionModel):
         default=(), description="The dependencies required by this Blok."
     )
     "The dependencies required by this Blok.\nDefault: []"
-    components: tuple["ComponentNodeInput", ...] = Field(
-        description="The UI component tree blueprint for this Blok."
+    components: tuple["ComponentNodeInput", ...] | None = Field(
+        default=None,
+        description="The UI component tree blueprint for this Blok, unless it is sent as its `source`.",
+    )
+    source: str | None = Field(
+        default=None,
+        description="The Blok as BSX, parsed by the server into its component tree: three times fewer bytes than the tree. Exactly one of `components` and `source` is sent.",
     )
     catalog: str | None = Field(
         default=None,

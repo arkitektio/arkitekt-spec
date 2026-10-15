@@ -68,10 +68,9 @@ def build_declared_bloks(
             demo_state = {**demo_state, **declaration.local_state}
         demo_state = demo_state_for(declaration.component, dependencies, demo_state)
 
-        declared_bloks[blok_key] = check_blok(BlokImplementationInput(
+        fields: dict[str, Any] = dict(
             key=blok_key,
             dependencies=tuple(dependencies),
-            components=(declaration.component,),
             description=declaration.description,
             demo_state=demo_state,
             catalog=declaration.catalog,
@@ -79,7 +78,15 @@ def build_declared_bloks(
             default=declaration.default,
             for_model=declaration.for_model,
             for_node=declaration.for_node,
-        ))
+        )
+        # Checked as its tree; sent as the BSX it was written in, when it was, which the
+        # server parses into the same tree.
+        checked = check_blok(BlokImplementationInput(components=(declaration.component,), **fields))
+        declared_bloks[blok_key] = (
+            BlokImplementationInput(source=declaration.source, **fields)
+            if declaration.source is not None
+            else checked
+        )
 
     return declared_bloks
 

@@ -7,6 +7,7 @@ import pytest
 
 from arkitekt_spec.actions import AssetKind
 from arkitekt_spec.declare.app import AppRegistry
+from arkitekt_spec.declare.blok import bsx
 from arkitekt_spec.declare.errors import RegistryFrozenError
 
 GLB = b"glTF" + b"\x02\x00\x00\x00" + b"rest"
@@ -88,7 +89,8 @@ def test_a_blok_names_an_asset_of_its_own_app(registry: AppRegistry) -> None:
     registry.register_blok("panel", '<img src="@self.assets.logo" />')
 
     bloks = {blok.key: blok for blok in registry.to_implement_agent_input(name="app").bloks}
-    (model,) = bloks["view"].components[0].children
+    # Sent as the BSX it was written in, which the server parses into this tree.
+    (model,) = bsx(bloks["view"].source).children or ()
     assert model.props[0].dynamic_value.path == "self.assets.scope"
     # The key is one the server maps to this agent, though nothing else of it is used.
     assert [(dependency.key, dependency.state_dependencies) for dependency in bloks["view"].dependencies] == [("self", None)]

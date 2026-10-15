@@ -103,6 +103,8 @@ class BlokDeclaration(BaseModel):
     """Everything :meth:`AppRegistry.register_blok` records for one blok."""
 
     component: ComponentNodeInput
+    source: str | None = None
+    """The BSX the component was parsed from, which is what is sent: a third of the tree's bytes."""
     description: str | None = None
     demo_state: dict[str, Any] | None = None
     local_state: dict[str, Any] | None = None
@@ -732,7 +734,9 @@ class AppRegistry(BaseModel):
             raise ValueError("A blok name is required")
         if component is None:
             raise ValueError(f"Blok '{name}' must define a component")
+        source: str | None = None
         if isinstance(component, str):
+            source = component
             component = parse_bsx(component)
 
         resolved_dependencies = self._resolve_dependencies(dependencies)
@@ -780,6 +784,7 @@ class AppRegistry(BaseModel):
 
         self.registered_bloks[name] = BlokDeclaration(
             component=component,
+            source=source,
             description=description,
             demo_state=demo_state,
             local_state=local_state,

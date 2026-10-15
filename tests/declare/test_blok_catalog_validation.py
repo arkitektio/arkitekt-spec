@@ -4,6 +4,7 @@ import warnings
 
 import pytest
 
+from arkitekt_spec.actions import BlokImplementationInput
 from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.blok import bsx
 from arkitekt_spec.declare.blok.registry import build_declared_bloks
@@ -397,3 +398,33 @@ def test_an_action_may_bring_its_own_logo(monkeypatch: pytest.MonkeyPatch) -> No
     assert implementation.logo == "act.logo"
     (blok,) = agent.bloks or ()
     assert (blok.key, blok.context) == ("act.logo", LOGO_CONTEXT)
+
+
+
+def test_a_blok_written_in_bsx_is_sent_as_its_source_and_a_tree_as_its_tree() -> None:
+    registry = _logo_registry()
+    source = '<SVG viewBox="0 0 24 24"><Path d="M0 0" /></SVG>'
+    registry.register_blok("written", source, catalog="electron", context="logo")
+    registry.register_blok("built", bsx(source), catalog="electron", context="logo")
+
+    bloks = {blok.key: blok for blok in registry.to_implement_agent_input().bloks or ()}
+
+    assert (bloks["written"].source, bloks["written"].components) == (source, None)
+    assert bloks["built"].source is None and bloks["built"].components == (bsx(source),)
+    # Nothing but the source travels: no null components on the wire.
+    assert "components" not in bloks["written"].model_dump(exclude_unset=True)
+
+
+def test_a_blok_written_in_bsx_is_still_checked_as_its_tree() -> None:
+    """What is sent is the source, but what is checked is the tree it parses into."""
+    registry = _logo_registry()
+    registry.register_blok("bad", '<SVG><Path d="@nobody.state.x" /></SVG>', catalog="electron", context="logo")
+
+    with pytest.raises(ValueError, match="unknown state"):
+        registry.to_implement_agent_input()
+
+
+@pytest.mark.parametrize(("sent", "message"), [({"components": (), "source": "<Box />"}, "not both"), ({}, "BSX source")])
+def test_a_blok_is_sent_one_way(sent: dict, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        BlokImplementationInput(key="panel", **sent)

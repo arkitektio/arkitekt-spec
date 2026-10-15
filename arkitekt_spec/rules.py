@@ -341,11 +341,16 @@ class DefinitionRules(BaseModel):
 
 
 class BlokRules(BaseModel):
-    """A blok implementation: its demo state matches its dependencies' state demands."""
+    """A blok implementation: sent as its tree or its source, and its demo state matches its
+    dependencies' state demands."""
 
     @model_validator(mode="after")
     def _demo_state(self) -> Self:
         blok: Any = self
+        if blok.components is not None and blok.source is not None:
+            raise ValueError("a blok is sent as its components or as its BSX source, not both")
+        if blok.components is None and blok.source is None:
+            raise ValueError("a blok is sent as its components or as its BSX source")
         check_demo_state(blok.dependencies, blok.demo_state)
         return self
 

@@ -913,12 +913,20 @@
           "title": "Catalog"
         },
         "components": {
-          "description": "The UI component tree blueprint for this Blok.",
-          "items": {
-            "$ref": "#/$defs/ComponentNodeInput"
-          },
-          "title": "Components",
-          "type": "array"
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ComponentNodeInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The UI component tree blueprint for this Blok, unless it is sent as its `source`.",
+          "title": "Components"
         },
         "context": {
           "$ref": "#/$defs/ComponentContext",
@@ -1013,11 +1021,23 @@
           "description": "The key of this Blok implementation.",
           "title": "Key",
           "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The Blok as BSX, parsed by the server into its component tree: three times fewer bytes than the tree. Exactly one of `components` and `source` is sent.",
+          "title": "Source"
         }
       },
       "required": [
-        "key",
-        "components"
+        "key"
       ],
       "title": "BlokImplementationInput",
       "type": "object"
