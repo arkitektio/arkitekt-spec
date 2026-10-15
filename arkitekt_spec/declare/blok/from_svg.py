@@ -15,7 +15,7 @@ subset can draw and drops the rest, saying what it dropped:
   ``href`` chain is resolved into its attributes and stops;
 - paint on the root ``<svg>`` (``fill="none" stroke="currentColor"``, as icon sets
   write) moves to a ``G`` around the drawing, since the root takes no paint;
-- ``currentColor`` paints ``ink``; an action logo, which paints only with
+- ``currentColor`` paints the ``color`` set around it, else ``ink``; an action logo, which paints only with
   ``LOGO_PAINT_TOKENS``, has every colour mapped to the nearest token;
 - masks, filters, patterns, images, markers, scripts and event handlers have no
   component and are dropped.
@@ -31,7 +31,7 @@ import os
 import re
 import warnings
 import xml.etree.ElementTree as ET
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -838,7 +838,7 @@ class _Converter:
                 )
             )
             inner = self.apply(
-                _Node("G"), target_tag, _only(target_declared, TEXT_ATTRIBUTES), inner
+                _Node("G"), target_tag, _only(target_declared, (*TEXT_ATTRIBUTES, "color")), inner
             )
             node.children = self.children(target, inner, using)
         else:
@@ -1007,13 +1007,18 @@ class _Converter:
     def apply(
         self, node: _Node, tag: str, declared: Mapping[str, str], inherited: Mapping[str, str]
     ) -> dict[str, str]:
-        """Set ``declared`` on ``node`` as its component's props; the text attributes its children inherit."""
+        """Set ``declared`` on ``node`` as its component's props; what its children inherit.
+
+        That is the text attributes, and ``color``: what ``currentColor`` paints.
+        """
         allowed = self.props[node.component]
         inner = dict(inherited)
+        if declared.get("color", "currentColor").lower() not in ("currentcolor", "inherit"):
+            inner["color"] = declared["color"]
         for name, value in declared.items():
             key = _camel(name)
             if key in allowed:
-                self.set_prop(node, tag, key, value)
+                self.set_prop(node, tag, key, value, inner.get("color"))
             elif name in TEXT_ATTRIBUTES:
                 inner[name] = value
             elif name in QUIET_ATTRIBUTES or name.startswith(("data-", "aria-", "xml:", "xmlns")):
@@ -1024,12 +1029,14 @@ class _Converter:
                 self.warn(f"'{name}' on <{tag}> has no logo prop and was dropped")
         return inner
 
-    def set_prop(self, node: _Node, tag: str, key: str, raw: str) -> None:
+    def set_prop(
+        self, node: _Node, tag: str, key: str, raw: str, current: str | None = None
+    ) -> None:
         value = _collapse(raw)
         if not value or value in ("inherit", "unset", "initial"):
             return
         if key in PAINTS:
-            self.set_paint(node, key, value)
+            self.set_paint(node, key, value, current)
             return
         if key == "clipPath":
             match = URL.fullmatch(value)
@@ -1075,7 +1082,7 @@ class _Converter:
         if transform:
             self.set_prop(node, "g", "transform", transform)
 
-    def set_paint(self, node: _Node, key: str, value: str) -> None:
+    def set_paint(self, node: _Node, key: str, value: str, current: str | None = None) -> None:
         match = URL.fullmatch(value)
         if match is not None:
             kinds = ("linearGradient", "radialGradient")
@@ -1092,7 +1099,10 @@ class _Converter:
             node.props[key] = "none"
             return
         if lowered == "currentcolor":
-            node.props[key] = "ink"
+            if current is None:
+                node.props[key] = "ink"  # the colour of the text around the logo
+            else:
+                self.set_paint(node, key, current)
             return
         colour = _colour(value)
         if colour is None:
@@ -1138,7 +1148,7 @@ class _Converter:
         return ""
 
 
-def _only(declared: Mapping[str, str], names: Mapping[str, str]) -> dict[str, str]:
+def _only(declared: Mapping[str, str], names: Collection[str]) -> dict[str, str]:
     return {name: value for name, value in declared.items() if name in names}
 
 

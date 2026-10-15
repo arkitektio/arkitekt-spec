@@ -346,6 +346,32 @@ def test_an_action_logo_registers_inline_on_an_action() -> None:
     assert [blok.key for blok in agent.bloks or ()] == ["act.logo"]
 
 
+@pytest.mark.parametrize(
+    ("context", "expected"),
+    [("logo", ["#e11d48", "#2563eb", "ink"]), ("action_logo", ["brand", "brand", "ink"])],
+)
+def test_current_colour_paints_the_colour_set_around_it(context: str, expected: list[str]) -> None:
+    source, lost = convert(
+        svg(
+            '<path d="M0 0" fill="currentColor" />'
+            '<g color="#2563eb"><path d="M1 1" stroke="currentColor" fill="none" /></g>'
+            '<g color="currentColor"><path d="M2 2" fill="currentColor" /></g>',
+            'viewBox="0 0 24 24" color="#e11d48"',
+        ),
+        context=context,
+    )
+    assert lost == []
+    assert [
+        path.get("fill") if path.get("fill") != "none" else path["stroke"]
+        for path in drawn(source, "Path")
+    ] == [
+        *expected[:2],
+        expected[0],
+    ]
+    without, _ = convert(svg('<path d="M0 0" fill="currentColor" />'), context=context)
+    assert drawn(without, "Path")[0]["fill"] == expected[2]
+
+
 def test_a_palette_maps_colours_of_a_logo_too() -> None:
     source, _ = convert(
         LUCIDE.replace('stroke="currentColor"', 'stroke="black"'), palette={"#000": "ink"}
