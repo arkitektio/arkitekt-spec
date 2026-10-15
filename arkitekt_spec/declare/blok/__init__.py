@@ -1,5 +1,6 @@
 """Blok parsing, validation and dependency inference."""
 
+from arkitekt_spec.declare.blok.from_svg import SvgConversionError, SvgConversionWarning, from_svg
 from arkitekt_spec.declare.blok.parser import (
     BlokParser,
     PortCallParser,
@@ -21,11 +22,14 @@ __all__ = [
     "BlokParser",
     "DependencyIndex",
     "PortCallParser",
+    "SvgConversionError",
+    "SvgConversionWarning",
     "bsx",
     "build_declared_bloks",
     "check_context_root",
     "coerce_util_call",
     "demo_state_for",
+    "from_svg",
     "local_roots_of",
     "parse_util_call",
     "resolve_state_reference",
