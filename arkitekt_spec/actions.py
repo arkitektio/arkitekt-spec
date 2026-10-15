@@ -1252,6 +1252,10 @@ class ImplementationInput(ActionModel):
         default=None,
         description="A hash of the implementation's code. A workflow is only resumed by an implementation with the same hash.",
     )
+    logo: str | None = Field(
+        default=None,
+        description="The key of the agent's logo blok (context LOGO) that draws this action.",
+    )
 
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True

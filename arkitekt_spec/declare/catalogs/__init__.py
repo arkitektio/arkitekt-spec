@@ -88,6 +88,17 @@ COMPONENT_CONTEXTS = (HTML_CONTEXT, SCENE_CONTEXT, LOGO_CONTEXT)
 """The renderers a component can live in. A blok's tree starts in the html context."""
 CONTEXT_ROOTS: Mapping[str, str] = {SCENE_CONTEXT: "Scene", LOGO_CONTEXT: "SVG"}
 """The one component a blok of each of these contexts has as its root."""
+
+LOGO_MAX_NODES = 200
+"""The most components a logo blok may have, counted once each as written."""
+LOGO_MAX_DEPTH = 12
+"""The deepest a logo blok may nest, its root at depth 1."""
+LOGO_MAX_PATH_DATA = 16 * 1024
+"""The most characters of path data (``d`` and ``points`` props) a logo blok may hold in all."""
+LOGO_MAX_FOREACH_ITEMS = 64
+"""The most items a ``foreach`` in a logo blok may draw from the blok's demo state."""
+LOGO_PATH_DATA_PROPS = ("d", "points")
+"""The props whose static values are path data."""
 """The ``CatalogValueKind`` names, hard-coded so this module never imports the generated schema."""
 
 CALLBACK_KIND = "CALLBACK"
@@ -757,6 +768,7 @@ RULES: tuple[Rule, ...] = (
     Rule("callback_prop_unbound", "_check_component", "A CALLBACK prop not bound via agent_call or util_call."),
     Rule("asset_prop", "_check_asset_prop", "An ASSET prop that is not bound to a <dependency>.assets.<name> path."),
     Rule("context_root", "validate_components_against_catalogs", "A scene or logo blok whose one root is not its Scene or SVG component."),
+    Rule("logo_complexity", "check_logo_complexity", "A logo blok with too many nodes, too deep a tree, too much path data, or a foreach drawing too many items."),
     Rule("component_placement", "_check_placement", "A component outside its context, without a required ancestor, or under a forbidden one."),
     Rule("catalog_conflict", "resolve_operations", "Two catalogs defining one operation or component differently."),
     Rule("base_shadowed", "check_extension_does_not_shadow_base", "A UI catalog redefining a base operation."),

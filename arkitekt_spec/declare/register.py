@@ -6,6 +6,7 @@ import warnings
 from collections.abc import Callable
 from typing import (
     TYPE_CHECKING,
+    Any,
     Generic,
     Literal,
     ParamSpec,
@@ -23,6 +24,8 @@ from arkitekt_spec.actions import (
     ActionDependencyInput,
     AgentDependencyInput,
     AssignWidgetInput,
+    ComponentContext,
+    ComponentNodeInput,
     DefinitionInput,
     EffectInput,
     Effects,
@@ -142,6 +145,17 @@ def code_hash_of(function_or_actor: AnyFunction) -> str | None:
     return hashlib.sha256(code).hexdigest()
 
 
+def _logo_of(config: RegisterConfig, interface: str, registry: "AppRegistry") -> dict[str, Any]:
+    """The ``logo`` field of an implementation: the logo blok's name, declaring an inline one."""
+    if config.logo is None:
+        return {}
+    if isinstance(config.logo, ComponentNodeInput):
+        name = f"{interface}.logo"
+        registry.register_blok(name, config.logo, context=ComponentContext.LOGO)
+        return {"logo": name}
+    return {"logo": config.logo}
+
+
 def register_func(
     function_or_actor: AnyFunction,
     structure_registry: StructureRegistry,
@@ -230,6 +244,8 @@ def register_func(
             effects=config.effects or implementation_registry.default_effects,
             execution=config.execution,
             code_hash=code_hash_of(function_or_actor),
+            # Set only when there is one, so an action without a logo keeps its wire bytes.
+            **_logo_of(config, interface, implementation_registry),
         )),
         DeclaredImplementation(function_or_actor, config, actifier),
     )
@@ -268,6 +284,7 @@ def declare_implementation(
     catalogs: list[str] | None = None,
     effects: Effects | None = None,
     execution: Execution = Execution.PLAIN,
+    logo: str | ComponentNodeInput | None = None,
 ) -> WrappedFunction[P, R]:
     """Register a function directly: ``declare_implementation(fn, implementation_registry=...)``."""
 
@@ -301,6 +318,7 @@ def declare_implementation(
     catalogs: list[str] | None = None,
     effects: Effects | None = None,
     execution: Execution = Execution.PLAIN,
+    logo: str | ComponentNodeInput | None = None,
 ) -> Callable[[Callable[P, R]], WrappedFunction[P, R]]:
     """Build a configured decorator: ``declare_implementation(implementation_registry=..., name=...)``."""
 
@@ -333,6 +351,7 @@ def declare_implementation(
     catalogs: list[str] | None = None,
     effects: Effects | None = None,
     execution: Execution = Execution.PLAIN,
+    logo: str | ComponentNodeInput | None = None,
 ) -> WrappedFunction[P, R] | Callable[[Callable[P, R]], WrappedFunction[P, R]]:
     """Register a function or actor with an app registry.
 
@@ -391,6 +410,10 @@ def declare_implementation(
             Informational. None takes the app's default.
         execution (Execution): WORKFLOW to call other actions and be resumed
             after a crash; PLAIN otherwise.
+        logo (str | ComponentNodeInput | None): The logo that draws the action:
+            the name of a logo blok the app declares, or a tree of its own
+            (``bsx("<SVG>...</SVG>")``), declared as the logo blok
+            ``<interface>.logo``.
 
     Returns:
         The wrapped function, or a decorator producing it.
@@ -420,6 +443,7 @@ def declare_implementation(
         in_process=in_process,
         effects=effects,
         execution=execution,
+        logo=logo,
     )
 
     def offer(function_or_actor: Callable[P, R]) -> WrappedFunction[P, R]:

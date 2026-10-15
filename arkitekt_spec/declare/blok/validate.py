@@ -25,6 +25,11 @@ from arkitekt_spec.declare.catalogs import (
     CONTEXT_ROOTS,
     HTML_CONTEXT,
     LATEST_SEGMENT,
+    LOGO_MAX_DEPTH,
+    LOGO_MAX_FOREACH_ITEMS,
+    LOGO_MAX_NODES,
+    LOGO_MAX_PATH_DATA,
+    LOGO_PATH_DATA_PROPS,
     CatalogView,
     Diagnostic,
     asset_path_parts,
@@ -475,6 +480,61 @@ def check_context_root(node: ComponentNodeInput, context: str) -> None:
             f"{node_context(node)}: the root of a {context.lower()} blok must be a {required!r}, "
             f"not {node.component!r}"
         )
+
+
+def check_logo_complexity(node: ComponentNodeInput, demo_state: Mapping[str, Any] | None = None) -> None:
+    """A logo is an icon: few nodes, shallow, little path data, and loops over few items.
+
+    A ``foreach`` is held to the length of the list it reads in ``demo_state``, which is
+    the only state a logo is drawn with; one whose list is not there draws nothing.
+
+    Raises:
+        ValueError: If the tree passes any of the ``LOGO_MAX_*`` limits.
+    """
+    nodes = 0
+    path_data = 0
+
+    def visit(current: ComponentNodeInput, depth: int) -> None:
+        nonlocal nodes, path_data
+        nodes += 1
+        if depth > LOGO_MAX_DEPTH:
+            raise ValueError(f"{node_context(current)}: a logo nests at most {LOGO_MAX_DEPTH} deep")
+        for prop in current.props or ():
+            if prop.key in LOGO_PATH_DATA_PROPS and isinstance(prop.static_value, str):
+                path_data += len(prop.static_value)
+            if current.component == "foreach" and prop.key == "items":
+                items = _demo_items(prop, demo_state)
+                if items > LOGO_MAX_FOREACH_ITEMS:
+                    raise ValueError(
+                        f"{node_context(current)}: a foreach in a logo draws at most "
+                        f"{LOGO_MAX_FOREACH_ITEMS} items, its demo state has {items}"
+                    )
+        for child in current.children or ():
+            visit(child, depth + 1)
+
+    visit(node, 1)
+    if nodes > LOGO_MAX_NODES:
+        raise ValueError(f"{node_context(node)}: a logo has at most {LOGO_MAX_NODES} components, this one {nodes}")
+    if path_data > LOGO_MAX_PATH_DATA:
+        raise ValueError(
+            f"{node_context(node)}: a logo holds at most {LOGO_MAX_PATH_DATA} characters of path data, "
+            f"this one {path_data}"
+        )
+
+
+def _demo_items(prop: Any, demo_state: Mapping[str, Any] | None) -> int:
+    """How many items a foreach's ``items`` gives in the demo state; 0 when it names none."""
+    if isinstance(prop.static_value, list):
+        return len(prop.static_value)
+    path = prop.dynamic_value.path if prop.dynamic_value is not None else None
+    value: Any = demo_state or {}
+    for segment in (path or "").replace("/", ".").split("."):
+        if not segment:
+            continue
+        if not isinstance(value, Mapping) or segment not in value:
+            return 0
+        value = value[segment]
+    return len(value) if isinstance(value, list) else 0
 
 
 def _check_tree_placement(

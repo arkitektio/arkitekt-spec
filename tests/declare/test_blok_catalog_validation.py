@@ -309,3 +309,91 @@ def test_a_published_catalog_says_which_components_inherit_their_context() -> No
     assert components["foreach"].inherits_context
     assert not components["Path"].inherits_context
     assert components["SVG"].children_context == LOGO_CONTEXT
+
+
+def _logo(paths: int = 1, d: str = "M0 0") -> str:
+    return "<SVG>" + "".join(f'<Path d="{d}" />' for _ in range(paths)) + "</SVG>"
+
+
+@pytest.mark.parametrize(
+    ("tree", "demo_state", "message"),
+    [
+        (_logo(paths=200), None, "a logo has at most 200 components, this one 201"),
+        ("<SVG>" + "<G>" * 12 + "</G>" * 12 + "</SVG>", None, "a logo nests at most 12 deep"),
+        (_logo(paths=2, d="M" + "1" * 8192), None, "at most 16384 characters of path data"),
+        (
+            '<SVG><foreach items="@self.lamps" let="#lamp"><Path d="M0 0" /></foreach></SVG>',
+            {"self": {"lamps": list(range(65))}},
+            "a foreach in a logo draws at most 64 items, its demo state has 65",
+        ),
+    ],
+)
+def test_a_logo_is_held_to_the_size_of_an_icon(tree: str, demo_state: dict | None, message: str) -> None:
+    registry = _logo_registry()
+    registry.declare_ui_catalog(
+        "looping",
+        components=[
+            *registry.declared_catalogs["electron"].components,
+            ComponentSpec(
+                name="foreach",
+                accepts_children=True,
+                inherits_context=True,
+                props=(PropSpec(key="items", kind="LIST", required=True), PropSpec(key="let", kind="STRING", required=False)),
+            ),
+        ],
+        operations=[],
+    )
+    with pytest.raises(ValueError, match=message):
+        registry.register_blok("big", tree, catalog="looping", context="logo", demo_state=demo_state)
+
+
+def test_an_icon_sized_logo_passes_and_an_html_blok_has_no_such_limit() -> None:
+    registry = _logo_registry()
+    registry.register_blok("logo", _logo(paths=199), catalog="electron", context="logo")
+    registry.register_blok("panel", "<Box>" + _logo(paths=300) + "</Box>", catalog="electron")
+
+
+def _act(amount: float) -> float:
+    """Return what it is given."""
+    return amount
+
+
+def test_an_action_is_drawn_by_a_logo_blok_the_app_declares() -> None:
+    registry = _logo_registry()
+    registry.register_blok("crop", _logo(), catalog="electron", context="logo", default=True)
+    registry.register_action(_act, key="act", logo="crop")
+    registry.register_action(_act, key="plain")
+
+    agent = registry.to_implement_agent_input()
+
+    logos = {implementation.definition.key: implementation.logo for implementation in agent.implementations or ()}
+    assert logos == {"act": "crop", "plain": None}
+    # An action without a logo sends no field at all: its wire bytes stay what they were.
+    plain = next(i for i in agent.implementations or () if i.definition.key == "plain")
+    assert "logo" not in plain.model_dump(exclude_unset=True)
+
+
+def test_an_action_naming_no_declared_logo_is_refused() -> None:
+    registry = _logo_registry()
+    registry.register_blok("panel", "<Box />", catalog="electron")
+    registry.register_action(_act, key="missing", logo="nowhere")
+    registry.register_action(_act, key="not_a_logo", logo="panel")
+
+    with pytest.raises(ValueError, match="'nowhere', which is not a logo blok this app declares"):
+        registry.to_implement_agent_input()
+
+
+def test_an_action_may_bring_its_own_logo(monkeypatch: pytest.MonkeyPatch) -> None:
+    import arkitekt_spec.declare.app as app_module
+
+    registry = _logo_registry()
+    # An inline logo is drawn against the standard catalog; this one stands in for it.
+    monkeypatch.setattr(app_module, "standard_view", lambda: registry.catalog_view("electron"))
+    registry.register_action(_act, key="act", logo=bsx('<SVG><Path d="M1 1" /></SVG>'))
+
+    agent = registry.to_implement_agent_input()
+
+    (implementation,) = agent.implementations or ()
+    assert implementation.logo == "act.logo"
+    (blok,) = agent.bloks or ()
+    assert (blok.key, blok.context) == ("act.logo", LOGO_CONTEXT)

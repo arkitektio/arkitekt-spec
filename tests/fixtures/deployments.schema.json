@@ -2064,6 +2064,19 @@
           "description": "The locks of the implementation. This is used to specify which resources the implementation needs to run",
           "title": "Locks"
         },
+        "logo": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The key of the agent's logo blok (context LOGO) that draws this action.",
+          "title": "Logo"
+        },
         "manipulates": {
           "anyOf": [
             {

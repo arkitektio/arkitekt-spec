@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 from arkitekt_spec.actions import (
+    ComponentNodeInput,
     DefinitionInput,
     Effects,
     Execution,
@@ -201,6 +202,8 @@ class RegisterConfig:
     """What running it again would do to the world; None takes the app's default."""
     execution: Execution = Execution.PLAIN
     """WORKFLOW may call other actions and is resumed after a crash; PLAIN may not."""
+    logo: "str | ComponentNodeInput | None" = None
+    """The logo blok that draws the action: a declared logo blok's name, or a tree (``bsx(...)``)."""
 
 
 @runtime_checkable

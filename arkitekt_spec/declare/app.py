@@ -57,6 +57,7 @@ from arkitekt_spec.declare.blok.registry import build_declared_bloks
 from arkitekt_spec.declare.blok.validate import (
     RESERVED_ROOTS,
     check_context_root,
+    check_logo_complexity,
     validate_blok_catalog,
 )
 from arkitekt_spec.declare.catalogs import (
@@ -768,6 +769,8 @@ class AppRegistry(BaseModel):
             # At most one default per context: the newly declared one replaces it.
             self.registered_bloks[other] = self.registered_bloks[other].model_copy(update={"default": False})
         check_context_root(component, context)
+        if context == ComponentContext.LOGO:
+            check_logo_complexity(component, demo_state)
         # Catalog rules only: references need the dependencies that
         # ``build_declared_bloks`` infers later, and are checked there.
         for diagnostic in validate_blok_catalog(component, self.catalog_view(catalog)):
@@ -1640,6 +1643,7 @@ class AppRegistry(BaseModel):
         catalogs: list[str] | None = None,
         effects: Effects | None = None,
         execution: Execution = Execution.PLAIN,
+        logo: "str | ComponentNodeInput | None" = None,
     ) -> "WrappedFunction[P, R]":
         """Register a function as an action, as a plain call rather than a decorator.
 
@@ -1682,6 +1686,10 @@ class AppRegistry(BaseModel):
                 None takes the app's default.
             execution: ``Execution.WORKFLOW`` to call other actions and be resumed
                 after a crash (see :meth:`register_workflow`).
+            logo: The logo that draws the action: the name of a logo blok this
+                app declares (``register_blok(..., context="logo")``), or a tree
+                of its own (``bsx("<SVG>...</SVG>")``). Without one, a client
+                shows the app's default logo.
 
         Returns:
             The function, still callable as itself.
@@ -1714,6 +1722,7 @@ class AppRegistry(BaseModel):
             catalogs=catalogs,
             effects=effects,
             execution=execution,
+            logo=logo,
         )
 
     def register_workflow(
