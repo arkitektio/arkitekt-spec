@@ -22,9 +22,9 @@ from arkitekt_spec.declare.blok.walk import (
     walk_component,
 )
 from arkitekt_spec.declare.catalogs import (
+    CONTEXT_ROOTS,
     HTML_CONTEXT,
     LATEST_SEGMENT,
-    SCENE_ROOT_COMPONENT,
     CatalogView,
     Diagnostic,
     asset_path_parts,
@@ -457,11 +457,22 @@ def validate_blok(
     return visitor.diagnostics
 
 
-def check_scene_root(node: ComponentNodeInput) -> None:
-    """The root of a scene blok is the scene itself, whatever catalog is in force."""
-    if node.component != SCENE_ROOT_COMPONENT:
+def check_context_root(node: ComponentNodeInput, context: str) -> None:
+    """The root of a scene blok is a ``Scene``, of a logo blok an ``SVG``, whatever catalog is in force.
+
+    Args:
+        node: The blok's root.
+        context: The blok's context, as a ``ComponentContext`` value. An html blok's root
+            may be anything.
+
+    Raises:
+        ValueError: If the root is not the one the context requires.
+    """
+    context = getattr(context, "value", context)
+    required = CONTEXT_ROOTS.get(context)
+    if required is not None and node.component != required:
         raise ValueError(
-            f"{node_context(node)}: the root of a scene blok must be a {SCENE_ROOT_COMPONENT!r}, "
+            f"{node_context(node)}: the root of a {context.lower()} blok must be a {required!r}, "
             f"not {node.component!r}"
         )
 

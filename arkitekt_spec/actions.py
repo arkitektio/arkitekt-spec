@@ -151,6 +151,8 @@ class ComponentContext(str, Enum):
     "Panels, dashboards and popouts."
     SCENE = "SCENE"
     "A 3D view."
+    LOGO = "LOGO"
+    "An SVG drawing: an agent's logo, which clients render against its demo state."
 
 
 class PortKind(str, Enum):

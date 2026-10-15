@@ -56,7 +56,7 @@ from arkitekt_spec.declare.blok.parser import bsx as parse_bsx
 from arkitekt_spec.declare.blok.registry import build_declared_bloks
 from arkitekt_spec.declare.blok.validate import (
     RESERVED_ROOTS,
-    check_scene_root,
+    check_context_root,
     validate_blok_catalog,
 )
 from arkitekt_spec.declare.catalogs import (
@@ -708,11 +708,13 @@ class AppRegistry(BaseModel):
                 may bind controls to (``bind="form.iterations"``) and read back
                 in a call (``@self.run(iterations=form.iterations)``). It never
                 reaches the agent's state.
-            context: The renderer for the blok's root: ``"html"`` for a panel, or
-                ``"scene"`` for a full 3D view, whose root must be a ``Scene``.
+            context: The renderer for the blok's root: ``"html"`` for a panel,
+                ``"scene"`` for a full 3D view, whose root must be a ``Scene``, or
+                ``"logo"`` for the app's logo, whose root must be an ``SVG``. Clients
+                render a logo against ``demo_state`` only, never the agent's live state.
             default: Whether this is the app's default blok for its context: the
-                panel, or the 3D view, a client shows for the app without being
-                told which. Declaring another default replaces it.
+                panel, the 3D view or the logo a client shows for the app without
+                being told which. Declaring another default replaces it.
             for_model: The model (``"sha256:..."``) this blok decorates. A viewer
                 showing that model, in any app's scene, offers this blok where
                 ``for_node`` is clicked. Html bloks only.
@@ -765,8 +767,7 @@ class AppRegistry(BaseModel):
         for other in replaced:
             # At most one default per context: the newly declared one replaces it.
             self.registered_bloks[other] = self.registered_bloks[other].model_copy(update={"default": False})
-        if context == ComponentContext.SCENE:
-            check_scene_root(component)
+        check_context_root(component, context)
         # Catalog rules only: references need the dependencies that
         # ``build_declared_bloks`` infers later, and are checked there.
         for diagnostic in validate_blok_catalog(component, self.catalog_view(catalog)):

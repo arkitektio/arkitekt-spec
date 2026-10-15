@@ -1205,7 +1205,8 @@
       "description": "The renderer a blok component lives in. A blok's tree starts in HTML.",
       "enum": [
         "HTML",
-        "SCENE"
+        "SCENE",
+        "LOGO"
       ],
       "title": "ComponentContext",
       "type": "string"

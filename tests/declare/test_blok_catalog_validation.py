@@ -10,10 +10,13 @@ from arkitekt_spec.declare.blok.registry import build_declared_bloks
 from arkitekt_spec.declare.blok.validate import validate_blok_catalog
 from arkitekt_spec.declare.catalogs import (
     HTML_CONTEXT,
+    LOGO_CONTEXT,
     SCENE_CONTEXT,
     UNKNOWN_OPERATION,
     CatalogWarning,
     ComponentSpec,
+    PropSpec,
+    _parse_ui_catalog,
 )
 
 from .catalog_cases import BOX, CLAMP, FOREACH, SLIDER, base_view, electron_view
@@ -220,3 +223,89 @@ def test_a_tree_that_bridges_into_a_scene_and_back_is_accepted() -> None:
 def test_a_component_is_held_to_its_declared_placement(tree: str, message: str) -> None:
     with pytest.raises(ValueError, match=message):
         _scene_registry().register_blok("bad", tree, catalog="electron")
+
+
+def _logo_registry() -> AppRegistry:
+    registry = AppRegistry()
+    registry.declare_ui_catalog(
+        "electron",
+        components=[
+            BOX,
+            ComponentSpec(name="loop", accepts_children=True, inherits_context=True),
+            ComponentSpec(
+                name="SVG",
+                accepts_children=True,
+                props=(PropSpec(key="viewBox", kind="STRING", required=False),),
+                children_context=LOGO_CONTEXT,
+                not_downstream_of=("SVG",),
+            ),
+            ComponentSpec(name="G", accepts_children=True, context=LOGO_CONTEXT, downstream_of=("SVG",)),
+            ComponentSpec(
+                name="Path",
+                props=(PropSpec(key="d", kind="STRING", required=True),),
+                context=LOGO_CONTEXT,
+                downstream_of=("SVG",),
+            ),
+            ComponentSpec(
+                name="Scene", accepts_children=True, children_context=SCENE_CONTEXT, not_downstream_of=("Scene",)
+            ),
+            ComponentSpec(name="Model", context=SCENE_CONTEXT, downstream_of=("Scene",)),
+        ],
+        operations=[],
+    )
+    return registry
+
+
+def test_a_logo_blok_is_one_svg_of_shapes() -> None:
+    registry = _logo_registry()
+    registry.register_blok(
+        "logo",
+        '<SVG viewBox="0 0 24 24"><G><Path d="M2 12h20" /></G></SVG>',
+        catalog="electron",
+        context="logo",
+        default=True,
+    )
+    # An html blok may draw an SVG anywhere it likes.
+    registry.register_blok("panel", '<Box><SVG><Path d="M0 0" /></SVG></Box>', catalog="electron")
+
+    assert registry.registered_bloks["logo"].context == LOGO_CONTEXT
+    assert registry.registered_bloks["logo"].default
+
+
+@pytest.mark.parametrize(
+    ("tree", "context", "message"),
+    [
+        ('<Path d="M0 0" />', "logo", "the root of a logo blok must be a 'SVG', not 'Path'"),
+        ("<Box><SVG /></Box>", "logo", "the root of a logo blok must be a 'SVG', not 'Box'"),
+        ('<loop><SVG /></loop>', "logo", "the root of a logo blok must be a 'SVG', not 'loop'"),
+        ('<Box><Path d="M0 0" /></Box>', "html", "component 'Path' is a logo component and cannot be placed in the html context"),
+        ("<SVG><loop><Box /></loop></SVG>", "logo", "component 'Box' is a html component and cannot be placed in the logo context"),
+    ],
+)
+def test_a_logo_blok_is_held_to_its_root_and_its_shapes_to_the_svg(tree: str, context: str, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        _logo_registry().register_blok("bad", tree, catalog="electron", context=context)
+
+
+def test_control_flow_takes_the_context_it_is_placed_in() -> None:
+    registry = _logo_registry()
+    registry.register_blok("logo", '<SVG><loop><Path d="M0 0" /></loop></SVG>', catalog="electron", context="logo")
+    registry.register_blok("scene", "<Scene><loop><Model /></loop></Scene>", catalog="electron", context="scene")
+    registry.register_blok("panel", "<loop><Box /></loop>", catalog="electron")
+
+
+def test_a_published_catalog_says_which_components_inherit_their_context() -> None:
+    catalog = _parse_ui_catalog(
+        {
+            "name": "electron",
+            "components": [
+                {"name": "foreach", "acceptsChildren": True, "inheritsContext": True},
+                {"name": "SVG", "acceptsChildren": True, "childrenContext": "LOGO"},
+                {"name": "Path", "context": "LOGO"},
+            ],
+        }
+    )
+    components = {component.name: component for component in catalog.components}
+    assert components["foreach"].inherits_context
+    assert not components["Path"].inherits_context
+    assert components["SVG"].children_context == LOGO_CONTEXT

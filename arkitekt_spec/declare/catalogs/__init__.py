@@ -83,10 +83,11 @@ def latest_task_path_parts(path: str) -> tuple[str, str, list[str]] | None:
 
 HTML_CONTEXT = "HTML"
 SCENE_CONTEXT = "SCENE"
-COMPONENT_CONTEXTS = (HTML_CONTEXT, SCENE_CONTEXT)
-# The one component a scene blok may have as its root.
-SCENE_ROOT_COMPONENT = "Scene"
+LOGO_CONTEXT = "LOGO"
+COMPONENT_CONTEXTS = (HTML_CONTEXT, SCENE_CONTEXT, LOGO_CONTEXT)
 """The renderers a component can live in. A blok's tree starts in the html context."""
+CONTEXT_ROOTS: Mapping[str, str] = {SCENE_CONTEXT: "Scene", LOGO_CONTEXT: "SVG"}
+"""The one component a blok of each of these contexts has as its root."""
 """The ``CatalogValueKind`` names, hard-coded so this module never imports the generated schema."""
 
 CALLBACK_KIND = "CALLBACK"
@@ -148,6 +149,8 @@ class ComponentSpec:
     """The context the component may be placed in."""
     children_context: str | None = None
     """The context of its children when it differs from its own: it bridges two renderers."""
+    inherits_context: bool = False
+    """Placed in any context, taking its parent's for itself and its children (control flow)."""
     downstream_of: tuple[str, ...] = ()
     """Components of which at least one must be an ancestor, at any depth."""
     not_downstream_of: tuple[str, ...] = ()
@@ -309,6 +312,7 @@ def _parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]
                 description=entry.get("description"),
                 context=_parse_context(raw, name, entry.get("context")) or HTML_CONTEXT,
                 children_context=_parse_context(raw, name, entry.get("childrenContext")),
+                inherits_context=bool(entry.get("inheritsContext", False)),
                 downstream_of=tuple(entry.get("downstreamOf") or ()),
                 not_downstream_of=tuple(entry.get("notDownstreamOf") or ()),
             )
@@ -696,7 +700,8 @@ def check_placement(
     """Check where a component sits in the tree; return the context of its children.
 
     A tree starts in the html context. A component whose ``children_context`` differs from
-    its own bridges two renderers, and everything below it is checked in the new one. Does
+    its own bridges two renderers, and everything below it is checked in the new one. One
+    that ``inherits_context`` sits in whichever context is in force and passes it on. Does
     nothing when ``view.components`` is ``None`` or does not know the component (which
     :func:`check_component` reports).
 
@@ -714,7 +719,7 @@ def check_placement(
     spec = view.components.get(component) if view.components is not None else None
     if spec is None:
         return context
-    if spec.context != context:
+    if not spec.inherits_context and spec.context != context:
         raise ValueError(
             f"{owner}: component {component!r} is a {spec.context.lower()} component "
             f"and cannot be placed in the {context.lower()} context"
@@ -724,6 +729,8 @@ def check_placement(
     forbidden = sorted(set(spec.not_downstream_of) & set(ancestors))
     if forbidden:
         raise ValueError(f"{owner}: component {component!r} must not be inside {forbidden}")
+    if spec.inherits_context:
+        return context
     return spec.children_context or spec.context
 
 
@@ -749,7 +756,7 @@ RULES: tuple[Rule, ...] = (
     Rule("component_props", "_check_component", "Unknown or missing required props on a component."),
     Rule("callback_prop_unbound", "_check_component", "A CALLBACK prop not bound via agent_call or util_call."),
     Rule("asset_prop", "_check_asset_prop", "An ASSET prop that is not bound to a <dependency>.assets.<name> path."),
-    Rule("scene_root", "validate_components_against_catalogs", "A scene blok whose one root is not the Scene component."),
+    Rule("context_root", "validate_components_against_catalogs", "A scene or logo blok whose one root is not its Scene or SVG component."),
     Rule("component_placement", "_check_placement", "A component outside its context, without a required ancestor, or under a forbidden one."),
     Rule("catalog_conflict", "resolve_operations", "Two catalogs defining one operation or component differently."),
     Rule("base_shadowed", "check_extension_does_not_shadow_base", "A UI catalog redefining a base operation."),
