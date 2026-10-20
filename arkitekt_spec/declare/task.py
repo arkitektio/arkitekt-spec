@@ -75,6 +75,32 @@ class HookInput(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True)
 
 
+class AssignPrompt(BaseModel):
+    """Why a task wants something a person has to approve: a child call, or a hold.
+
+    It is the agent's own words. Whoever shows it shows what the server knows next to
+    it (the action, the agent, the arguments), so it explains and never decides.
+    """
+
+    title: str = Field(description="One line: what the task wants to do.")
+    description: str | None = Field(default=None, description="A few sentences on why.")
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class Decision(BaseModel):
+    """What came back from a hold (:meth:`Task.ahold`).
+
+    ``approved`` is False when the person said no; the task goes on and decides what
+    that means. ``auto`` is True when nobody was asked: the run is in auto-mode (or
+    the task is local).
+    """
+
+    approved: bool
+    answer: str | None = None
+    auto: bool = False
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
 @dataclass
 class AssignmentHook:
     """Code a task runs when its assignment receives a message of ``kind``.
@@ -223,13 +249,19 @@ class Task(Protocol):
         """:meth:`guard`, entered with ``async with``."""
         ...
 
-    def hold(self, message: str, *, lost: AgentLost | None = None) -> None:
-        """Wait for a person: the task pauses with ``message`` until someone resumes it
-        (it carries on after the hold) or cancels it. ``lost`` puts what is known about a
-        lost step (its effects, last progress) in front of whoever decides."""
+    def hold(self, message: str, *, prompt: AssignPrompt | None = None, lost: AgentLost | None = None) -> Decision:
+        """Wait for a person to decide: the task is HELD with ``message`` (and ``prompt``)
+        until someone approves or denies it, and returns their :class:`Decision`.
+
+        A denial does not end the task: ``approved`` is False and the task goes on. A
+        cancel still ends it. In a run in auto-mode the server approves at once, with
+        ``auto`` set. ``lost`` puts what is known about a lost step (its effects, last
+        progress) in front of whoever decides. A resumed workflow gets the decision it
+        already had back, without holding again.
+        """
         ...
 
-    async def ahold(self, message: str, *, lost: AgentLost | None = None) -> None:
+    async def ahold(self, message: str, *, prompt: AssignPrompt | None = None, lost: AgentLost | None = None) -> Decision:
         """:meth:`hold`, awaited."""
         ...
 
@@ -258,6 +290,7 @@ class Task(Protocol):
         capture: bool = False,
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
+        prompt: AssignPrompt | None = None,
         **kwargs: Any,  # ditto, by keyword
     ) -> Any:  # whatever the action returns
         """Call an action as a child of this task.
@@ -265,8 +298,12 @@ class Task(Protocol):
         ``target`` is an already-fetched ``Action`` or ``Implementation``: a task knows
         no client, so it cannot look one up.
 
+        Unless the run is in auto-mode, the server holds the child until a person
+        approves it; ``prompt`` is what they are shown about why.
+
         Raises:
             NoCallerError: If nothing routes this task's calls.
+            DeniedError: If a person refused to let the child run.
         """
         ...
 
@@ -292,6 +329,7 @@ class Task(Protocol):
         capture: bool = False,
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
+        prompt: AssignPrompt | None = None,
         **kwargs: Any,  # ditto, by keyword
     ) -> AsyncIterator[Any]:
         """Stream a generator action's yields as a child of this task.
@@ -312,6 +350,7 @@ class Task(Protocol):
         capture: bool = False,
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
+        prompt: AssignPrompt | None = None,
     ) -> Any:  # the backend's raw payload
         """Call with already-serialized arguments, as a child of this task.
 
@@ -334,6 +373,7 @@ class Task(Protocol):
         capture: bool = False,
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
+        prompt: AssignPrompt | None = None,
     ) -> AsyncIterator[Any]:
         """Stream with already-serialized arguments, as a child of this task.
 
@@ -464,13 +504,14 @@ class LocalTask:
         """A local task is never resumed: nothing to watch."""
         yield
 
-    def hold(self, message: str, *, lost: AgentLost | None = None) -> None:
-        """Nobody decides for a local task: it logs ``message`` and carries on, as if resumed."""
-        logger.log(logging.WARNING, "hold (a local task carries on): %s", message)
+    def hold(self, message: str, *, prompt: AssignPrompt | None = None, lost: AgentLost | None = None) -> Decision:
+        """Nobody decides for a local task: it logs ``message`` and carries on, approved."""
+        logger.log(logging.WARNING, "hold (a local task carries on, approved): %s", message)
+        return Decision(approved=True, auto=True)
 
-    async def ahold(self, message: str, *, lost: AgentLost | None = None) -> None:
-        """Nobody decides for a local task: it logs ``message`` and carries on, as if resumed."""
-        self.hold(message, lost=lost)
+    async def ahold(self, message: str, *, prompt: AssignPrompt | None = None, lost: AgentLost | None = None) -> Decision:
+        """Nobody decides for a local task: it logs ``message`` and carries on, approved."""
+        return self.hold(message, prompt=prompt, lost=lost)
 
     def call(
         self,
@@ -494,6 +535,7 @@ class LocalTask:
         capture: bool = False,
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
+        prompt: AssignPrompt | None = None,
         **kwargs: Any,
     ) -> Any:
         """Refuse: a local task cannot call.
@@ -525,6 +567,7 @@ class LocalTask:
         capture: bool = False,
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
+        prompt: AssignPrompt | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[Any]:
         """Refuse: a local task cannot call.
@@ -546,6 +589,7 @@ class LocalTask:
         capture: bool = False,
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
+        prompt: AssignPrompt | None = None,
     ) -> Any:
         """Refuse: a local task cannot call.
 
@@ -565,6 +609,7 @@ class LocalTask:
         capture: bool = False,
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
+        prompt: AssignPrompt | None = None,
     ) -> AsyncIterator[Any]:
         """Refuse: a local task cannot call.
 

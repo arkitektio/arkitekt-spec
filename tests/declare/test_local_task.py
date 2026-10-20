@@ -7,7 +7,7 @@ import time
 import pytest
 
 from arkitekt_spec.declare.agents.errors import NoCallerError
-from arkitekt_spec.declare.task import AssignmentHook, LocalTask, LogLevel, Task, is_task
+from arkitekt_spec.declare.task import AssignmentHook, AssignPrompt, Decision, LocalTask, LogLevel, Task, is_task
 
 
 class Target:
@@ -99,3 +99,15 @@ def test_a_local_task_takes_effects_without_recording_them() -> None:
     now, drawn = asyncio.run(effects())
     assert now >= before and len(drawn) == 4
     assert isinstance(task, Task), "still the spec's Task"
+
+
+def test_a_local_task_holds_for_nobody_and_carries_on_approved(caplog: pytest.LogCaptureFixture) -> None:
+    task = Task.local()
+    prompt = AssignPrompt(title="Overwrite the plate", description="It holds last week's run.")
+
+    with caplog.at_level(logging.WARNING, logger="arkitekt.task"):
+        decision = task.hold("Overwrite?", prompt=prompt)
+        awaited = asyncio.run(task.ahold("Overwrite?"))
+
+    assert decision == awaited == Decision(approved=True, auto=True)
+    assert "Overwrite?" in caplog.text

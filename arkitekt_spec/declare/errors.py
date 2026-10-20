@@ -39,6 +39,22 @@ class NotAWorkflowError(RekuestError):
 
 
 
+class DeniedError(RekuestError):
+    """A person refused to let a call run: the server held the child for approval, and
+    it was denied. Nothing ran. Raised at the call, which decides what that means.
+
+    Attributes:
+        answer: What the person said, if anything.
+        task: The id of the denied child task.
+    """
+
+    def __init__(self, answer: str | None = None, *, task: str | None = None) -> None:
+        super().__init__(f"The call was denied: {answer}" if answer else "The call was denied.")
+        self.answer = answer
+        self.task = task
+
+
+
 class AgentLost(RekuestError):
     """The agent running a call died while it ran. Not a failure: how it ended is unknown.
 
