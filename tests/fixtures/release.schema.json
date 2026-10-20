@@ -1303,6 +1303,54 @@
       "title": "ComponentPropInput",
       "type": "object"
     },
+    "ContainerEngineCapability": {
+      "additionalProperties": false,
+      "description": "The container engine's API socket: the app starts and stops containers itself.\n\nEquivalent to root on the machine. The installer finds the socket \u2014 Docker's, a\nrootless engine's under ``$XDG_RUNTIME_DIR``, Podman's \u2014 and mounts it at ``target``.",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why the app needs it, in a sentence: shown to the person who agrees to it.",
+          "title": "Description"
+        },
+        "kind": {
+          "const": "container_engine",
+          "default": "container_engine",
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "description": "What the capability is called within the flavour: the key an operator answers to, and what the grant is recorded under.",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "description": "If false, the app runs without it and the person installing it may decline it.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "target": {
+          "default": "/var/run/docker.sock",
+          "description": "Where the socket is mounted inside the container.",
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ContainerEngineCapability",
+      "type": "object"
+    },
     "CpuSelector": {
       "additionalProperties": false,
       "description": "CPU requirements of the flavour.",
@@ -1771,6 +1819,67 @@
       "title": "DescriptorOperator",
       "type": "string"
     },
+    "DeviceCapability": {
+      "additionalProperties": false,
+      "description": "A device of the host, passed through: a camera, a serial port, a USB device.",
+      "properties": {
+        "class": {
+          "description": "What kind of device it is, so the installer can offer the matching ones.",
+          "enum": [
+            "video",
+            "serial",
+            "usb",
+            "dri",
+            "other"
+          ],
+          "title": "Class",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why the app needs it, in a sentence: shown to the person who agrees to it.",
+          "title": "Description"
+        },
+        "kind": {
+          "const": "device",
+          "default": "device",
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "description": "What the capability is called within the flavour: the key an operator answers to, and what the grant is recorded under.",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "description": "If false, the app runs without it and the person installing it may decline it.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "target": {
+          "description": "Where the device appears inside the container, e.g. `/dev/video0`.",
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "class",
+        "target"
+      ],
+      "title": "DeviceCapability",
+      "type": "object"
+    },
     "DynamicValueInput": {
       "additionalProperties": false,
       "description": "A bound state pointer referencing a variable inside a Blok state instance.",
@@ -1895,6 +2004,102 @@
       ],
       "title": "Execution",
       "type": "string"
+    },
+    "FolderCapability": {
+      "additionalProperties": false,
+      "description": "A folder of the host, mounted into the container.",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why the app needs it, in a sentence: shown to the person who agrees to it.",
+          "title": "Description"
+        },
+        "kind": {
+          "const": "folder",
+          "default": "folder",
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "description": "What the capability is called within the flavour: the key an operator answers to, and what the grant is recorded under.",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "readOnly": {
+          "default": true,
+          "description": "Whether the app only reads it. A writable folder is granted only on request.",
+          "title": "Readonly",
+          "type": "boolean"
+        },
+        "required": {
+          "default": true,
+          "description": "If false, the app runs without it and the person installing it may decline it.",
+          "title": "Required",
+          "type": "boolean"
+        },
+        "target": {
+          "description": "Where the folder is mounted inside the container.",
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "target"
+      ],
+      "title": "FolderCapability",
+      "type": "object"
+    },
+    "HostNetworkCapability": {
+      "additionalProperties": false,
+      "description": "The host's network stack instead of the container's own: for discovery protocols\nand devices that are reached by broadcast.",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why the app needs it, in a sentence: shown to the person who agrees to it.",
+          "title": "Description"
+        },
+        "kind": {
+          "const": "host_network",
+          "default": "host_network",
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "description": "What the capability is called within the flavour: the key an operator answers to, and what the grant is recorded under.",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "description": "If false, the app runs without it and the person installing it may decline it.",
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "HostNetworkCapability",
+      "type": "object"
     },
     "ImplementationInput": {
       "additionalProperties": false,
@@ -2267,6 +2472,55 @@
         "key"
       ],
       "title": "LabelSelector",
+      "type": "object"
+    },
+    "LinuxCapability": {
+      "additionalProperties": false,
+      "description": "One Linux capability added to the container (``cap_add``).",
+      "properties": {
+        "cap": {
+          "description": "The capability, without the `CAP_` prefix, e.g. `SYS_NICE`.",
+          "pattern": "^[A-Z][A-Z_]+$",
+          "title": "Cap",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why the app needs it, in a sentence: shown to the person who agrees to it.",
+          "title": "Description"
+        },
+        "kind": {
+          "const": "linux_capability",
+          "default": "linux_capability",
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "description": "What the capability is called within the flavour: the key an operator answers to, and what the grant is recorded under.",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "description": "If false, the app runs without it and the person installing it may decline it.",
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "cap"
+      ],
+      "title": "LinuxCapability",
       "type": "object"
     },
     "LockDefinitionInput": {
@@ -2763,6 +3017,44 @@
           "description": "When the image was built.",
           "title": "Built At"
         },
+        "capabilities": {
+          "description": "What the image must be granted on the machine it runs on.",
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "container_engine": "#/$defs/ContainerEngineCapability",
+                "device": "#/$defs/DeviceCapability",
+                "folder": "#/$defs/FolderCapability",
+                "host_network": "#/$defs/HostNetworkCapability",
+                "linux_capability": "#/$defs/LinuxCapability",
+                "shared_memory": "#/$defs/SharedMemoryCapability"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ContainerEngineCapability"
+              },
+              {
+                "$ref": "#/$defs/DeviceCapability"
+              },
+              {
+                "$ref": "#/$defs/FolderCapability"
+              },
+              {
+                "$ref": "#/$defs/HostNetworkCapability"
+              },
+              {
+                "$ref": "#/$defs/LinuxCapability"
+              },
+              {
+                "$ref": "#/$defs/SharedMemoryCapability"
+              }
+            ]
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
         "description": {
           "anyOf": [
             {
@@ -3245,6 +3537,55 @@
         "ward"
       ],
       "title": "SearchAssignWidgetInput",
+      "type": "object"
+    },
+    "SharedMemoryCapability": {
+      "additionalProperties": false,
+      "description": "More shared memory (``/dev/shm``) than the engine's default of 64 MB.",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why the app needs it, in a sentence: shown to the person who agrees to it.",
+          "title": "Description"
+        },
+        "kind": {
+          "const": "shared_memory",
+          "default": "shared_memory",
+          "title": "Kind",
+          "type": "string"
+        },
+        "min": {
+          "description": "The shared memory the app needs, in MB.",
+          "exclusiveMinimum": 0,
+          "title": "Min",
+          "type": "integer"
+        },
+        "name": {
+          "description": "What the capability is called within the flavour: the key an operator answers to, and what the grant is recorded under.",
+          "pattern": "^[a-z0-9][a-z0-9_-]{0,62}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "description": "If false, the app runs without it and the person installing it may decline it.",
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "min"
+      ],
+      "title": "SharedMemoryCapability",
       "type": "object"
     },
     "SliderAssignWidgetInput": {

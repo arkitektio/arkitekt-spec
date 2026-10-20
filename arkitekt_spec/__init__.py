@@ -7,6 +7,7 @@ arkitekt's plugin CLI writes it, and the kabinet server reads it.
 - :class:`AppManifest` and :class:`Requirement`: who the app is, what services it needs.
 - :class:`Inspection`: what the app declares, in the action language of :mod:`.actions`.
 - :data:`Selector`: where a flavour of it may run.
+- :data:`Capability`: what a flavour must be granted where it runs.
 - :class:`ReleaseDescriptor`: a release as its registry repository carries it (:mod:`.release`).
 - :class:`DeploymentsFile`: ``.arkitekt/deployments.yaml``, the images a repo publishes.
 """
@@ -17,6 +18,17 @@ from pydantic import TypeAdapter
 
 from arkitekt_spec import actions
 from arkitekt_spec.actions import definition_hash
+from arkitekt_spec.capabilities import (
+    CAPABILITY_KINDS,
+    BaseCapability,
+    Capability,
+    ContainerEngineCapability,
+    DeviceCapability,
+    FolderCapability,
+    HostNetworkCapability,
+    LinuxCapability,
+    SharedMemoryCapability,
+)
 from arkitekt_spec.declaration import AppDeclaration
 from arkitekt_spec.deployment import (
     DEPLOYMENTS_PATH,
@@ -70,7 +82,13 @@ def selector_adapter() -> TypeAdapter[Selector]:
     return TypeAdapter(Selector)
 
 
+def capability_adapter() -> TypeAdapter[Capability]:
+    """A validator for a single capability, dispatched on ``kind``."""
+    return TypeAdapter(Capability)
+
+
 __all__ = [
+    "CAPABILITY_KINDS",
     "DEFAULT_ENTRYPOINT",
     "DEPLOYMENTS_PATH",
     "RELEASE_MEDIA_TYPE",
@@ -80,13 +98,20 @@ __all__ = [
     "AppDeclaration",
     "AppImage",
     "AppManifest",
+    "BaseCapability",
     "BaseSelector",
+    "Capability",
+    "ContainerEngineCapability",
     "CpuSelector",
     "CudaSelector",
     "DeploymentsFile",
+    "DeviceCapability",
     "DockerImage",
+    "FolderCapability",
+    "HostNetworkCapability",
     "Inspection",
     "LabelSelector",
+    "LinuxCapability",
     "OneApiSelector",
     "RamSelector",
     "ReleaseDescriptor",
@@ -94,7 +119,9 @@ __all__ = [
     "Requirement",
     "RocmSelector",
     "Selector",
+    "SharedMemoryCapability",
     "actions",
+    "capability_adapter",
     "definition_hash",
     "dump_deployments",
     "dump_descriptor",

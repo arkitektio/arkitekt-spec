@@ -4,9 +4,10 @@ import datetime
 from collections.abc import Mapping
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, SerializerFunctionWrapHandler, field_validator, model_serializer
 
 from arkitekt_spec.base import WireModel
+from arkitekt_spec.capabilities import Capability, unique_names
 from arkitekt_spec.inspection import Inspection
 from arkitekt_spec.manifest import AppManifest
 from arkitekt_spec.selectors import Selector
@@ -38,8 +39,27 @@ class AppImage(WireModel):
     selectors: list[Selector] = Field(
         default_factory=list, description="Where the image may be placed."
     )
+    capabilities: list[Capability] = Field(
+        default_factory=list,
+        description="What the image must be granted on the machine it runs on.",
+    )
     inspection: Inspection
     image: DockerImage
+
+    @field_validator("capabilities")
+    @classmethod
+    def _named_once(cls, value: list[Capability]) -> list[Capability]:
+        unique_names(list(value))
+        return value
+
+    @model_serializer(mode="wrap")
+    def _without_no_capabilities(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # Left out when there are none: the bytes of everything written before flavours
+        # had capabilities stay what they were, and a descriptor's digest is its identity.
+        data: dict[str, Any] = handler(self)
+        if not self.capabilities:
+            data.pop("capabilities", None)
+        return data
 
 
 class DeploymentsFile(WireModel):
