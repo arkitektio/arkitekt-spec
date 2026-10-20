@@ -7,7 +7,15 @@ import time
 import pytest
 
 from arkitekt_spec.declare.agents.errors import NoCallerError
-from arkitekt_spec.declare.task import AssignmentHook, AssignPrompt, Decision, LocalTask, LogLevel, Task, is_task
+from arkitekt_spec.declare.task import (
+    AssignmentHook,
+    AssignPrompt,
+    Decision,
+    LocalTask,
+    LogLevel,
+    Task,
+    is_task,
+)
 
 
 class Target:
