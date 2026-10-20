@@ -4,8 +4,9 @@ import pytest
 
 from arkitekt_spec.actions import DescriptorOperator
 from arkitekt_spec.declare.annotations import Provides, Requires
-from arkitekt_spec.declare.descriptors import holds, unfulfilled
+from arkitekt_spec.declare.descriptors import holds, resolve_pointer, unfulfilled, unmet_state
 from arkitekt_spec.declare.structures.registry import StructureRegistry
+from arkitekt_spec.declare.task import StateRequirement
 
 
 def requires(key: str, operator: str, value: object = None) -> Requires:
@@ -103,3 +104,73 @@ def test_a_structure_without_a_describer_has_none() -> None:
         return Thing(id)
 
     assert registry.get_fullfilled_structure("@t/thing").describe is None
+
+
+def state(path: str, operator: str, value: object = None, name: str = "stage") -> StateRequirement:
+    return StateRequirement(state=name, path=path, operator=DescriptorOperator(operator), value=value)
+
+
+STAGE = {"busy": False, "position": [1.5, 2.0], "mode": "idle", "a/b": {"~x": 1}}
+
+
+@pytest.mark.parametrize(
+    "requirement",
+    [
+        state("/busy", "EQUALS", False),
+        state("/mode", "IN", ["idle", "parked"]),
+        state("/position/0", "GTE", 1.0),
+        state("/position/1", "LTE", 2.0),
+        state("/position", "CONTAINS", 2.0),
+        state("/a~1b/~0x", "EQUALS", 1),
+        state("/busy", "EXISTS"),
+        state("/gone", "EXISTS", False),
+    ],
+)
+def test_a_state_requirement_that_holds_is_met(requirement: StateRequirement) -> None:
+    assert unmet_state([requirement], {"stage": STAGE}) == ()
+
+
+def test_a_state_requirement_that_fails_names_the_value_found() -> None:
+    assert unmet_state([state("/busy", "EQUALS", True)], {"stage": STAGE}) == (
+        "stage/busy EQUALS True (actual False)",
+    )
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/gone", "/position/2", "/position/x", "/position/01", "/busy/deeper"],
+)
+def test_a_path_the_state_does_not_hold_fails(path: str) -> None:
+    (failure,) = unmet_state([state(path, "EQUALS", 1)], {"stage": STAGE})
+    assert failure.endswith("(missing)")
+
+
+def test_a_state_the_agent_does_not_have_fails() -> None:
+    (failure,) = unmet_state([state("/busy", "EQUALS", False, name="laser")], {"stage": STAGE})
+    assert "no state 'laser'" in failure
+
+
+def test_exists_false_fails_on_a_present_path() -> None:
+    assert unmet_state([state("/busy", "EXISTS", False)], {"stage": STAGE}) != ()
+
+
+def test_a_comparison_that_cannot_be_made_fails_rather_than_raises() -> None:
+    (failure,) = unmet_state([state("/mode", "GTE", 1)], {"stage": STAGE})
+    assert "GTE orders numbers" in failure
+
+
+def test_every_failing_requirement_is_reported() -> None:
+    failures = unmet_state(
+        [state("/busy", "EQUALS", True), state("/mode", "EQUALS", "idle"), state("/gone", "EXISTS")],
+        {"stage": STAGE},
+    )
+    assert len(failures) == 2
+
+
+def test_a_state_requirement_path_is_a_pointer() -> None:
+    with pytest.raises(ValueError):
+        StateRequirement(state="stage", path="busy", operator="EQUALS", value=False)
+
+
+def test_resolve_pointer_of_the_empty_path_is_the_document() -> None:
+    assert resolve_pointer(STAGE, "") is STAGE

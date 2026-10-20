@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from arkitekt_spec.actions import DescriptorOperator
 from arkitekt_spec.declare.agents.errors import NoCallerError
 from arkitekt_spec.declare.errors import AgentLost
 from arkitekt_spec.declare.structures.types import JSONSerializable
@@ -85,6 +86,33 @@ class AssignPrompt(BaseModel):
     title: str = Field(description="One line: what the task wants to do.")
     description: str | None = Field(default=None, description="A few sentences on why.")
     model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class StateRequirement(BaseModel):
+    """What the called agent's state must hold for a call to run.
+
+    The agent tests it after taking the action's locks and the locks the named state
+    requires, before any of the action runs; on a mismatch the call raises
+    :class:`~arkitekt_spec.declare.errors.StatePreconditionFailed`. A state that declares
+    no ``required_locks`` is guarded by nothing, so for it the test is a snapshot: the
+    state may still change while the action runs.
+
+    ``path`` is an RFC 6901 pointer into the state's value (``/busy``,
+    ``/stage/position/0``). A path the state does not hold fails, except for
+    ``EXISTS`` with ``value=False``, which asks for absence.
+    """
+
+    state: str = Field(description="The state's interface on the agent (`@app.state(name=...)`).")
+    path: str = Field(
+        pattern=r"^/",
+        description="An RFC 6901 pointer into the state's value, e.g. '/busy' or '/stage/position/0'.",
+    )
+    operator: DescriptorOperator = Field(description="How the value at `path` is compared with `value`.")
+    value: Any | None = Field(
+        default=None,
+        description="What the value is compared with: IN/NOT_IN take a list, LTE/GTE a number, EXISTS true or false.",
+    )
+    model_config = ConfigDict(frozen=True, extra="forbid", use_enum_values=True)
 
 
 class Decision(BaseModel):
@@ -291,6 +319,7 @@ class Task(Protocol):
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
         prompt: AssignPrompt | None = None,
+        state_requires: list[StateRequirement] | None = None,
         **kwargs: Any,  # ditto, by keyword
     ) -> Any:  # whatever the action returns
         """Call an action as a child of this task.
@@ -301,9 +330,14 @@ class Task(Protocol):
         Unless the run is in auto-mode, the server holds the child until a person
         approves it; ``prompt`` is what they are shown about why.
 
+        ``state_requires`` is what the child's agent's state must hold for it to run
+        (:class:`StateRequirement`).
+
         Raises:
             NoCallerError: If nothing routes this task's calls.
             DeniedError: If a person refused to let the child run.
+            StatePreconditionFailed: If the child's agent's state did not match
+                ``state_requires``; nothing of it ran.
         """
         ...
 
@@ -330,6 +364,7 @@ class Task(Protocol):
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
         prompt: AssignPrompt | None = None,
+        state_requires: list[StateRequirement] | None = None,
         **kwargs: Any,  # ditto, by keyword
     ) -> AsyncIterator[Any]:
         """Stream a generator action's yields as a child of this task.
@@ -351,6 +386,7 @@ class Task(Protocol):
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
         prompt: AssignPrompt | None = None,
+        state_requires: list[StateRequirement] | None = None,
     ) -> Any:  # the backend's raw payload
         """Call with already-serialized arguments, as a child of this task.
 
@@ -374,6 +410,7 @@ class Task(Protocol):
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
         prompt: AssignPrompt | None = None,
+        state_requires: list[StateRequirement] | None = None,
     ) -> AsyncIterator[Any]:
         """Stream with already-serialized arguments, as a child of this task.
 
@@ -536,6 +573,7 @@ class LocalTask:
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
         prompt: AssignPrompt | None = None,
+        state_requires: list[StateRequirement] | None = None,
         **kwargs: Any,
     ) -> Any:
         """Refuse: a local task cannot call.
@@ -568,6 +606,7 @@ class LocalTask:
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
         prompt: AssignPrompt | None = None,
+        state_requires: list[StateRequirement] | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[Any]:
         """Refuse: a local task cannot call.
@@ -590,6 +629,7 @@ class LocalTask:
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
         prompt: AssignPrompt | None = None,
+        state_requires: list[StateRequirement] | None = None,
     ) -> Any:
         """Refuse: a local task cannot call.
 
@@ -610,6 +650,7 @@ class LocalTask:
         escalate_to_interrupt: bool = False,
         cancel_timeout: float | None = None,
         prompt: AssignPrompt | None = None,
+        state_requires: list[StateRequirement] | None = None,
     ) -> AsyncIterator[Any]:
         """Refuse: a local task cannot call.
 

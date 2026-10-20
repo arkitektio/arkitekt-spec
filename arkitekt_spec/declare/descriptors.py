@@ -17,9 +17,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from arkitekt_spec.actions import ProvidesInput, RequiresInput
+
+if TYPE_CHECKING:
+    from arkitekt_spec.declare.task import StateRequirement
 
 Constraint = RequiresInput | ProvidesInput
 
@@ -95,6 +98,76 @@ def unfulfilled(constraints: Iterable[Constraint], descriptors: Mapping[str, Any
             failures.append(
                 f"{constraint.key} {operator_name(constraint.operator)} {constraint.value!r} (actual {actual!r})"
             )
+    return tuple(failures)
+
+
+_MISSING = object()
+
+
+def resolve_pointer(document: Any, pointer: str) -> Any:
+    """The value at an RFC 6901 pointer, or ``_MISSING`` when the document has none.
+
+    ``""`` is the whole document; ``/a/0`` is key ``a``, then index 0. ``~1`` and ``~0``
+    stand for ``/`` and ``~`` in a key.
+    """
+    if pointer == "":
+        return document
+    if not pointer.startswith("/"):
+        raise ValueError(f"{pointer!r} is not a JSON pointer: it must start with '/'")
+    current = document
+    for raw in pointer[1:].split("/"):
+        token = raw.replace("~1", "/").replace("~0", "~")
+        if isinstance(current, Mapping):
+            if token not in current:
+                return _MISSING
+            current = current[token]
+        elif isinstance(current, Sequence) and not isinstance(current, (str, bytes)):
+            if not token.isdigit() or (len(token) > 1 and token.startswith("0")):
+                return _MISSING
+            index = int(token)
+            if index >= len(current):
+                return _MISSING
+            current = current[index]
+        else:
+            return _MISSING
+    return current
+
+
+def unmet_state(requirements: Iterable[StateRequirement], states: Mapping[str, Any]) -> tuple[str, ...]:
+    """Every state requirement these states do not satisfy, one line each.
+
+    Unlike :func:`unfulfilled`, nothing is skipped: a state the agent does not have, or
+    a path its value does not hold, is a failure (except ``EXISTS`` with
+    ``value=False``, which asks for absence). An operator that cannot compare the
+    values found (ordering a string) is a failure too, never an exception.
+
+    Args:
+        requirements: A call's ``state_requires``.
+        states: The agent's states by interface, each as its JSON value.
+
+    Returns:
+        The failures, empty when every requirement holds.
+    """
+    failures: list[str] = []
+    for requirement in requirements:
+        name = operator_name(requirement.operator)
+        where = f"{requirement.state}{requirement.path}"
+        if requirement.state not in states:
+            failures.append(f"{where}: the agent has no state {requirement.state!r}")
+            continue
+        actual = resolve_pointer(states[requirement.state], requirement.path)
+        if actual is _MISSING:
+            if name == "EXISTS" and requirement.value is False:
+                continue
+            failures.append(f"{where} {name} {requirement.value!r} (missing)")
+            continue
+        try:
+            ok = holds(requirement.operator, actual, requirement.value)
+        except (TypeError, ValueError) as error:
+            failures.append(f"{where} {name} {requirement.value!r}: {error}")
+            continue
+        if not ok:
+            failures.append(f"{where} {name} {requirement.value!r} (actual {actual!r})")
     return tuple(failures)
 
 

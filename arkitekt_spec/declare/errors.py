@@ -55,6 +55,30 @@ class DeniedError(RekuestError):
 
 
 
+STATE_PRECONDITION = "STATE_PRECONDITION"
+"""The code a ``FAILED`` task carries when its agent's state did not match the call's
+``state_requires``: nothing of the action ran."""
+
+
+class StatePreconditionFailed(ErrorCallError):
+    """A call's ``state_requires`` did not hold on its agent's state, so nothing of the
+    action ran. Raised at the call. The message names every requirement that failed
+    with the value found.
+
+    It is an :class:`ErrorCallError`, so code that already handles failed calls handles
+    this one; catch it first to tell "the state was not what I expected" from a failure
+    of the action itself.
+
+    Attributes:
+        task: The id of the refused task, when known.
+    """
+
+    def __init__(self, message: str, *, task: str | None = None) -> None:
+        super().__init__(message)
+        self.task = task
+
+
+
 class AgentLost(RekuestError):
     """The agent running a call died while it ran. Not a failure: how it ended is unknown.
 
