@@ -899,6 +899,22 @@
       "additionalProperties": false,
       "description": "Which locks does the agent provide in general",
       "properties": {
+        "args": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ArgPortInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The items this Blok is opened for, declared like an action's args and read under `@args.<key>`. A UI offers the Blok on any item its args accept. HTML bloks only.",
+          "title": "Args"
+        },
         "catalog": {
           "anyOf": [
             {

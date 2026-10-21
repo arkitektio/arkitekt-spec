@@ -829,6 +829,11 @@ class BlokImplementationInput(BlokRules, ActionModel):
         default=None,
         description="The node of `for_model` this Blok attaches to; the model's root when absent.",
     )
+    args: tuple["ArgPortInput", ...] | None = Field(
+        default=None,
+        description="The items this Blok is opened for, declared like an action's args and read under `@args.<key>`. A UI offers the Blok on any item its args accept. HTML bloks only.",
+    )
+    "The items this Blok is opened for, read under `@args.<key>`. None when there are none, so a blok without args sends, and the agent hashes (`exclude_none`), what it always did."
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )

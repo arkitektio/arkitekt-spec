@@ -86,6 +86,10 @@ def build_declared_bloks(
             for_model=declaration.for_model,
             for_node=declaration.for_node,
         )
+        if declaration.args:
+            # Unset otherwise: the declaration is dumped ``exclude_unset``, so a blok without
+            # args sends, and hashes, what it did before bloks took any.
+            fields["args"] = declaration.args
         # Checked as its tree; sent as the BSX it was written in, when it was, which the
         # server parses into the same tree.
         checked = check_blok(BlokImplementationInput(components=(declaration.component,), **fields))

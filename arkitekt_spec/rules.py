@@ -352,7 +352,24 @@ class BlokRules(BaseModel):
         if blok.components is None and blok.source is None:
             raise ValueError("a blok is sent as its components or as its BSX source")
         check_demo_state(blok.dependencies, blok.demo_state)
+        _check_blok_args(self)
         return self
+
+
+def _check_blok_args(rules: BaseModel) -> None:
+    """The server's ``check_blok_args``: an html blok's args, keyed once, owning the ``args`` root."""
+    blok: Any = rules
+    if not blok.args:
+        return
+    context = getattr(blok.context, "value", blok.context)
+    if context != "HTML":
+        raise ValueError(f"Blok manifest: only an html blok takes args, not a {context} blok")
+    keys = [port.key for port in blok.args]
+    twice = next((key for key in keys if keys.count(key) > 1), None)
+    if twice is not None:
+        raise ValueError(f"Blok manifest args: duplicate key {twice!r}")
+    if any(dependency.key == "args" for dependency in blok.dependencies or ()):
+        raise ValueError("Blok manifest: a blok with args reads them under 'args', so no dependency can be called that")
 
 
 class AgentRules(BaseModel):

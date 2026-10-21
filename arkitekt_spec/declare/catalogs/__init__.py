@@ -94,6 +94,8 @@ CONTEXT_ROOTS: Mapping[str, str] = {SCENE_CONTEXT: "Scene", LOGO_CONTEXT: "SVG",
 """The one component a blok of each of these contexts has as its root."""
 ACTION_LOGO_TASK_ROOT = "task"
 """The path root an action logo reads its task at: null until the viewer runs the action."""
+BLOK_ARGS_ROOT = "args"
+"""The path root a blok reads the items it is opened for at (``@args.image``): null until it is opened for one."""
 
 LOGO_MAX_NODES = 200
 """The most components a logo blok may have, counted once each as written."""

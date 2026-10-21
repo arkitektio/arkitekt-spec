@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, SkipValidation
 from arkitekt_spec.actions import (
     ASSET_SOURCE_MAX_LENGTH,
     AgentDependencyInput,
+    ArgPortInput,
     AssetInput,
     AssetKind,
     AssignWidgetInput,
@@ -56,6 +57,7 @@ from arkitekt_spec.declare.blok.parser import bsx as parse_bsx
 from arkitekt_spec.declare.blok.registry import build_declared_bloks
 from arkitekt_spec.declare.blok.validate import (
     RESERVED_ROOTS,
+    check_args_reads,
     check_context_root,
     check_logo_complexity,
     check_logo_palette,
@@ -64,6 +66,7 @@ from arkitekt_spec.declare.blok.validate import (
 from arkitekt_spec.declare.catalogs import (
     ACTION_LOGO_TASK_ROOT,
     ASSETS_SEGMENT,
+    BLOK_ARGS_ROOT,
     MODEL_REF_PATTERN,
     Catalog,
     CatalogView,
@@ -77,6 +80,7 @@ from arkitekt_spec.declare.catalogs import (
     standard_view,
 )
 from arkitekt_spec.declare.coercible_types import OptimisticCoercible
+from arkitekt_spec.declare.definition.define import convert_object_to_argport
 from arkitekt_spec.declare.errors import AppContextError, RegistryFrozenError
 from arkitekt_spec.declare.protocol.types import AnyState
 from arkitekt_spec.declare.provider import Provider, declare_provider
@@ -116,6 +120,8 @@ class BlokDeclaration(BaseModel):
     default: bool = False
     for_model: str | None = None
     for_node: str | None = None
+    args: tuple[ArgPortInput, ...] = ()
+    """The items the blok is opened for, read under ``@args.<key>``."""
 
 
 #: How each kind of asset is recognised: the extensions it is written with, and how
@@ -687,6 +693,7 @@ class AppRegistry(BaseModel):
         default: bool = False,
         for_model: str | None = None,
         for_node: str | None = None,
+        args: "Mapping[str, Any] | None" = None,
     ) -> None:
         """Register a blok component tree in the registry.
 
@@ -729,11 +736,18 @@ class AppRegistry(BaseModel):
                 ``for_node`` is clicked. Html bloks only.
             for_node: The node of ``for_model`` to attach to; the model's root
                 when left out.
+            args: The items the blok is opened for, typed like an action's
+                arguments: ``{"image": Image}``, ``Optional[...]`` for one it can do
+                without, ``Annotated[...]`` for ``requires``. A client offers the
+                blok on any item its args accept, and the tree reads the item at
+                ``@args.image`` -- null until the blok is opened for one. Html
+                bloks only.
 
         Raises:
             ValueError: If the name or component is missing, a reference does not
-                resolve, a declared catalog rejects the tree, or a ``local_state``
-                key is reserved or names a dependency.
+                resolve, a declared catalog rejects the tree, a ``local_state``
+                key is reserved or names a dependency, or ``args`` are given to a
+                blok that is not html, or the tree reads an arg it does not declare.
         """
         self._refuse_if_frozen(f"the blok {name!r}")
         if not name:
@@ -761,6 +775,24 @@ class AppRegistry(BaseModel):
                 f"Blok '{name}' names {shadowed} in both demo_state and local_state"
             )
         context = ComponentContext(context.upper()) if isinstance(context, str) else context
+        arg_ports = tuple(
+            convert_object_to_argport(cls, key, self.structure_registry)
+            for key, cls in (args or {}).items()
+        )
+        if arg_ports:
+            if context != ComponentContext.HTML:
+                raise ValueError(f"Blok '{name}': only an html blok is opened for an item, so only it takes args")
+            if BLOK_ARGS_ROOT in (demo_state or ()) or BLOK_ARGS_ROOT in (local_state or ()):
+                raise ValueError(
+                    f"Blok '{name}': its args are null until it is opened for an item; "
+                    f"there is no {BLOK_ARGS_ROOT!r} to set in demo_state or local_state"
+                )
+            if any(dependency.key == BLOK_ARGS_ROOT for dependency in resolved_dependencies or ()):
+                raise ValueError(f"Blok '{name}': it reads its args under {BLOK_ARGS_ROOT!r}, so no dependency can be called that")
+            check_args_reads(component, (port.key for port in arg_ports))
+            # Like an action logo's ``task``: a root the server takes from the demo state,
+            # and the renderer fills with the item the blok is opened for.
+            local_state = {BLOK_ARGS_ROOT: {port.key: None for port in arg_ports}, **(local_state or {})}
         if context == ComponentContext.ACTION_LOGO:
             if resolved_dependencies:
                 raise ValueError(f"Blok '{name}': an action logo reads only @task, it has no dependencies")
@@ -813,6 +845,7 @@ class AppRegistry(BaseModel):
             default=default,
             for_model=for_model,
             for_node=for_node,
+            args=arg_ports,
         )
 
     def register_asset(

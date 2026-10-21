@@ -23,6 +23,7 @@ from arkitekt_spec.declare.blok.walk import (
     walk_component,
 )
 from arkitekt_spec.declare.catalogs import (
+    BLOK_ARGS_ROOT,
     CONTEXT_ROOTS,
     HTML_CONTEXT,
     LATEST_SEGMENT,
@@ -483,6 +484,51 @@ def check_context_root(node: ComponentNodeInput, context: str) -> None:
             f"{node_context(node)}: the root of a {context.lower()} blok must be a {required!r}, "
             f"not {node.component!r}"
         )
+
+
+def check_args_reads(node: ComponentNodeInput, arg_keys: Iterable[str]) -> None:
+    """Every ``@args.<key>`` the tree reads names one of the blok's declared args.
+
+    ``args`` is a local root, so nothing else checks what is read below it; a ``foreach``
+    local of the same name shadows it.
+
+    Raises:
+        ValueError: If a path reads an arg the blok does not declare, or reads ``args`` whole.
+    """
+    visitor = _ArgsVisitor(frozenset(arg_keys))
+    walk_component(node, visitor)
+
+
+class _ArgsVisitor(BlokVisitor):
+    """Checks the second segment of every path rooted at ``args``."""
+
+    def __init__(self, arg_keys: frozenset[str]) -> None:
+        self.arg_keys = arg_keys
+
+    def visit_component(self, node: ComponentNodeInput, scope: dict[str, Any], context: str) -> None:
+        return None
+
+    def visit_path(self, path: str, scope: dict[str, Any], context: str) -> None:
+        parts = path.replace("/", ".").split(".")
+        if parts[0] != BLOK_ARGS_ROOT or BLOK_ARGS_ROOT in scope:
+            return
+        if len(parts) < 2:
+            raise ValueError(f"{context} reads @{BLOK_ARGS_ROOT} whole; read one arg, e.g. @{BLOK_ARGS_ROOT}.<key>")
+        if parts[1] not in self.arg_keys:
+            declared = ", ".join(sorted(self.arg_keys)) or "none"
+            raise ValueError(f"{context} reads @{BLOK_ARGS_ROOT}.{parts[1]}, but the blok declares no such arg (declared: {declared})")
+
+    def visit_agent_call(self, call: AgentProbeInput, scope: dict[str, Any], context: str) -> None:
+        return None
+
+    def visit_util_call(self, call: UtilCallInput, scope: dict[str, Any], context: str) -> None:
+        return None
+
+    def declare_foreach_local(self, name: str, items_path: str, scope: dict[str, Any], context: str) -> Any:
+        return None
+
+    def declare_bound_call(self, name: str, call: AgentProbeInput, context: str) -> Any:
+        return None
 
 
 def check_logo_complexity(node: ComponentNodeInput, demo_state: Mapping[str, Any] | None = None) -> None:
