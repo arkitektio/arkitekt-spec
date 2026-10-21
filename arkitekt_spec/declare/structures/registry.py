@@ -234,6 +234,12 @@ def _as_bound_app(app: "BoundApp | Mapping[str, Any]") -> "BoundApp":
     return app
 
 
+def _named_by(function: Callable[..., Any], clients: Mapping[str, Any]) -> dict[str, Any]:
+    """The part of ``clients`` that ``function`` has a parameter for."""
+    parameters = inspect.signature(function).parameters
+    return {name: client for name, client in clients.items() if name in parameters}
+
+
 def injected_clients_of(
     function: Callable[..., Any], identifier: str, role: str
 ) -> dict[str, type]:
@@ -1307,9 +1313,11 @@ class StructureRegistry(BaseModel):
             # the same thing earlier, without a connection.
             raise StructureClientError(str(e)) from e
 
-        # One copy, every function at once.
+        # One copy, every function at once -- each handed only the clients it
+        # names. `wanted` is the union over expand, shrink and expand_many, so a
+        # shrinker taking the object alone must not be handed the expander's client.
         applied: dict[str, Any] = {
-            name: partial(function, **clients)
+            name: partial(function, **_named_by(function, clients))
             for name, function in (
                 ("aexpand", structure.aexpand),
                 ("aexpand_many", structure.aexpand_many),
