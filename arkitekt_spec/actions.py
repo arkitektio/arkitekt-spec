@@ -988,6 +988,16 @@ class DefinitionInput(DefinitionRules, ActionModel):
         description="Names of the UI catalogs that extend the base catalog (`base@1`, always applied) for this definition's effect and validator calls. Unknown names yield an unknown_catalog warning; conflicting operation definitions across catalogs are a registration error.",
     )
     "Names of the UI catalogs that extend the base catalog (`base@1`, always applied) for this definition's effect and validator calls. Unknown names yield an unknown_catalog warning; conflicting operation definitions across catalogs are a registration error.\nDefault: []"
+    protocols: Annotated[tuple[str, ...], GraphQLDefault("[]")] = Field(
+        default=(),
+        # Never written when empty, in any dump: a definition without hints is then
+        # the bytes it was before hints existed, which every strict reader of
+        # definitions that predates them (an older takt, kabinet's inspection
+        # import) still accepts, and an agent's hash does not move.
+        exclude_if=lambda protocols: not protocols,
+        description="Where this action means to hook in, as plain names (`on_scene_annotation`): a hint for whoever fires that hook, never a contract. The server stores them beside the ones it infers and checks nothing; a caller still matches the ports itself. Not part of the action's identity, so changing them does not change its hash.",
+    )
+    "Where this action means to hook in, as plain names: a hint, never a contract. Not part of the hash.\nDefault: []"
     port_groups: Annotated[tuple["PortGroupInput", ...], GraphQLDefault("[]")] = Field(
         validation_alias=AliasChoices("port_groups", "portGroups"),
         serialization_alias="portGroups",

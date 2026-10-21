@@ -187,6 +187,8 @@ class RegisterConfig:
     key: str | None = None
     catalogs: list[str] | None = None
     """Names of the UI catalogs that extend the base catalog (``base@1``, always applied) for the definition's effect and validator calls."""
+    protocols: list[str] | None = None
+    """Where the action means to hook in (``on_scene_annotation``): hints a caller filters on, never a contract."""
     # implementation / actor-shaping
     optimistics: list[OptimisticCoercible] | None = None
     locks: list[str] | None = None

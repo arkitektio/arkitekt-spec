@@ -558,6 +558,7 @@ def prepare_definition(
     version: str | None = None,
     key: str | None = None,
     catalogs: list[str] | None = None,
+    protocols: list[str] | None = None,
 ) -> DefinitionInput:
     """Define
 
@@ -824,6 +825,9 @@ def prepare_definition(
         stateful=stateful,
         isTestFor=tuple(is_test_for or []),
         catalogs=tuple(catalogs) if catalogs else None,
+        # Only when given: an unset field stays off the wire, so an app that hints
+        # nothing registers exactly the bytes it did before hints existed.
+        **({"protocols": tuple(protocols)} if protocols else {}),
     )
 
     return definition

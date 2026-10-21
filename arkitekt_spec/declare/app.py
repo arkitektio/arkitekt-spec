@@ -1698,6 +1698,7 @@ class AppRegistry(BaseModel):
         policy: DisconnectPolicy = KEEP,
         version: str | None = None,
         catalogs: list[str] | None = None,
+        protocols: list[str] | None = None,
         effects: Effects | None = None,
         execution: Execution = Execution.PLAIN,
         logo: "str | ComponentNodeInput | None" = None,
@@ -1739,6 +1740,8 @@ class AppRegistry(BaseModel):
                 disconnects.
             version: Version of the definition.
             catalogs: Catalogs the action is listed in.
+            protocols: Where the action means to hook in (``on_scene_annotation``):
+                hints a caller filters on, never a contract, and not part of the hash.
             effects: What running it again would do to the world. Informational;
                 None takes the app's default.
             execution: ``Execution.WORKFLOW`` to call other actions and be resumed
@@ -1777,6 +1780,7 @@ class AppRegistry(BaseModel):
             policy=policy,
             version=version,
             catalogs=catalogs,
+            protocols=protocols,
             effects=effects,
             execution=execution,
             logo=logo,

@@ -95,5 +95,6 @@ def prepare_definition_from_config(
         key=config.key,
         version=config.version,
         catalogs=config.catalogs,
+        protocols=config.protocols,
         **prepare_overrides,
     )

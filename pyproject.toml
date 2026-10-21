@@ -11,7 +11,7 @@ license = "MIT"
 # them -- no rekuest, rath, koil or fakts -- only on small pure-python packages.
 # graphql-core is optional: with it installed, search queries get their full shape check.
 dependencies = [
-    "pydantic>=2.11",
+    "pydantic>=2.12",
     "pyyaml>=6",
     # The declaration layer (arkitekt_spec.declare) reads function signatures and
     # docstrings; these three are small and pure python.

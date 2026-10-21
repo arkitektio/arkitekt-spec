@@ -339,6 +339,19 @@ class DefinitionRules(BaseModel):
                 )
         return self
 
+    @model_validator(mode="after")
+    def _protocols_are_names(self) -> Self:
+        """A protocol hint is a name to filter on: one word, said once."""
+        protocols = tuple(getattr(self, "protocols", None) or ())
+        for protocol in protocols:
+            # The server stores a hint as a name of at most 1000 characters.
+            if not protocol or len(protocol) > 1000 or any(character.isspace() for character in protocol):
+                raise ValueError(f"A protocol hint is a name without whitespace, got {protocol!r}")
+        twice = sorted({protocol for protocol in protocols if protocols.count(protocol) > 1})
+        if twice:
+            raise ValueError(f"The protocol hint {', '.join(twice)} is given twice")
+        return self
+
 
 class BlokRules(BaseModel):
     """A blok implementation: sent as its tree or its source, and its demo state matches its

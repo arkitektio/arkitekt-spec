@@ -1878,6 +1878,15 @@
           "title": "Port Groups",
           "type": "array"
         },
+        "protocols": {
+          "default": [],
+          "description": "Where this action means to hook in, as plain names (`on_scene_annotation`): a hint for whoever fires that hook, never a contract. The server stores them beside the ones it infers and checks nothing; a caller still matches the ports itself. Not part of the action's identity, so changing them does not change its hash.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Protocols",
+          "type": "array"
+        },
         "pure": {
           "default": false,
           "description": "Whether the action is pure: same args always produce the same result and no side effects \u2014 its results are replayable/cacheable. Implies idempotent. Incompatible with stateful and with a PHYSICAL effect class.",
