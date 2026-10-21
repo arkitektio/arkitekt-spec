@@ -7723,6 +7723,196 @@
       ]
     },
     {
+      "name": "MikroScene",
+      "description": "One mikro scene and its stores, shared by the MikroScene parts inside it. One per blok is the supported case: a second scene's viewport also hears the window's keyboard.",
+      "acceptsChildren": true,
+      "context": "HTML",
+      "childrenContext": null,
+      "inheritsContext": false,
+      "downstreamOf": [],
+      "notDownstreamOf": [
+        "MikroScene"
+      ],
+      "props": [
+        {
+          "key": "bind",
+          "kind": "STRING",
+          "required": false,
+          "description": "Where the selection is written: {\"annotation\", \"lens\"} (structure references), or null when nothing is selected."
+        },
+        {
+          "key": "bindWorld",
+          "kind": "STRING",
+          "required": false,
+          "description": "Where the scene's world coordinate system is written, a structure reference ({\"object\", \"__identifier\": \"@mikro/coordinatesystem\"}), once the scene has loaded. What a picker of what this scene can show asks the server with: `lenses(filters: {placeableIn: {space: $world}})`, `$world` read from this path."
+        },
+        {
+          "key": "className",
+          "kind": "STRING",
+          "required": false,
+          "description": "Extra Tailwind classes appended to the element."
+        },
+        {
+          "key": "live",
+          "kind": "BOOL",
+          "required": false,
+          "description": "Follow the scene as others change it, an action writing a layer included. Defaults to true."
+        },
+        {
+          "key": "onAnnotation",
+          "kind": "CALLBACK",
+          "required": false,
+          "description": "Runs when a shape is drawn. $event is {\"annotation\", \"kind\", \"lens\", \"descriptors\"}: the shape and the lens under the probe as structure references (lens null when none was under it)."
+        },
+        {
+          "key": "onLayersChange",
+          "kind": "CALLBACK",
+          "required": false,
+          "description": "Runs when a layer comes, goes or draws another lens. $event is {\"layers\", \"added\"}; an action here that writes layers is told again, `added` names the new ones."
+        },
+        {
+          "key": "onPick",
+          "kind": "CALLBACK",
+          "required": false,
+          "description": "Runs on a deliberate click that reads a voxel (probe mode, not a vertex being placed). $event is {\"layer\", \"world\", \"voxel\", \"lens\"}."
+        },
+        {
+          "key": "onSelect",
+          "kind": "CALLBACK",
+          "required": false,
+          "description": "Runs when the user changes the selection (the selection a draw makes is reported as onAnnotation, not here). $event is {\"annotation\", \"annotations\", \"lens\"}."
+        },
+        {
+          "key": "value",
+          "kind": "DICT",
+          "required": false,
+          "description": "The scene, a structure reference: typically @args.scene."
+        }
+      ]
+    },
+    {
+      "name": "MikroSceneAnnotations",
+      "description": "The scene's shapes and the selection, as the scene page's Annotations tab lists them. Placed inside a MikroScene.",
+      "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "inheritsContext": false,
+      "downstreamOf": [
+        "MikroScene"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "className",
+          "kind": "STRING",
+          "required": false,
+          "description": "Extra Tailwind classes appended to the element."
+        },
+        {
+          "key": "height",
+          "kind": "STRING",
+          "required": false,
+          "description": "CSS height of the panel."
+        }
+      ]
+    },
+    {
+      "name": "MikroSceneLayers",
+      "description": "The scene's layers, as the scene page's Layers tab lists them. Placed inside a MikroScene.",
+      "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "inheritsContext": false,
+      "downstreamOf": [
+        "MikroScene"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "className",
+          "kind": "STRING",
+          "required": false,
+          "description": "Extra Tailwind classes appended to the element."
+        },
+        {
+          "key": "height",
+          "kind": "STRING",
+          "required": false,
+          "description": "CSS height of the panel."
+        }
+      ]
+    },
+    {
+      "name": "MikroSceneProbe",
+      "description": "What the probe reads under the cursor. Placed inside a MikroScene.",
+      "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "inheritsContext": false,
+      "downstreamOf": [
+        "MikroScene"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "className",
+          "kind": "STRING",
+          "required": false,
+          "description": "Extra Tailwind classes appended to the element."
+        },
+        {
+          "key": "height",
+          "kind": "STRING",
+          "required": false,
+          "description": "CSS height of the panel."
+        }
+      ]
+    },
+    {
+      "name": "MikroSceneViewport",
+      "description": "The scene's interactive view: draw, probe, navigate. Placed inside a MikroScene.",
+      "acceptsChildren": false,
+      "context": "HTML",
+      "childrenContext": null,
+      "inheritsContext": false,
+      "downstreamOf": [
+        "MikroScene"
+      ],
+      "notDownstreamOf": [],
+      "props": [
+        {
+          "key": "cards",
+          "kind": "BOOL",
+          "required": false,
+          "description": "Open a shape's action card on a click or a draw. Defaults to false here: the blok decides what a shape does."
+        },
+        {
+          "key": "className",
+          "kind": "STRING",
+          "required": false,
+          "description": "Extra Tailwind classes appended to the element."
+        },
+        {
+          "key": "height",
+          "kind": "STRING",
+          "required": false,
+          "description": "CSS height of the viewport. Defaults to \"32rem\"."
+        },
+        {
+          "key": "minHeight",
+          "kind": "STRING",
+          "required": false,
+          "description": "CSS minimum height of the viewport."
+        },
+        {
+          "key": "sliders",
+          "kind": "BOOL",
+          "required": false,
+          "description": "Show the Z and dimension sliders. Defaults to true."
+        }
+      ]
+    },
+    {
       "name": "Model",
       "description": "Places one GLB model in the scene. Its children bind the model's named nodes to state. A model that is missing or refused renders a placeholder that says why.",
       "acceptsChildren": true,
@@ -8179,7 +8369,7 @@
     },
     {
       "name": "OnClick",
-      "description": "Makes a node and everything beneath it clickable, with a highlight on hover. A click runs an action, opens a blok, or both.",
+      "description": "Makes a node and everything beneath it clickable, with a highlight on hover. A click runs an action, opens a blok, or both; a second click closes it, and opening one card closes the others that are not pinned.",
       "acceptsChildren": false,
       "context": "SCENE",
       "childrenContext": null,
@@ -8191,10 +8381,16 @@
       "notDownstreamOf": [],
       "props": [
         {
+          "key": "description",
+          "kind": "STRING",
+          "required": false,
+          "description": "A line under the heading of the card."
+        },
+        {
           "key": "mode",
           "kind": "STRING",
           "required": false,
-          "description": "Where the opened blok shows: \"popout\" as a card on the node, \"panel\" beside the scene. Defaults to popout."
+          "description": "Where the opened blok shows: \"popout\" as a card on the clicked spot (the viewer can drag it aside), \"panel\" beside the scene. Defaults to popout."
         },
         {
           "key": "node",
@@ -8206,13 +8402,19 @@
           "key": "onClick",
           "kind": "CALLBACK",
           "required": false,
-          "description": "Called when the node is clicked. Arguments may read event.node."
+          "description": "Called when the node is clicked (not when a drag of the view ends on it). Arguments may read event.node and event.point ([x, y, z] in meters, where it was hit)."
         },
         {
           "key": "open",
           "kind": "STRING",
           "required": false,
           "description": "The name of an html blok to show when the node is clicked."
+        },
+        {
+          "key": "title",
+          "kind": "STRING",
+          "required": false,
+          "description": "The heading of the card; it shows the node name when unset."
         }
       ]
     },
@@ -8707,7 +8909,7 @@
     },
     {
       "name": "Popout",
-      "description": "An HTML card anchored to a node that follows it as it moves. Its children are ordinary html components.",
+      "description": "An HTML card anchored to a node that follows it as it moves; the viewer can drag it aside, and a line keeps pointing at the node. Its children are ordinary html components.",
       "acceptsChildren": true,
       "context": "SCENE",
       "childrenContext": "HTML",
@@ -8719,6 +8921,12 @@
       "notDownstreamOf": [],
       "props": [
         {
+          "key": "description",
+          "kind": "STRING",
+          "required": false,
+          "description": "A line under the heading of the card."
+        },
+        {
           "key": "node",
           "kind": "STRING",
           "required": true,
@@ -8729,6 +8937,12 @@
           "kind": "BOOL",
           "required": false,
           "description": "Whether the card shows. When bound it decides alone and trigger is ignored."
+        },
+        {
+          "key": "title",
+          "kind": "STRING",
+          "required": false,
+          "description": "The heading of the card; it shows the node name when unset."
         },
         {
           "key": "trigger",
@@ -10920,30 +11134,6 @@
           "kind": "ANY",
           "required": false,
           "description": "The opacity at this stop, 0 to 1."
-        }
-      ]
-    },
-    {
-      "name": "StreamRender",
-      "description": "Renders a live lovekit broadcast.",
-      "acceptsChildren": false,
-      "context": "HTML",
-      "childrenContext": null,
-      "inheritsContext": false,
-      "downstreamOf": [],
-      "notDownstreamOf": [],
-      "props": [
-        {
-          "key": "broadcast",
-          "kind": "DICT",
-          "required": false,
-          "description": "The lovekit broadcast to render."
-        },
-        {
-          "key": "className",
-          "kind": "STRING",
-          "required": false,
-          "description": "Extra Tailwind classes appended to the widget."
         }
       ]
     },
@@ -14081,196 +14271,6 @@
           "description": "Media URL."
         }
       ]
-    },
-    {
-      "name": "MikroScene",
-      "description": "One mikro scene and its stores, shared by the MikroScene parts inside it. One per blok is the supported case: a second scene's viewport also hears the window's keyboard.",
-      "acceptsChildren": true,
-      "context": "HTML",
-      "childrenContext": null,
-      "inheritsContext": false,
-      "downstreamOf": [],
-      "notDownstreamOf": [
-        "MikroScene"
-      ],
-      "props": [
-        {
-          "key": "bind",
-          "kind": "STRING",
-          "required": false,
-          "description": "Where the selection is written: {\"annotation\", \"lens\"} (structure references), or null when nothing is selected."
-        },
-        {
-          "key": "bindWorld",
-          "kind": "STRING",
-          "required": false,
-          "description": "Where the scene's world coordinate system is written, a structure reference ({\"object\", \"__identifier\": \"@mikro/coordinatesystem\"}), once the scene has loaded. What a picker of what this scene can show asks the server with: `lenses(filters: {placeableIn: {space: $world}})`, `$world` read from this path."
-        },
-        {
-          "key": "className",
-          "kind": "STRING",
-          "required": false,
-          "description": "Extra Tailwind classes appended to the element."
-        },
-        {
-          "key": "live",
-          "kind": "BOOL",
-          "required": false,
-          "description": "Follow the scene as others change it, an action writing a layer included. Defaults to true."
-        },
-        {
-          "key": "onAnnotation",
-          "kind": "CALLBACK",
-          "required": false,
-          "description": "Runs when a shape is drawn. $event is {\"annotation\", \"kind\", \"lens\", \"descriptors\"}: the shape and the lens under the probe as structure references (lens null when none was under it)."
-        },
-        {
-          "key": "onLayersChange",
-          "kind": "CALLBACK",
-          "required": false,
-          "description": "Runs when a layer comes, goes or draws another lens. $event is {\"layers\", \"added\"}; an action here that writes layers is told again, `added` names the new ones."
-        },
-        {
-          "key": "onPick",
-          "kind": "CALLBACK",
-          "required": false,
-          "description": "Runs on a deliberate click that reads a voxel (probe mode, not a vertex being placed). $event is {\"layer\", \"world\", \"voxel\", \"lens\"}."
-        },
-        {
-          "key": "onSelect",
-          "kind": "CALLBACK",
-          "required": false,
-          "description": "Runs when the user changes the selection (the selection a draw makes is reported as onAnnotation, not here). $event is {\"annotation\", \"annotations\", \"lens\"}."
-        },
-        {
-          "key": "value",
-          "kind": "DICT",
-          "required": false,
-          "description": "The scene, a structure reference: typically @args.scene."
-        }
-      ]
-    },
-    {
-      "name": "MikroSceneAnnotations",
-      "description": "The scene's shapes and the selection, as the scene page's Annotations tab lists them. Placed inside a MikroScene.",
-      "acceptsChildren": false,
-      "context": "HTML",
-      "childrenContext": null,
-      "inheritsContext": false,
-      "downstreamOf": [
-        "MikroScene"
-      ],
-      "notDownstreamOf": [],
-      "props": [
-        {
-          "key": "className",
-          "kind": "STRING",
-          "required": false,
-          "description": "Extra Tailwind classes appended to the element."
-        },
-        {
-          "key": "height",
-          "kind": "STRING",
-          "required": false,
-          "description": "CSS height of the panel."
-        }
-      ]
-    },
-    {
-      "name": "MikroSceneLayers",
-      "description": "The scene's layers, as the scene page's Layers tab lists them. Placed inside a MikroScene.",
-      "acceptsChildren": false,
-      "context": "HTML",
-      "childrenContext": null,
-      "inheritsContext": false,
-      "downstreamOf": [
-        "MikroScene"
-      ],
-      "notDownstreamOf": [],
-      "props": [
-        {
-          "key": "className",
-          "kind": "STRING",
-          "required": false,
-          "description": "Extra Tailwind classes appended to the element."
-        },
-        {
-          "key": "height",
-          "kind": "STRING",
-          "required": false,
-          "description": "CSS height of the panel."
-        }
-      ]
-    },
-    {
-      "name": "MikroSceneProbe",
-      "description": "What the probe reads under the cursor. Placed inside a MikroScene.",
-      "acceptsChildren": false,
-      "context": "HTML",
-      "childrenContext": null,
-      "inheritsContext": false,
-      "downstreamOf": [
-        "MikroScene"
-      ],
-      "notDownstreamOf": [],
-      "props": [
-        {
-          "key": "className",
-          "kind": "STRING",
-          "required": false,
-          "description": "Extra Tailwind classes appended to the element."
-        },
-        {
-          "key": "height",
-          "kind": "STRING",
-          "required": false,
-          "description": "CSS height of the panel."
-        }
-      ]
-    },
-    {
-      "name": "MikroSceneViewport",
-      "description": "The scene's interactive view: draw, probe, navigate. Placed inside a MikroScene.",
-      "acceptsChildren": false,
-      "context": "HTML",
-      "childrenContext": null,
-      "inheritsContext": false,
-      "downstreamOf": [
-        "MikroScene"
-      ],
-      "notDownstreamOf": [],
-      "props": [
-        {
-          "key": "cards",
-          "kind": "BOOL",
-          "required": false,
-          "description": "Open a shape's action card on a click or a draw. Defaults to false here: the blok decides what a shape does."
-        },
-        {
-          "key": "className",
-          "kind": "STRING",
-          "required": false,
-          "description": "Extra Tailwind classes appended to the element."
-        },
-        {
-          "key": "height",
-          "kind": "STRING",
-          "required": false,
-          "description": "CSS height of the viewport. Defaults to \"32rem\"."
-        },
-        {
-          "key": "minHeight",
-          "kind": "STRING",
-          "required": false,
-          "description": "CSS minimum height of the viewport."
-        },
-        {
-          "key": "sliders",
-          "kind": "BOOL",
-          "required": false,
-          "description": "Show the Z and dimension sliders. Defaults to true."
-        }
-      ]
     }
   ],
   "operations": [
@@ -14981,7 +14981,7 @@
     },
     {
       "name": "logger.error",
-      "description": "Logs its arguments and shows a error toast. Has side effects; only valid in action position.",
+      "description": "Logs its arguments to the console at error level. For a message the user should see, use ui.toast. Has side effects; only valid in action position.",
       "arguments": [
         {
           "key": "values",
@@ -14994,7 +14994,7 @@
     },
     {
       "name": "logger.info",
-      "description": "Logs its arguments and shows a info toast. Has side effects; only valid in action position.",
+      "description": "Logs its arguments to the console at info level. For a message the user should see, use ui.toast. Has side effects; only valid in action position.",
       "arguments": [
         {
           "key": "values",
@@ -15007,7 +15007,7 @@
     },
     {
       "name": "logger.warn",
-      "description": "Logs its arguments and shows a warn toast. Has side effects; only valid in action position.",
+      "description": "Logs its arguments to the console at warn level. For a message the user should see, use ui.toast. Has side effects; only valid in action position.",
       "arguments": [
         {
           "key": "values",
