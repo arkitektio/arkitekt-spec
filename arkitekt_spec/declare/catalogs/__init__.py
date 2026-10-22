@@ -31,8 +31,9 @@ import functools
 import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from importlib import resources
+from typing import Literal
 
 BASE_CATALOG_NAME = "base"
 BASE_CATALOG_VERSION = 1
@@ -284,15 +285,6 @@ STANDARD_CATALOG_SOURCE = "arkitektio/orkestrator"
 """The repository whose releases publish the standard catalog, as ``blok-catalog.json``."""
 
 
-STANDARD_CATALOG_CORRECTIONS: Mapping[str, Mapping[str, object]] = {}
-"""Where the published standard catalog is known to say something the app does not do.
-
-The vendored file stays as published; what is wrong in it is set right here, by name, and
-``tests/declare/test_standard_catalog.py`` fails for an entry the file no longer needs --
-which is when to delete it. The fix belongs in the app that publishes the catalog.
-"""
-
-
 def _parse_context(raw: dict, component: str, value: object) -> str | None:  # type: ignore[type-arg]
     if value is None:
         return None
@@ -382,21 +374,9 @@ def load_standard_catalog() -> Catalog:
     ``orkestrator.json`` is the ``blok-catalog.json`` of an Orkestrator release, unmodified:
     the components that app draws and the operations it evaluates. It is the frontend's to
     write and only ever copied here (``scripts/sync_standard_catalog.py``), which is what
-    keeps a blok written against it from drifting from what is rendered.
+    keeps a blok written against it from drifting from what is rendered. Where it is wrong,
+    the fix is an Orkestrator release, not a patch here.
     """
-    catalog = load_published_standard_catalog()
-    return replace(
-        catalog,
-        components=tuple(
-            replace(component, **STANDARD_CATALOG_CORRECTIONS.get(component.name, {}))  # type: ignore[arg-type]
-            for component in catalog.components
-        ),
-    )
-
-
-@functools.lru_cache(maxsize=1)
-def load_published_standard_catalog() -> Catalog:
-    """The vendored standard catalog exactly as it was published, before the corrections."""
     text = resources.files(__package__).joinpath("orkestrator.json").read_text(encoding="utf-8")
     catalog = _parse_ui_catalog(json.loads(text))
     if catalog.name != STANDARD_CATALOG_NAME:
@@ -420,6 +400,29 @@ def standard_view() -> "CatalogView":
     return resolve_catalogs([load_standard_catalog()], authoritative=True)
 
 
+def ui_catalog_view(raw: dict) -> "CatalogView":  # type: ignore[type-arg]
+    """The view of a published UI catalog, read as the vendored standard one is read.
+
+    ``raw`` is a ``blok-catalog.json`` as a UI app exports it, e.g. a checkout's fresh
+    ``dist/catalog/blok-catalog.json``: a blok can be checked against what that checkout
+    renders before a release vendors it. Raises ``ValueError`` when the payload is not a
+    valid catalog.
+    """
+    return resolve_catalogs([parse_ui_catalog(raw)], authoritative=True)
+
+
+def parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]
+    """A ``blok-catalog.json`` payload as a :class:`Catalog`.
+
+    Raises:
+        ValueError: If the payload is not a valid catalog.
+    """
+    try:
+        return _parse_ui_catalog(raw)
+    except (KeyError, TypeError) as error:
+        raise ValueError(f"not a UI catalog payload: {error!r}") from error
+
+
 def base_version_named(name: str) -> int | None:
     """The base-catalog version ``name`` refers to, or ``None`` if it names another catalog.
 
@@ -438,11 +441,26 @@ def base_version_named(name: str) -> int | None:
 # --------------------------------------------------------------------------- diagnostics
 
 UNKNOWN_OPERATION = "unknown_operation"
+OPERATION_ARGUMENTS = "operation_arguments"
+UNKNOWN_COMPONENT = "unknown_component"
+COMPONENT_CHILDREN = "component_children"
+COMPONENT_PROPS = "component_props"
+CALLBACK_PROP_UNBOUND = "callback_prop_unbound"
+ASSET_PROP = "asset_prop"
+COMPONENT_PLACEMENT = "component_placement"
 UNKNOWN_CATALOG = "unknown_catalog"
 BASE_CATALOG_DRIFT = "base_catalog_drift"
 
 WARNING = "WARNING"
 """The only diagnostic level there is: a hard finding is raised, never recorded."""
+
+BlokCheckMode = Literal["warning", "strict"]
+"""How a blok is held to its catalog on the client.
+
+``"warning"`` (the default) reports an unknown component, a missing or unknown prop and
+every other catalog finding as a warning: the client's copy of a catalog may lag the UI
+that renders the blok. ``"strict"`` refuses the blok on the first one.
+"""
 
 
 @dataclass(frozen=True)
@@ -457,6 +475,13 @@ class Diagnostic:
     code: str
     message: str
     path: str | None = None
+
+
+def _finding(findings: "list[Diagnostic] | None", code: str, message: str, owner: str) -> None:
+    """Record a catalog finding in ``findings``, or raise it when there is no list to record it in."""
+    if findings is None:
+        raise ValueError(message)
+    findings.append(Diagnostic(level=WARNING, code=code, message=message, path=owner))
 
 
 class CatalogWarning(UserWarning):
@@ -561,6 +586,7 @@ def check_call(
     argument_keys: Iterable[str],
     view: CatalogView,
     owner: str,
+    findings: list[Diagnostic] | None = None,
 ) -> Diagnostic | None:
     """Check one util call against ``view``.
 
@@ -571,7 +597,8 @@ def check_call(
         A warning diagnostic for an unknown operation, else ``None``.
 
     Raises:
-        ValueError: If a known operation is called with an unaccepted or missing argument key.
+        ValueError: If a known operation is called with an unaccepted or missing argument
+            key, and there are no ``findings`` to record it in.
     """
     spec = view.operations.get(operation)
     if spec is None:
@@ -591,10 +618,10 @@ def check_call(
     passed = set(argument_keys)
     unknown = sorted(passed - set(accepted))
     if unknown:
-        raise ValueError(f"{owner}: operation {operation!r} does not accept arguments {unknown}")
+        _finding(findings, OPERATION_ARGUMENTS, f"{owner}: operation {operation!r} does not accept arguments {unknown}", owner)
     missing = sorted(key for key, argument in accepted.items() if argument.required and key not in passed)
     if missing:
-        raise ValueError(f"{owner}: operation {operation!r} requires arguments {missing}")
+        _finding(findings, OPERATION_ARGUMENTS, f"{owner}: operation {operation!r} requires arguments {missing}", owner)
     return None
 
 
@@ -606,6 +633,7 @@ def check_component(
     view: CatalogView,
     owner: str,
     bound_paths: Mapping[str, str] | None = None,
+    findings: list[Diagnostic] | None = None,
 ) -> None:
     """Check one component node against ``view``.
 
@@ -625,48 +653,51 @@ def check_component(
         view: The catalog view in force.
         owner: The node's location, for error messages.
         bound_paths: Per prop key, the path the prop is bound to, for the props bound to one.
+        findings: Where to record what is wrong, as warnings, instead of raising it.
 
     Raises:
         ValueError: On an unknown component, children a component does not accept, an unknown
             or missing required prop, an unbound ``CALLBACK`` prop, or an ``ASSET`` prop
-            that does not name an asset.
+            that does not name an asset -- unless there are ``findings`` to record it in.
     """
     if view.components is None:
         return
 
     spec = view.components.get(component)
     if spec is None:
-        raise ValueError(f"{owner}: component {component!r} is not registered in catalog ({view.label})")
+        message = f"{owner}: component {component!r} is not registered in catalog ({view.label})"
+        _finding(findings, UNKNOWN_COMPONENT, message, owner)
+        return
     if has_children and not spec.accepts_children:
-        raise ValueError(f"{owner}: component {component!r} does not accept children")
+        _finding(findings, COMPONENT_CHILDREN, f"{owner}: component {component!r} does not accept children", owner)
 
     prop_specs = {prop.key: prop for prop in spec.props}
     present = set(prop_keys)
     unknown = sorted(present - set(prop_specs))
     if unknown:
-        raise ValueError(f"{owner}: component {component!r} has no props {unknown}")
+        _finding(findings, COMPONENT_PROPS, f"{owner}: component {component!r} has no props {unknown}", owner)
     missing = sorted(key for key, prop in prop_specs.items() if prop.required and key not in present)
     if missing:
-        raise ValueError(f"{owner}: component {component!r} requires props {missing}")
+        _finding(findings, COMPONENT_PROPS, f"{owner}: component {component!r} requires props {missing}", owner)
 
-    for key in sorted(present):
+    for key in sorted(present & set(prop_specs)):
         prop_spec = prop_specs[key]
         if prop_spec.kind == CALLBACK_KIND and not callback_bindings.get(key, False):
-            raise ValueError(
-                f"prop {key!r} of {owner} is a CALLBACK prop and must be bound "
-                "via agent_call or util_call"
-            )
+            message = f"prop {key!r} of {owner} is a CALLBACK prop and must be bound via agent_call or util_call"
+            _finding(findings, CALLBACK_PROP_UNBOUND, message, owner)
         if prop_spec.kind == ASSET_KIND:
             path = (bound_paths or {}).get(key)
             try:
                 named = asset_path_parts(path) if path is not None else None
             except ValueError as error:
-                raise ValueError(f"prop {key!r} of {owner}: {error}") from None
+                _finding(findings, ASSET_PROP, f"prop {key!r} of {owner}: {error}", owner)
+                continue
             if named is None:
-                raise ValueError(
+                message = (
                     f"prop {key!r} of {owner} is an ASSET prop and must name an asset "
                     f"the app registered, as in {key}=\"@self.assets.<name>\""
                 )
+                _finding(findings, ASSET_PROP, message, owner)
 
 
 def check_catalog_names(names: Iterable[str], known: Iterable[str], owner: str) -> list[Diagnostic]:
@@ -724,6 +755,7 @@ def check_placement(
     context: str,
     view: CatalogView,
     owner: str,
+    findings: list[Diagnostic] | None = None,
 ) -> str:
     """Check where a component sits in the tree; return the context of its children.
 
@@ -739,24 +771,28 @@ def check_placement(
         context: The context in force where it is placed.
         view: The catalog view in force.
         owner: The node's location, for error messages.
+        findings: Where to record what is wrong, as warnings, instead of raising it.
 
     Raises:
         ValueError: If the component is placed outside its context, lacks a required
-            ancestor, or sits under a forbidden one.
+            ancestor, or sits under a forbidden one -- unless there are ``findings`` to
+            record it in.
     """
     spec = view.components.get(component) if view.components is not None else None
     if spec is None:
         return context
     if not spec.inherits_context and spec.context != context:
-        raise ValueError(
+        message = (
             f"{owner}: component {component!r} is a {spec.context.lower()} component "
             f"and cannot be placed in the {context.lower()} context"
         )
+        _finding(findings, COMPONENT_PLACEMENT, message, owner)
     if spec.downstream_of and not set(spec.downstream_of) & set(ancestors):
-        raise ValueError(f"{owner}: component {component!r} must be inside one of {sorted(spec.downstream_of)}")
+        message = f"{owner}: component {component!r} must be inside one of {sorted(spec.downstream_of)}"
+        _finding(findings, COMPONENT_PLACEMENT, message, owner)
     forbidden = sorted(set(spec.not_downstream_of) & set(ancestors))
     if forbidden:
-        raise ValueError(f"{owner}: component {component!r} must not be inside {forbidden}")
+        _finding(findings, COMPONENT_PLACEMENT, f"{owner}: component {component!r} must not be inside {forbidden}", owner)
     if spec.inherits_context:
         return context
     return spec.children_context or spec.context

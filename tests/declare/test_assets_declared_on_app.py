@@ -109,7 +109,7 @@ def test_a_blok_names_an_asset_of_its_own_app(registry: AppRegistry) -> None:
 def test_a_blok_naming_no_asset_of_the_app_is_refused(registry: AppRegistry, tree: str, message: str) -> None:
     registry.register_asset("scope", "models/scope.glb")
     with pytest.raises(ValueError, match=message):
-        registry.register_blok("view", tree, context="scene")
+        registry.register_blok("view", tree, context="scene", mode="strict")
         registry.to_implement_agent_input(name="app")
 
 

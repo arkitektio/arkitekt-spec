@@ -68,6 +68,7 @@ from arkitekt_spec.declare.catalogs import (
     ASSETS_SEGMENT,
     BLOK_ARGS_ROOT,
     MODEL_REF_PATTERN,
+    BlokCheckMode,
     Catalog,
     CatalogView,
     CatalogWarning,
@@ -694,6 +695,7 @@ class AppRegistry(BaseModel):
         for_model: str | None = None,
         for_node: str | None = None,
         args: "Mapping[str, Any] | None" = None,
+        mode: BlokCheckMode = "warning",
     ) -> None:
         """Register a blok component tree in the registry.
 
@@ -705,8 +707,9 @@ class AppRegistry(BaseModel):
 
         The tree is validated now. References resolve against the dependencies;
         components, props and util operations are checked against ``catalog`` when
-        this app has declared it with :meth:`declare_ui_catalog`, and findings that do
-        not block registration are raised as :class:`~rekuest.catalogs.CatalogWarning`.
+        this app has declared it with :meth:`declare_ui_catalog` (or against the standard
+        one), and in the default ``"warning"`` mode every finding is raised as a
+        :class:`~arkitekt_spec.declare.catalogs.CatalogWarning` instead of refusing the blok.
 
         Args:
             name: The blok's name.
@@ -742,10 +745,12 @@ class AppRegistry(BaseModel):
                 blok on any item its args accept, and the tree reads the item at
                 ``@args.image`` -- null until the blok is opened for one. Html
                 bloks only.
+            mode: ``"warning"`` warns about an unknown component, prop or any other
+                catalog finding; ``"strict"`` refuses the blok for it.
 
         Raises:
             ValueError: If the name or component is missing, a reference does not
-                resolve, a declared catalog rejects the tree, a ``local_state``
+                resolve, a catalog rejects the tree in strict mode, a ``local_state``
                 key is reserved or names a dependency, or ``args`` are given to a
                 blok that is not html, or the tree reads an arg it does not declare.
         """
@@ -828,7 +833,7 @@ class AppRegistry(BaseModel):
             check_logo_palette(component, {**(demo_state or {}), **(local_state or {})})
         # Catalog rules only: references need the dependencies that
         # ``build_declared_bloks`` infers later, and are checked there.
-        for diagnostic in validate_blok_catalog(component, self.catalog_view(catalog)):
+        for diagnostic in validate_blok_catalog(component, self.catalog_view(catalog), mode):
             warnings.warn(
                 f"Blok {name!r}: {diagnostic.message}", CatalogWarning, stacklevel=2
             )

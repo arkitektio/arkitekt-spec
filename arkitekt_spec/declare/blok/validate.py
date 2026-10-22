@@ -1,7 +1,9 @@
 """Validate blok component trees against their declared dependencies."""
 
-from collections.abc import Iterable, Mapping
+import json
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from arkitekt_spec.actions import (
@@ -13,6 +15,7 @@ from arkitekt_spec.actions import (
     StateImplementationInput,
     UtilCallInput,
 )
+from arkitekt_spec.declare.blok.parser import bsx
 from arkitekt_spec.declare.blok.walk import (
     FOREACH_COMPONENT,
     FOREACH_ITEMS_PROP,
@@ -34,13 +37,21 @@ from arkitekt_spec.declare.catalogs import (
     LOGO_PAINT_PROPS,
     LOGO_PAINT_TOKENS,
     LOGO_PATH_DATA_PROPS,
+    STANDARD_CATALOG_NAME,
+    BlokCheckMode,
+    Catalog,
     CatalogView,
     Diagnostic,
     asset_path_parts,
+    base_only_view,
+    base_version_named,
     check_call,
     check_component,
     check_placement,
     latest_task_path_parts,
+    load_standard_catalog,
+    parse_ui_catalog,
+    resolve_catalogs,
 )
 from arkitekt_spec.declare.definition.match import build_port_matches
 
@@ -247,11 +258,14 @@ class _ValidationVisitor(BlokVisitor):
         index: DependencyIndex,
         catalog: "CatalogView | None" = None,
         local_roots: frozenset[str] = frozenset(),
+        mode: BlokCheckMode = "warning",
     ) -> None:
         self.index = index
         self.catalog = catalog
         self.local_roots = local_roots
         self.diagnostics: list[Diagnostic] = []
+        # Where a catalog finding goes: the diagnostics, or raised when strict.
+        self.findings = None if mode == "strict" else self.diagnostics
 
     def visit_component(
         self, node: ComponentNodeInput, scope: dict[str, PortMatchInput | None], context: str
@@ -270,6 +284,7 @@ class _ValidationVisitor(BlokVisitor):
             self.catalog,
             context,
             _bound_paths(node),
+            self.findings,
         )
 
     def visit_path(
@@ -313,6 +328,7 @@ class _ValidationVisitor(BlokVisitor):
             [argument.key for argument in call.arguments or () if argument.key is not None],
             self.catalog,
             context,
+            self.findings,
         )
         if finding is not None:
             self.diagnostics.append(finding)
@@ -434,6 +450,7 @@ def validate_blok(
     dependencies: list[AgentDependencyInput],
     catalog: "CatalogView | None" = None,
     local_roots: Iterable[str] = (),
+    mode: BlokCheckMode = "warning",
 ) -> list[Diagnostic]:
     """Validate every reference in ``component`` resolves against ``dependencies``.
 
@@ -449,20 +466,23 @@ def validate_blok(
         dependencies: What references in the tree may resolve against.
         catalog: The catalog view in force, or ``None`` to skip every catalog rule.
         local_roots: Path roots that name the blok's own UI state.
+        mode: ``"warning"`` returns a broken catalog rule as a finding, ``"strict"``
+            raises it (see :data:`~arkitekt_spec.declare.catalogs.BlokCheckMode`).
 
     Returns:
         The non-fatal findings, e.g. util calls naming an operation the catalog does
         not provide. Empty when nothing was found or no catalog was given.
 
     Raises:
-        ValueError: If any reference cannot be resolved, or any catalog rule is broken.
-            The message names the component and its structural id.
+        ValueError: If any reference cannot be resolved, or, in strict mode, any
+            catalog rule is broken. The message names the component and its
+            structural id.
     """
     index = DependencyIndex.from_dependencies(dependencies)
-    visitor = _ValidationVisitor(index, catalog, frozenset(local_roots) - index.keys)
+    visitor = _ValidationVisitor(index, catalog, frozenset(local_roots) - index.keys, mode)
     walk_component(component, visitor)
     if catalog is not None:
-        _check_tree_placement(component, catalog)
+        _check_tree_placement(component, catalog, visitor.findings)
     return visitor.diagnostics
 
 
@@ -656,13 +676,14 @@ def _demo_items(prop: Any, demo_state: Mapping[str, Any] | None) -> int:
 def _check_tree_placement(
     node: ComponentNodeInput,
     catalog: CatalogView,
+    findings: list[Diagnostic] | None,
     ancestors: tuple[str, ...] = (),
     context: str = HTML_CONTEXT,
 ) -> None:
     """Check every node's placement, carrying its ancestors and the context in force."""
-    inner = check_placement(node.component, ancestors, context, catalog, node_context(node))
+    inner = check_placement(node.component, ancestors, context, catalog, node_context(node), findings)
     for child in node.children or ():
-        _check_tree_placement(child, catalog, (*ancestors, node.component), inner)
+        _check_tree_placement(child, catalog, findings, (*ancestors, node.component), inner)
 
 
 class _CatalogVisitor(BlokVisitor):
@@ -673,9 +694,10 @@ class _CatalogVisitor(BlokVisitor):
     none, so they can fire the moment a blok is declared.
     """
 
-    def __init__(self, catalog: CatalogView) -> None:
+    def __init__(self, catalog: CatalogView, mode: BlokCheckMode) -> None:
         self.catalog = catalog
         self.diagnostics: list[Diagnostic] = []
+        self.findings = None if mode == "strict" else self.diagnostics
 
     def visit_component(
         self, node: ComponentNodeInput, scope: dict[str, PortMatchInput | None], context: str
@@ -691,6 +713,7 @@ class _CatalogVisitor(BlokVisitor):
             self.catalog,
             context,
             _bound_paths(node),
+            self.findings,
         )
 
     def visit_util_call(
@@ -701,6 +724,7 @@ class _CatalogVisitor(BlokVisitor):
             [argument.key for argument in call.arguments or () if argument.key is not None],
             self.catalog,
             context,
+            self.findings,
         )
         if finding is not None:
             self.diagnostics.append(finding)
@@ -731,23 +755,93 @@ class _CatalogVisitor(BlokVisitor):
 
 
 def validate_blok_catalog(
-    component: ComponentNodeInput, catalog: CatalogView
+    component: ComponentNodeInput, catalog: CatalogView, mode: BlokCheckMode = "warning"
 ) -> list[Diagnostic]:
     """Check ``component``'s components, props and util operations against ``catalog``.
 
     References are not checked -- they need dependencies this stage does not have.
 
     Returns:
-        The non-fatal findings, e.g. operations the catalog does not provide.
+        The findings: operations the catalog does not provide and, unless ``mode`` is
+        ``"strict"``, every broken catalog rule.
 
     Raises:
-        ValueError: If a catalog rule is broken. The message names the component
-            and its structural id.
+        ValueError: In strict mode, if a catalog rule is broken. The message names the
+            component and its structural id.
     """
-    visitor = _CatalogVisitor(catalog)
+    visitor = _CatalogVisitor(catalog, mode)
     walk_component(component, visitor)
-    _check_tree_placement(component, catalog)
+    _check_tree_placement(component, catalog, visitor.findings)
     return visitor.diagnostics
+
+
+CatalogSource = str | Path | Catalog | Mapping[str, Any]
+"""A catalog to check against: ``"orkestrator"`` (the vendored standard one), ``"base"``,
+the path of a ``blok-catalog.json`` as a UI app exports it, that payload already loaded,
+or a :class:`~arkitekt_spec.declare.catalogs.Catalog`."""
+
+
+def _load_catalog(source: CatalogSource) -> Catalog | None:
+    """The catalog ``source`` names, or ``None`` for the base catalog every view has anyway."""
+    if isinstance(source, Catalog):
+        return source
+    if isinstance(source, Mapping):
+        return parse_ui_catalog(dict(source))
+    if isinstance(source, str) and source == STANDARD_CATALOG_NAME:
+        return load_standard_catalog()
+    if isinstance(source, str) and base_version_named(source) is not None:
+        return None
+    path = Path(source)
+    if not path.is_file():
+        raise ValueError(
+            f"catalog {str(source)!r} is neither {STANDARD_CATALOG_NAME!r}, 'base', nor a blok-catalog.json file"
+        )
+    return parse_ui_catalog(json.loads(path.read_text(encoding="utf-8")))
+
+
+def catalogs_view(catalogs: Sequence[CatalogSource] | None = None) -> CatalogView:
+    """The view a blok is checked against when it is rendered by ``catalogs``.
+
+    No catalogs means the standard one. Only the base catalog means base operations alone,
+    which cannot tell a typo from an operation a UI provides, so nothing more is checked.
+    """
+    loaded = [catalog for source in catalogs or (STANDARD_CATALOG_NAME,) if (catalog := _load_catalog(source))]
+    if not loaded:
+        return base_only_view()
+    return resolve_catalogs(loaded, authoritative=True)
+
+
+def validate_bsx(
+    source: str | ComponentNodeInput,
+    catalogs: Sequence[CatalogSource] | None = None,
+    *,
+    mode: BlokCheckMode = "warning",
+) -> list[Diagnostic]:
+    """Check a blok against the catalogs that render it, on its own, with no app.
+
+    Only the catalog rules run: components, props, children, placement and util
+    operations. References need the dependencies an app infers, so
+    :func:`validate_blok` checks those.
+
+    Example:
+        >>> validate_bsx('<Card><Button label="Go" /></Card>', ["orkestrator"])
+        []
+
+    Args:
+        source: The blok, as BSX or already parsed.
+        catalogs: What renders it (see :data:`CatalogSource`); the standard catalog when
+            left out.
+        mode: ``"warning"`` returns what is wrong; ``"strict"`` raises the first of it.
+
+    Returns:
+        The findings, one per broken rule. Empty when the blok checks out.
+
+    Raises:
+        ValueError: If the BSX does not parse, a catalog cannot be loaded or two of them
+            conflict, or, in strict mode, a catalog rule is broken.
+    """
+    component = bsx(source) if isinstance(source, str) else source
+    return validate_blok_catalog(component, catalogs_view(catalogs), mode)
 
 
 def _resolve_dependency_state_path(

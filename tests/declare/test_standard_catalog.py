@@ -16,15 +16,15 @@ import pytest
 from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.blok.registry import build_declared_bloks
 from arkitekt_spec.declare.catalogs import (
-    STANDARD_CATALOG_CORRECTIONS,
     STANDARD_CATALOG_NAME,
     VALUE_KINDS,
+    CatalogWarning,
     ComponentSpec,
     base_operations,
-    load_published_standard_catalog,
     load_standard_catalog,
     standard_catalog_release,
     standard_view,
+    ui_catalog_view,
 )
 
 VENDORED = resources.files("arkitekt_spec.declare.catalogs").joinpath("orkestrator.json")
@@ -82,23 +82,26 @@ def test_the_vendored_file_is_the_one_the_app_exports() -> None:
     )
 
 
-# -- the corrections ----------------------------------------------------------------
+def test_an_exported_catalog_reads_as_the_vendored_one_does() -> None:
+    """``ui_catalog_view`` of the vendored file is the standard view: one reading, two sources."""
+    view = ui_catalog_view(json.loads(VENDORED.read_text()))
+    standard = standard_view()
+
+    assert dict(view.components or {}) == dict(standard.components or {})
+    assert dict(view.operations) == dict(standard.operations)
+    assert view.authoritative
 
 
-def test_every_correction_is_still_needed() -> None:
-    """A correction the published catalog no longer needs is to be deleted."""
-    published = {component.name: component for component in load_published_standard_catalog().components}
+def test_a_payload_that_is_no_catalog_is_a_value_error() -> None:
+    with pytest.raises(ValueError):
+        ui_catalog_view({"components": [{"props": []}]})
 
-    for name, changes in STANDARD_CATALOG_CORRECTIONS.items():
-        assert name in published, f"{name} is corrected, and no longer published"
-        for field, value in changes.items():
-            assert getattr(published[name], field) != value, (
-                f"the published catalog now says {name}.{field} == {value!r}: delete the correction"
-            )
+
+# -- the catalog as published ------------------------------------------------------
 
 
 def test_a_loop_has_a_body() -> None:
-    """The app renders a ``foreach``'s children, and since it says so, nothing here corrects it."""
+    """The app renders a ``foreach``'s children, and the published catalog says so."""
     registry = AppRegistry()
 
     @registry.state
@@ -143,14 +146,14 @@ def test_what_the_app_does_not_render_is_refused(tree: str, message: str) -> Non
     registry = AppRegistry()
 
     with pytest.raises(ValueError, match=message):
-        registry.register_blok("panel", tree)
+        registry.register_blok("panel", tree, mode="strict")
 
     assert "panel" not in registry.registered_bloks
 
 
 def test_the_refusal_says_which_catalog() -> None:
     with pytest.raises(ValueError, match=r"base@1 \+ orkestrator"):
-        AppRegistry().register_blok("panel", "<Slidr />")
+        AppRegistry().register_blok("panel", "<Slidr />", mode="strict")
 
 
 def test_naming_the_standard_catalog_is_the_same_as_naming_none() -> None:
@@ -158,7 +161,7 @@ def test_naming_the_standard_catalog_is_the_same_as_naming_none() -> None:
     registry.register_blok("fine", "<div />", catalog="orkestrator")
 
     with pytest.raises(ValueError, match="'Slidr' is not registered"):
-        registry.register_blok("panel", "<Slidr />", catalog="orkestrator")
+        registry.register_blok("panel", "<Slidr />", catalog="orkestrator", mode="strict")
     assert registry.registered_bloks["fine"].catalog == "orkestrator"
 
 
@@ -171,12 +174,11 @@ def test_a_blok_for_another_renderer_is_not_held_to_the_standard_catalog() -> No
     registry.register_blok("own", "<Gauge />", catalog="mine")
 
     with pytest.raises(ValueError, match="'Card' is not registered"):
-        registry.register_blok("mixed", "<Card />", catalog="mine")
+        registry.register_blok("mixed", "<Card />", catalog="mine", mode="strict")
     assert set(registry.registered_bloks) == {"elsewhere", "own"}
 
 
 def test_an_operation_the_app_evaluates_is_known_and_one_it_does_not_is_a_warning() -> None:
-    from arkitekt_spec.declare.catalogs import CatalogWarning
 
     registry = AppRegistry()
     registry.register_blok("known", '<span text="@utils.math.round(value=1.234, precision=2)" />')
@@ -193,7 +195,7 @@ def test_an_operation_of_the_app_is_called_by_keyword() -> None:
     nothing. Refusing it is what keeps ``round(1.234, 2)`` from rounding 2.
     """
     with pytest.raises(ValueError, match=r"'math.round' does not accept arguments \['0', '1'\]"):
-        AppRegistry().register_blok("panel", '<span text="@utils.math.round(1.234, 2)" />')
+        AppRegistry().register_blok("panel", '<span text="@utils.math.round(1.234, 2)" />', mode="strict")
 
 
 # -- the 3D vocabulary ---------------------------------------------------------------
@@ -269,7 +271,7 @@ def test_a_new_default_replaces_the_previous_one_of_its_context() -> None:
 )
 def test_a_scene_blok_that_breaks_the_rules_is_refused(tree: str, options: dict, message: str) -> None:
     with pytest.raises(ValueError, match=message):
-        _scope().register_blok("bad", tree, **options)
+        _scope().register_blok("bad", tree, **options, mode="strict")
 
 
 def test_a_handler_reading_the_event_declares_no_dependency_for_it() -> None:
@@ -288,3 +290,48 @@ def test_a_handler_reading_the_event_declares_no_dependency_for_it() -> None:
     )
     blok = build_declared_bloks(registry)["arm_3d"]
     assert [dependency.key for dependency in blok.dependencies] == ["self"]
+
+
+# -- warning mode and validate_bsx ---------------------------------------------------
+
+
+def test_by_default_what_the_app_does_not_render_is_a_warning() -> None:
+    """The client's copy of a catalog may lag the UI: only strict mode refuses."""
+    registry = AppRegistry()
+
+    with pytest.warns(CatalogWarning) as caught:
+        registry.register_blok("panel", '<Card><Slidr /><Progress vlaue="3" /></Card>')
+
+    assert "panel" in registry.registered_bloks
+    messages = [str(warning.message) for warning in caught]
+    assert any("'Slidr' is not registered" in message for message in messages)
+    assert any("has no props ['vlaue']" in message for message in messages)
+
+
+def test_validate_bsx_reports_every_finding_with_its_code() -> None:
+    from arkitekt_spec.declare.blok import validate_bsx
+
+    findings = validate_bsx('<Card><Slidr /><Progress vlaue="3"><span /></Progress></Card>')
+
+    assert [finding.code for finding in findings] == ["unknown_component", "component_children", "component_props"]
+    assert validate_bsx('<Card><Button label="Go" /></Card>', ["orkestrator"]) == []
+
+
+def test_validate_bsx_in_strict_mode_raises_the_first_finding() -> None:
+    from arkitekt_spec.declare.blok import validate_bsx
+
+    with pytest.raises(ValueError, match="'Slidr' is not registered"):
+        validate_bsx("<Card><Slidr /></Card>", mode="strict")
+
+
+def test_validate_bsx_reads_an_exported_catalog_by_path_or_payload(tmp_path: Path) -> None:
+    from arkitekt_spec.declare.blok import validate_bsx
+
+    exported = tmp_path / "blok-catalog.json"
+    exported.write_text(VENDORED.read_text())
+
+    assert validate_bsx("<Card />", [exported]) == []
+    assert validate_bsx("<Card />", [json.loads(VENDORED.read_text())]) == []
+    assert validate_bsx("<Slidr />", ["base"]) == []  # base names no components: nothing to check
+    with pytest.raises(ValueError, match="neither 'orkestrator', 'base', nor a blok-catalog.json"):
+        validate_bsx("<Card />", ["no-such-catalog"])

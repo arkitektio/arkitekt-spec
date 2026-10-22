@@ -35,20 +35,20 @@ def _registry() -> AppRegistry:
 def test_a_declared_catalog_refuses_an_unknown_component() -> None:
     registry = _registry()
     with pytest.raises(ValueError, match="is not registered in catalog"):
-        registry.register_blok("bad", '<Box><Slidr min="1" /></Box>', catalog="electron")
+        registry.register_blok("bad", '<Box><Slidr min="1" /></Box>', catalog="electron", mode="strict")
 
 
 def test_a_declared_catalog_refuses_a_missing_required_prop() -> None:
     registry = _registry()
     with pytest.raises(ValueError, match="requires props"):
-        registry.register_blok("bad", "<Box><Slider /></Box>", catalog="electron")
+        registry.register_blok("bad", "<Box><Slider /></Box>", catalog="electron", mode="strict")
 
 
 def test_a_declared_catalog_refuses_children_on_a_leaf() -> None:
     registry = _registry()
     with pytest.raises(ValueError, match="does not accept children"):
         registry.register_blok(
-            "bad", '<Box><Slider min="1"><Box /></Slider></Box>', catalog="electron"
+            "bad", '<Box><Slider min="1"><Box /></Slider></Box>', catalog="electron", mode="strict"
         )
 
 
@@ -70,7 +70,7 @@ def test_a_known_operation_with_a_bad_argument_is_refused() -> None:
     registry = _registry()
     with pytest.raises(ValueError, match="does not accept arguments"):
         registry.register_blok(
-            "bad", '<Box><Slider min="@utils.clamp(value=1, nope=2)" /></Box>', catalog="electron"
+            "bad", '<Box><Slider min="@utils.clamp(value=1, nope=2)" /></Box>', catalog="electron", mode="strict"
         )
 
 
@@ -78,14 +78,14 @@ def test_a_util_call_nested_in_an_agent_call_argument_is_checked() -> None:
     """The walker recurses through argument trees, so nesting hides nothing."""
     tree = bsx('<Box><Slider min="@dep.act(utils.clamp(value=1, nope=2))" /></Box>')
     with pytest.raises(ValueError, match="does not accept arguments"):
-        validate_blok_catalog(tree, electron_view())
+        validate_blok_catalog(tree, electron_view(), mode="strict")
 
 
 def test_without_a_declared_catalog_a_blok_is_checked_against_the_standard_one() -> None:
     """A blok that names no catalog is drawn by the standard one, whose components are known."""
     registry = AppRegistry()
     with pytest.raises(ValueError, match="'Slidr' is not registered"):
-        registry.register_blok("anything", '<Slidr whatever="1" />')
+        registry.register_blok("anything", '<Slidr whatever="1" />', mode="strict")
     assert "anything" not in registry.registered_bloks
 
 
@@ -107,7 +107,7 @@ def test_foreach_is_an_ordinary_component_to_a_catalog() -> None:
     registry = AppRegistry()
     registry.declare_ui_catalog("ui", components=[BOX])
     with pytest.raises(ValueError, match="'foreach' is not registered"):
-        registry.register_blok("bad", '<Box><foreach let="#x" items="@d.s.xs" /></Box>', catalog="ui")
+        registry.register_blok("bad", '<Box><foreach let="#x" items="@d.s.xs" /></Box>', catalog="ui", mode="strict")
 
 
 def test_foreach_passes_when_the_catalog_registers_it() -> None:
@@ -224,7 +224,7 @@ def test_a_tree_that_bridges_into_a_scene_and_back_is_accepted() -> None:
 )
 def test_a_component_is_held_to_its_declared_placement(tree: str, message: str) -> None:
     with pytest.raises(ValueError, match=message):
-        _scene_registry().register_blok("bad", tree, catalog="electron")
+        _scene_registry().register_blok("bad", tree, catalog="electron", mode="strict")
 
 
 def _logo_registry() -> AppRegistry:
@@ -297,7 +297,7 @@ def test_a_logo_blok_is_one_svg_of_shapes() -> None:
 )
 def test_a_logo_blok_is_held_to_its_root_and_its_shapes_to_the_svg(tree: str, context: str, message: str) -> None:
     with pytest.raises(ValueError, match=message):
-        _logo_registry().register_blok("bad", tree, catalog="electron", context=context)
+        _logo_registry().register_blok("bad", tree, catalog="electron", context=context, mode="strict")
 
 
 def test_control_flow_takes_the_context_it_is_placed_in() -> None:
@@ -414,7 +414,7 @@ def test_palette_tokens_and_references_pass_and_a_logo_keeps_its_own_colours() -
 )
 def test_an_action_logo_is_one_action_logo_root(tree: str, context: str, message: str) -> None:
     with pytest.raises(ValueError, match=re.escape(message)):
-        _logo_registry().register_blok("bad", tree, catalog="electron", context=context)
+        _logo_registry().register_blok("bad", tree, catalog="electron", context=context, mode="strict")
 
 
 def test_an_action_logo_reads_its_task_and_nothing_of_the_app() -> None:
