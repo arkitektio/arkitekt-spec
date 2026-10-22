@@ -645,7 +645,8 @@ class AppRegistry(BaseModel):
             cls: The state class.
             state: Its schema, built against ``registry``.
             registry: The structures its ports were built against.
-            required_locks: Locks an action must hold to change it.
+            required_locks: Locks every action taking it holds (inferred). Not a
+                write guard.
         """
         self._refuse_if_frozen(f"the state '{state.interface}'")
         if state.interface == ASSETS_SEGMENT:

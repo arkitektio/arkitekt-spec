@@ -105,7 +105,9 @@ def declare_state(
         *function: Class to decorate when used as ``@state`` without
             parentheses.
         name: Explicit exported state name. Defaults to the class name.
-        required_locks: Locks that must be held while mutating this state.
+        required_locks: Locks every action taking this state holds (added to its
+            inferred locks), so no two actions command it at once. They do not
+            guard writes: managers and background hooks change the state freely.
         registry: The app registry the state is recorded in.
         structure_reg: Structure registry used while inspecting the state
             schema. Defaults to the app registry's.

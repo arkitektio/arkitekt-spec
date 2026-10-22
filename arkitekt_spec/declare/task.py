@@ -95,7 +95,8 @@ class StateRequirement(BaseModel):
     requires, before any of the action runs; on a mismatch the call raises
     :class:`~arkitekt_spec.declare.errors.StatePreconditionFailed`. A state that declares
     no ``required_locks`` is guarded by nothing, so for it the test is a snapshot: the
-    state may still change while the action runs.
+    state may still change while the action runs. Locks keep other *actions* out; a
+    manager or background hook reporting into the state may still change it.
 
     ``path`` is an RFC 6901 pointer into the state's value (``/busy``,
     ``/stage/position/0``). A path the state does not hold fails, except for

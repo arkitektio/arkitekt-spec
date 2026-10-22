@@ -57,5 +57,5 @@ def get_state_name(cls: Any, structure_registry: "StructureRegistry") -> str:
 
 
 def get_state_locks(cls: Any, structure_registry: "StructureRegistry") -> list[str]:
-    """The locks the app requires to change the state class ``cls``."""
+    """The locks an action taking the state class ``cls`` holds."""
     return list(structure_registry.state_for(cls).required_locks)
