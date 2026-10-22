@@ -342,10 +342,10 @@ class DefinitionRules(BaseModel):
     @model_validator(mode="after")
     def _protocols_are_names(self) -> Self:
         """A protocol hint is a name to filter on: one word, said once."""
-        protocols = tuple(getattr(self, "protocols", None) or ())
+        protocols: tuple[str, ...] = tuple(getattr(self, "protocols", None) or ())
         for protocol in protocols:
             # The server stores a hint as a name of at most 1000 characters.
-            if not protocol or len(protocol) > 1000 or any(character.isspace() for character in protocol):
+            if len(protocol) > 1000 or protocol.split() != [protocol]:  # empty, or with whitespace
                 raise ValueError(f"A protocol hint is a name without whitespace, got {protocol!r}")
         twice = sorted({protocol for protocol in protocols if protocols.count(protocol) > 1})
         if twice:
