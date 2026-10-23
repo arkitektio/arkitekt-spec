@@ -5,12 +5,19 @@ coordination server — reached over a publicly valid certificate — hands it t
 the hub's instances (``tls.certificates`` in its fakts). The fakts client sets it on the TLS
 aliases it resolves of such an instance (``Alias.certificates``), and:
 
-- Python clients (aiohttp, websockets) verify those aliases by exactly that certificate and
-  nothing else: :func:`pinned_context`, via ``Alias.ssl_context()``;
-- clients that read their roots from a file instead — Rust ones (obstore, LiveKit), duckdb —
-  get it as an extra root beside the public ones: :func:`trust_natively` points
-  ``SSL_CERT_FILE`` at a bundle of both. Weaker than pinning (a public CA could vouch for the
-  hub's names too), and process-wide, but those clients offer nothing finer.
+- Python clients (aiohttp, websockets, httpx) verify those aliases by exactly that
+  certificate and nothing else: :func:`pinned_context`, via ``Alias.ssl_context()``.
+- Any other client is the service's to configure, as its implementation allows; these are
+  the tools for it:
+
+  - :func:`bundle_file` — a file of the public roots plus the certificates, for a client that
+    takes a path (duckdb's ``ca_cert_file``). Changes nothing else.
+  - :func:`trust_natively` — points ``SSL_CERT_FILE`` at such a file, for a client that only
+    reads its roots from there (obstore, LiveKit: rustls). Process-wide: OpenSSL's default
+    paths, httpx and child processes read it too, so call it only where that client is built.
+
+  Both make the certificate an extra root beside the public ones: weaker than pinning (a
+  public CA could vouch for the hub's names too), but what those clients offer.
 """
 
 from __future__ import annotations
@@ -50,13 +57,10 @@ def pinned_context(certificates: list[str]) -> ssl.SSLContext:
     return ssl.create_default_context(cadata="\n".join(certificates))
 
 
-def trust_natively(certificates: list[str]) -> str:
-    """Make clients that read ``SSL_CERT_FILE`` trust ``certificates`` too, beside the roots
-    they trusted already; returns the bundle's path.
-
-    The bundle holds what ``SSL_CERT_FILE`` named before (the public roots, when it was unset)
-    and every certificate passed here so far, so trusting a second hub keeps the first.
-    """
+def bundle_file(certificates: list[str]) -> str:
+    """A file of the public roots — or what ``SSL_CERT_FILE`` named before :func:`trust_natively`
+    first changed it — plus every certificate passed here or there so far (so a second hub keeps
+    the first). Named by its contents, written once; nothing else changes."""
     global _base_bundle
     with _native_lock:
         if _base_bundle is None:
@@ -73,5 +77,13 @@ def trust_natively(certificates: list[str]) -> str:
             partial = path.with_suffix(f".{os.getpid()}.part")
             partial.write_text(bundle)
             partial.replace(path)
-        os.environ["SSL_CERT_FILE"] = str(path)
         return str(path)
+
+
+def trust_natively(certificates: list[str]) -> str:
+    """Point ``SSL_CERT_FILE`` at :func:`bundle_file`, for clients that read their roots only from
+    there; returns the path. Process-wide — see the module's notes — so a service calls it right
+    before it builds such a client, and only then."""
+    path = bundle_file(certificates)
+    os.environ["SSL_CERT_FILE"] = path
+    return path

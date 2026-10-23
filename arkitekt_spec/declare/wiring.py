@@ -100,9 +100,10 @@ class Alias(BaseModel):
     certificates: list[str] = Field(default_factory=list, exclude=True)
     """The certificates the instance's hub registered (PEM), set by the fakts
     client when it resolves a TLS alias of such an instance: the alias is then
-    verified by exactly these (:meth:`ssl_context`, see
-    :mod:`arkitekt_spec.declare.tls`). Empty for any other alias. Never sent or
-    cached."""
+    verified by exactly these (:meth:`ssl_context`). A client that does not take
+    an ``ssl.SSLContext`` is the service's to configure from them, with what
+    :mod:`arkitekt_spec.declare.tls` offers. Empty for any other alias. Never
+    sent or cached."""
     _mesh: MeshNode | None = PrivateAttr(default=None)
     """The mesh node this process reaches the alias through, if it runs one
     (not for an external proxy). Never sent or cached."""
@@ -117,16 +118,6 @@ class Alias(BaseModel):
         from arkitekt_spec.declare import tls
 
         return tls.pinned_context(self.certificates) if self.is_pinned() else tls.default_context()
-
-    def trust_natively(self) -> None:
-        """For clients that read their roots from ``SSL_CERT_FILE`` (obstore,
-        LiveKit, duckdb): make them trust this alias's hub certificate too. Does
-        nothing for an alias that is not pinned. See
-        :func:`arkitekt_spec.declare.tls.trust_natively`."""
-        if self.is_pinned():
-            from arkitekt_spec.declare import tls
-
-            tls.trust_natively(self.certificates)
 
     def through_mesh(self, proxy: str, node: MeshNode | None = None) -> Self:
         """A copy of this alias, reached through the mesh: over the HTTP

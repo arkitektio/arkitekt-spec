@@ -100,7 +100,7 @@ def test_native_trust_keeps_the_public_roots_and_every_hub(monkeypatch: pytest.M
     monkeypatch.setattr(tls, "_base_bundle", None)
     monkeypatch.setattr(tls, "_native", {})
 
-    alias(certificates=[HUB]).trust_natively()
+    tls.trust_natively([HUB])
     first = Path(os.environ["SSL_CERT_FILE"]).read_text()
     assert HUB.strip() in first
     assert Path(tls.public_roots() or "").read_text().strip()[:200] in first
@@ -110,14 +110,20 @@ def test_native_trust_keeps_the_public_roots_and_every_hub(monkeypatch: pytest.M
     assert HUB.strip() in both and OTHER.strip() in both
     assert os.environ["SSL_CERT_FILE"] == path
 
-    # A bundle Python itself can use: it verifies the hub.
+    # A bundle Python itself can use.
     context = ssl.create_default_context(cafile=path)
     assert context.cert_store_stats()["x509_ca"] >= 1
 
 
-def test_trusting_an_unpinned_alias_natively_changes_nothing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_a_bundle_file_changes_nothing_else(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SSL_CERT_FILE", "/unchanged")
-    alias().trust_natively()
+    monkeypatch.setattr(tls, "_base_bundle", None)
+    monkeypatch.setattr(tls, "_native", {})
+    path = tls.bundle_file([HUB])
+    assert HUB.strip() in Path(path).read_text()
     assert os.environ["SSL_CERT_FILE"] == "/unchanged"
+
+
+def test_the_alias_only_carries_the_certificates() -> None:
+    """How a client trusts them is the service's: the alias has no native-trust method."""
+    assert not hasattr(Alias, "trust_natively")
