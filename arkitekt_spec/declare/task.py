@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from arkitekt_spec.actions import DescriptorOperator
 from arkitekt_spec.declare.agents.errors import NoCallerError
@@ -117,17 +117,76 @@ class StateRequirement(BaseModel):
 
 
 class Decision(BaseModel):
-    """What came back from a hold (:meth:`Task.ahold`).
+    """What came back from a hold (:meth:`Task.ahold`) or an ask (:meth:`Task.aask`).
 
     ``approved`` is False when the person said no; the task goes on and decides what
     that means. ``auto`` is True when nobody was asked: the run is in auto-mode (or
-    the task is local).
+    the task is local). ``values`` is what the person answered through an ask's blok,
+    keyed by its returns and checked against them by the server; a structure comes as
+    ``{"__identifier", "object"}``.
     """
 
     approved: bool
     answer: str | None = None
     auto: bool = False
+    values: dict[str, Any] | None = None
     model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class TaskBlok(BaseModel):
+    """A blok a task shows a person: to ask (:meth:`Task.aask`, answered through it) or to
+    inform (:meth:`Task.ainform`, shown while the task goes on).
+
+    Exactly one of ``key`` (a blok the agent's app declares), ``id`` (any blok of the
+    organization) or ``source`` (BSX the server parses into a blok made for this task
+    alone) names it. A ``source`` blok may call its own agent as ``self``. Its tree
+    answers with ``@utils.blok.answer(values={'key': value, ...})``, keyed by ``returns``, and reads
+    ``@args.<key>``, ``@ask.status`` and, once answered, ``@returns.<key>``.
+    """
+
+    key: str | None = Field(default=None, description="A blok the agent's app declares, by its key.")
+    id: str | None = Field(default=None, description="Any blok of the organization, by its id.")
+    source: str | None = Field(default=None, description="The blok as BSX, made for this task alone.")
+    name: str | None = Field(default=None, description="A title for whoever sees it; the blok's own name when left out.")
+    args: dict[str, Any] | None = Field(default=None, description="What it is opened on, read under `@args.<key>`.")
+    returns: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="What an answer holds, as return ports (`{key, kind, identifier?, nullable?, children?}`). A `source` blok declares them here; a named one has its own.",
+    )
+    dependencies: list[dict[str, Any]] | None = Field(default=None, description="A `source` blok's agent dependencies besides `self`.")
+    agent_mappings: dict[str, str] | None = Field(
+        default=None,
+        description="Dependency key to agent id. A dependency left out that the sending agent satisfies is bound to it.",
+    )
+    demo_state: dict[str, Any] | None = Field(default=None, description="A `source` blok's initial state.")
+    catalog: str | None = Field(default=None, description="The UI catalog a `source` blok renders against; the server's default when left out.")
+    services: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="The services a `source` blok's `query` components read (`{key, service?, version?, schema_hash?}`).",
+    )
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    @model_validator(mode="after")
+    def _named_once(self) -> "TaskBlok":
+        named = [field for field in ("key", "id", "source") if getattr(self, field) is not None]
+        if len(named) != 1:
+            raise ValueError(f"A task's blok is named by exactly one of key, id or source, not {named or 'none'}")
+        return self
+
+
+def as_task_blok(
+    blok: "TaskBlok | str",
+    *,
+    args: dict[str, Any] | None = None,
+    returns: list[dict[str, Any]] | None = None,
+    name: str | None = None,
+) -> TaskBlok:
+    """``blok`` as a :class:`TaskBlok`: a string is BSX source; ``args``, ``returns`` and
+    ``name`` fill what it leaves out."""
+    if isinstance(blok, str):
+        return TaskBlok(source=blok, args=args, returns=returns, name=name)
+    extra = {k: v for k, v in {"args": args, "returns": returns, "name": name}.items() if v is not None}
+    return blok.model_copy(update=extra) if extra else blok
 
 
 @dataclass
@@ -292,6 +351,49 @@ class Task(Protocol):
 
     async def ahold(self, message: str, *, prompt: AssignPrompt | None = None, lost: AgentLost | None = None) -> Decision:
         """:meth:`hold`, awaited."""
+        ...
+
+    def ask(
+        self,
+        blok: "TaskBlok | str",
+        message: str,
+        *,
+        args: dict[str, Any] | None = None,
+        returns: list[dict[str, Any]] | None = None,
+        prompt: AssignPrompt | None = None,
+    ) -> Decision:
+        """Ask a person through a blok: the task is HELD on ``blok`` (a :class:`TaskBlok`,
+        or BSX source) until they answer in it or dismiss it.
+
+        Answered, the :class:`Decision` is approved and its ``values`` are what the blok
+        answered (``@utils.blok.answer(values={...})``), checked against its ``returns``. Dismissed,
+        it is not approved and has none. Auto-mode cannot answer for a person: an ask
+        waits in every run. Raises :class:`~arkitekt_spec.declare.errors.BlokRefused` when
+        the server cannot make the blok, with why. A resumed workflow gets the answer it
+        already had back, without asking again.
+        """
+        ...
+
+    async def aask(
+        self,
+        blok: "TaskBlok | str",
+        message: str,
+        *,
+        args: dict[str, Any] | None = None,
+        returns: list[dict[str, Any]] | None = None,
+        prompt: AssignPrompt | None = None,
+    ) -> Decision:
+        """:meth:`ask`, awaited."""
+        ...
+
+    def inform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, Any] | None = None) -> None:
+        """Show a person a blok (a :class:`TaskBlok`, or BSX source) while the task goes
+        on: a chart of its progress, a result. Nothing waits. A blok the server cannot make
+        is logged by the agent, never raised here."""
+        ...
+
+    async def ainform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, Any] | None = None) -> None:
+        """:meth:`inform`, awaited."""
         ...
 
     # -- calling ---------------------------------------------------------- #
@@ -550,6 +652,42 @@ class LocalTask:
     async def ahold(self, message: str, *, prompt: AssignPrompt | None = None, lost: AgentLost | None = None) -> Decision:
         """Nobody decides for a local task: it logs ``message`` and carries on, approved."""
         return self.hold(message, prompt=prompt, lost=lost)
+
+    def ask(
+        self,
+        blok: "TaskBlok | str",
+        message: str,
+        *,
+        args: dict[str, Any] | None = None,
+        returns: list[dict[str, Any]] | None = None,
+        prompt: AssignPrompt | None = None,
+    ) -> Decision:
+        """Nobody answers a local task: it logs ``message`` and goes on, not approved and
+        without values (an ask has no answer to make up)."""
+        as_task_blok(blok, args=args, returns=returns)
+        logger.log(logging.WARNING, "ask (nobody answers a local task): %s", message)
+        return Decision(approved=False, auto=True)
+
+    async def aask(
+        self,
+        blok: "TaskBlok | str",
+        message: str,
+        *,
+        args: dict[str, Any] | None = None,
+        returns: list[dict[str, Any]] | None = None,
+        prompt: AssignPrompt | None = None,
+    ) -> Decision:
+        """Nobody answers a local task (see :meth:`ask`)."""
+        return self.ask(blok, message, args=args, returns=returns, prompt=prompt)
+
+    def inform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, Any] | None = None) -> None:
+        """Nobody sees a local task's blok: it logs ``message``."""
+        as_task_blok(blok, args=args)
+        logger.log(logging.INFO, "inform (nobody sees a local task's blok): %s", message or "")
+
+    async def ainform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, Any] | None = None) -> None:
+        """Nobody sees a local task's blok (see :meth:`inform`)."""
+        self.inform(blok, message, args=args)
 
     def call(
         self,

@@ -55,6 +55,24 @@ class DeniedError(RekuestError):
 
 
 
+class BlokRefused(RekuestError):
+    """The server could not make the blok a task asked or informed with: its BSX does not
+    parse, or its args, bindings or services do not fit. (What the UI catalog lacks is no
+    refusal: the server stores it as a finding, and the UI draws it as an inline error.) Nothing
+    was shown and the task is not held. ``reason`` says why, so the blok can be fixed and
+    sent again (an LLM writing BSX reads it).
+
+    Attributes:
+        reason: Why the server refused it.
+        task: The id of the task that sent it.
+    """
+
+    def __init__(self, reason: str, *, task: str | None = None) -> None:
+        super().__init__(f"The blok was refused: {reason}")
+        self.reason = reason
+        self.task = task
+
+
 STATE_PRECONDITION = "STATE_PRECONDITION"
 """The code a ``FAILED`` task carries when its agent's state did not match the call's
 ``state_requires``: nothing of the action ran."""
