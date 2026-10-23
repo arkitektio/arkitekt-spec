@@ -366,7 +366,35 @@ class BlokRules(BaseModel):
             raise ValueError("a blok is sent as its components or as its BSX source")
         check_demo_state(blok.dependencies, blok.demo_state)
         _check_blok_args(self)
+        _check_blok_services(self)
         return self
+
+
+QUERY_COMPONENT = "query"
+"""The base catalog's GraphQL read: it runs on the service its ``schema`` prop names."""
+
+
+def _check_blok_services(rules: BaseModel) -> None:
+    """The server's ``check_blok_services``: each service named once, every ``query`` on a named one."""
+    blok: Any = rules
+    keys = [service.key for service in blok.services or ()]
+    twice = next((key for key in keys if keys.count(key) > 1), None)
+    if twice is not None:
+        raise ValueError(f"Blok manifest services: duplicate key {twice!r}")
+    declared = set(keys)
+
+    def visit(nodes: Iterable[Any] | None) -> None:
+        for node in nodes or ():
+            if node.component == QUERY_COMPONENT:
+                schema = next((prop.static_value for prop in node.props or () if prop.key == "schema"), None)
+                if isinstance(schema, str) and schema not in declared:
+                    raise ValueError(
+                        f"Blok manifest: component {node.id!r} queries the {schema!r} service, which the blok does not "
+                        f"declare in its services (declared: {sorted(declared) or 'none'})"
+                    )
+            visit(node.children)
+
+    visit(blok.components)
 
 
 def _check_blok_args(rules: BaseModel) -> None:

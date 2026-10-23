@@ -249,6 +249,7 @@ def _parse(raw: dict) -> Catalog:  # type: ignore[type-arg]
         name=raw["name"],
         version=int(raw["version"]),
         operations=tuple(operations),
+        components=tuple(_parse_components(raw, raw.get("components", []), camel=False)),
         description=raw.get("description"),
     )
 
@@ -276,6 +277,17 @@ def is_base_operation(name: str) -> bool:
     return name in base_operations()
 
 
+@functools.lru_cache(maxsize=1)
+def base_components() -> Mapping[str, ComponentSpec]:
+    """Base components by name: control flow, named in lowercase."""
+    return {component.name: component for component in load_base_catalog().components}
+
+
+def is_base_component(name: str) -> bool:
+    """Whether the component ``name`` is provided by the base catalog."""
+    return name in base_components()
+
+
 # --------------------------------------------------------------------------- the standard catalog
 
 STANDARD_CATALOG_NAME = "orkestrator"
@@ -293,15 +305,16 @@ def _parse_context(raw: dict, component: str, value: object) -> str | None:  # t
     return str(value)
 
 
-def _parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]
-    """A ``registerUiCatalog`` payload, as a UI app publishes it, as a :class:`Catalog`.
+def _parse_components(raw: dict, entries: Iterable[dict], *, camel: bool) -> list[ComponentSpec]:  # type: ignore[type-arg]
+    """Component entries as :class:`ComponentSpec`: a published catalog spells its keys in camelCase, the base manifest in snake_case."""
 
-    Operations the base catalog already provides are left out: a UI catalog only extends
-    the base, and a published one lists everything the app evaluates, base included.
-    """
+    def field(entry: dict, snake: str) -> object:  # type: ignore[type-arg]
+        head, *rest = snake.split("_")
+        return entry.get(head + "".join(part.title() for part in rest) if camel else snake)
+
     components: list[ComponentSpec] = []
     seen: set[str] = set()
-    for entry in raw.get("components", []):
+    for entry in entries:
         name = entry["name"]
         if not name or name in seen:
             raise ValueError(f"catalog {raw.get('name')!r}: duplicate or empty component name {name!r}")
@@ -327,16 +340,29 @@ def _parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]
         components.append(
             ComponentSpec(
                 name=name,
-                accepts_children=bool(entry.get("acceptsChildren", False)),
+                accepts_children=bool(field(entry, "accepts_children") or False),
                 props=tuple(props),
                 description=entry.get("description"),
                 context=_parse_context(raw, name, entry.get("context")) or HTML_CONTEXT,
-                children_context=_parse_context(raw, name, entry.get("childrenContext")),
-                inherits_context=bool(entry.get("inheritsContext", False)),
-                downstream_of=tuple(entry.get("downstreamOf") or ()),
-                not_downstream_of=tuple(entry.get("notDownstreamOf") or ()),
+                children_context=_parse_context(raw, name, field(entry, "children_context")),
+                inherits_context=bool(field(entry, "inherits_context") or False),
+                downstream_of=tuple(field(entry, "downstream_of") or ()),  # type: ignore[arg-type]
+                not_downstream_of=tuple(field(entry, "not_downstream_of") or ()),  # type: ignore[arg-type]
             )
         )
+
+    return components
+
+
+def _parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]
+    """A ``registerUiCatalog`` payload, as a UI app publishes it, as a :class:`Catalog`.
+
+    Operations and components the base catalog already provides are left out: a UI catalog
+    only extends the base, and a published one lists everything the app evaluates, base included.
+    """
+    components = [
+        component for component in _parse_components(raw, raw.get("components", []), camel=True) if not is_base_component(component.name)
+    ]
 
     operations: list[OperationSpec] = []
     for entry in raw.get("operations", []):
@@ -499,8 +525,8 @@ class CatalogView:
     """The operations and components in force for one validation pass.
 
     ``components`` is ``None`` when no catalog has registered any, meaning component names
-    cannot be checked at all -- the base catalog has no components, so before a UI app
-    registers some there is nothing to check against. Every component rule is skipped then,
+    cannot be checked at all -- the base catalog's control flow says nothing about what a UI
+    draws, so before a UI app registers some there is nothing to check against. Every component rule is skipped then,
     exactly as the server skips them.
 
     ``authoritative`` says whether the operation set is complete enough for an unknown
@@ -515,14 +541,17 @@ class CatalogView:
 
 
 def check_extension_does_not_shadow_base(catalog: Catalog) -> None:
-    """A UI catalog may add operations but never redefine a base one.
+    """A UI catalog may add operations and components but never redefine a base one.
 
     Raises:
-        ValueError: If the catalog defines an operation the base catalog already provides.
+        ValueError: If the catalog defines an operation or component the base catalog already provides.
     """
     shadowed = sorted({operation.name for operation in catalog.operations} & set(base_operations()))
     if shadowed:
         raise ValueError(f"catalog {catalog.name!r} cannot redefine base operations {shadowed}")
+    shadowed = sorted({component.name for component in catalog.components} & set(base_components()))
+    if shadowed:
+        raise ValueError(f"catalog {catalog.name!r} cannot redefine base components {shadowed}")
 
 
 def resolve_catalogs(catalogs: Sequence[Catalog], *, authoritative: bool) -> CatalogView:
@@ -537,12 +566,15 @@ def resolve_catalogs(catalogs: Sequence[Catalog], *, authoritative: bool) -> Cat
     """
     operations: dict[str, OperationSpec] = dict(base_operations())
     operation_provider: dict[str, str] = {}
-    components: dict[str, ComponentSpec] = {}
-    component_provider: dict[str, str] = {}
+    components: dict[str, ComponentSpec] = dict(base_components())
+    component_provider: dict[str, str] = {name: BASE_CATALOG_ID for name in components}
     any_components = False
 
     for catalog in catalogs:
         for operation in catalog.operations:
+            # Base wins: a catalog published before an operation joined base still lists it.
+            if is_base_operation(operation.name):
+                continue
             previous = operations.get(operation.name)
             if previous is not None and operation.name in operation_provider and previous != operation:
                 raise ValueError(
@@ -556,6 +588,8 @@ def resolve_catalogs(catalogs: Sequence[Catalog], *, authoritative: bool) -> Cat
             continue
         any_components = True
         for component in catalog.components:
+            if is_base_component(component.name):
+                continue
             previous_component = components.get(component.name)
             if previous_component is not None and previous_component != component:
                 raise ValueError(
@@ -574,7 +608,7 @@ def resolve_catalogs(catalogs: Sequence[Catalog], *, authoritative: bool) -> Cat
 
 
 def base_only_view() -> CatalogView:
-    """The offline view: base operations, no components, not authoritative."""
+    """The offline view: base operations, components unchecked, not authoritative."""
     return resolve_catalogs((), authoritative=False)
 
 

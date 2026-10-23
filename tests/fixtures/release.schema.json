@@ -1038,6 +1038,22 @@
           "title": "Key",
           "type": "string"
         },
+        "services": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/BlokServiceInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The backend services this Blok reads from (its `query` components name them), each frozen at the version it was written against.",
+          "title": "Services"
+        },
         "source": {
           "anyOf": [
             {
@@ -1056,6 +1072,62 @@
         "key"
       ],
       "title": "BlokImplementationInput",
+      "type": "object"
+    },
+    "BlokServiceInput": {
+      "additionalProperties": false,
+      "description": "A backend service a blok reads from, frozen at the version it was written against.",
+      "properties": {
+        "key": {
+          "description": "The service's key, as a `query`'s `schema` names it: 'mikro'.",
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "schema_hash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "'sha256:<hex>' of the canonical GraphQL schema the blok's queries were checked against.",
+          "title": "Schema Hash"
+        },
+        "service": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The service type, in reverse-domain form: 'live.arkitekt.mikro'.",
+          "title": "Service"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The server version the blok was written against, as the service declaration names it ('8').",
+          "title": "Version"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "title": "BlokServiceInput",
       "type": "object"
     },
     "ChoiceAssignWidgetInput": {

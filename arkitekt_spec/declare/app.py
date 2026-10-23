@@ -43,6 +43,7 @@ from arkitekt_spec.actions import (
     LockImplementationInput,
     PortGroupInput,
     PortKind,
+    PortMatchInput,
     ReturnWidgetInput,
     StateImplementationInput,
     TestTargetInput,
@@ -123,6 +124,10 @@ class BlokDeclaration(BaseModel):
     for_node: str | None = None
     args: tuple[ArgPortInput, ...] = ()
     """The items the blok is opened for, read under ``@args.<key>``."""
+    local_state_matches: dict[str, PortMatchInput | None] = Field(default_factory=dict)
+    """The type of each ``local_state`` root, from the class it was declared with or its value."""
+    mode: BlokCheckMode = "warning"
+    """How what only the build can check (a query against its service's schema) is reported."""
 
 
 #: How each kind of asset is recognised: the extensions it is written with, and how
@@ -690,7 +695,7 @@ class AppRegistry(BaseModel):
         demo_state: dict[str, Any] | None = None,
         dependencies: "Mapping[str, type[Any]] | Sequence[AgentDependencyInput] | None" = None,
         catalog: str | None = None,
-        local_state: dict[str, Any] | None = None,
+        local_state: Mapping[str, Any] | None = None,
         context: ComponentContext | str = ComponentContext.HTML,
         default: bool = False,
         for_model: str | None = None,
@@ -723,7 +728,10 @@ class AppRegistry(BaseModel):
                 ``{"form": {"iterations": 15}}``. Its keys are path roots the tree
                 may bind controls to (``bind="form.iterations"``) and read back
                 in a call (``@self.run(iterations=form.iterations)``). It never
-                reaches the agent's state.
+                reaches the agent's state. A root's type is what its value holds,
+                or, given a dataclass or pydantic model (``{"form": Form}``, or an
+                instance), its fields: a read or a bind of a key it does not have
+                is refused. A ``query``'s ``bind`` is typed on its own.
             context: The renderer for the blok's root: ``"html"`` for a panel,
                 ``"scene"`` for a full 3D view, whose root must be a ``Scene``, or
                 ``"logo"`` for the app's logo, whose root must be an ``SVG``. Clients
@@ -747,7 +755,9 @@ class AppRegistry(BaseModel):
                 ``@args.image`` -- null until the blok is opened for one. Html
                 bloks only.
             mode: ``"warning"`` warns about an unknown component, prop or any other
-                catalog finding; ``"strict"`` refuses the blok for it.
+                catalog finding; ``"strict"`` refuses the blok for it. The same goes for a
+                ``query`` the build checks against its service's schema: a field the
+                schema does not have, or a service whose schema the app does not know.
 
         Raises:
             ValueError: If the name or component is missing, a reference does not
@@ -765,6 +775,7 @@ class AppRegistry(BaseModel):
             source = component
             component = parse_bsx(component)
 
+        local_state, local_state_matches = self._local_state_types(local_state)
         resolved_dependencies = self._resolve_dependencies(dependencies)
         taken = RESERVED_ROOTS | {
             dependency.key for dependency in resolved_dependencies or ()
@@ -852,7 +863,29 @@ class AppRegistry(BaseModel):
             for_model=for_model,
             for_node=for_node,
             args=arg_ports,
+            local_state_matches=local_state_matches,
+            mode=mode,
         )
+
+    def _local_state_types(
+        self, local_state: Mapping[str, Any] | None
+    ) -> tuple[dict[str, Any] | None, dict[str, PortMatchInput | None]]:
+        """``local_state`` as the values it starts with, and each root's type."""
+        from arkitekt_spec.declare.blok.uistate import local_state_matches
+        from arkitekt_spec.declare.definition.match import build_port_match
+
+        def structure(cls: Any, key: str) -> PortMatchInput | None:
+            # A structure (``Image``) is typed as the app's registry types it; anything
+            # else it does not know stays untyped rather than refusing the blok.
+            try:
+                return build_port_match(0, convert_object_to_argport(cls, key, self.structure_registry))
+            except Exception:  # any refusal of the registry means "no type"
+                return None
+
+        if local_state is None:
+            return None, {}
+        values, matches = local_state_matches(local_state, structure)
+        return values, matches
 
     def register_asset(
         self,

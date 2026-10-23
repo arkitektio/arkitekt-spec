@@ -27,7 +27,8 @@ def test_base_catalog_is_a_catalog() -> None:
     base = load_base_catalog()
     assert isinstance(base, Catalog)
     assert base.name == "base" and base.version == BASE_CATALOG_VERSION
-    assert base.components == ()
+    assert {component.name for component in base.components} >= {"foreach", "if", "match", "case", "default", "when"}
+    assert all(component.name == component.name.lower() for component in base.components)
 
 
 def test_resolve_extends_base_without_replacing_it() -> None:

@@ -779,6 +779,21 @@ AssignWidgetInput = Annotated[
 ]
 
 
+class BlokServiceInput(ActionModel):
+    """A backend service a blok reads from, frozen at the version it was written against."""
+
+    key: str = Field(min_length=1, description="The service's key, as a `query`'s `schema` names it: 'mikro'.")
+    service: str | None = Field(default=None, description="The service type, in reverse-domain form: 'live.arkitekt.mikro'.")
+    version: str | None = Field(default=None, description="The server version the blok was written against, as the service declaration names it ('8').")
+    schema_hash: str | None = Field(
+        validation_alias=AliasChoices("schema_hash", "schemaHash"),
+        serialization_alias="schemaHash",
+        default=None,
+        description="'sha256:<hex>' of the canonical GraphQL schema the blok's queries were checked against.",
+    )
+    model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
+
+
 class BlokImplementationInput(BlokRules, ActionModel):
     """Which locks does the agent provide in general"""
 
@@ -834,6 +849,11 @@ class BlokImplementationInput(BlokRules, ActionModel):
         description="The items this Blok is opened for, declared like an action's args and read under `@args.<key>`. A UI offers the Blok on any item its args accept. HTML bloks only.",
     )
     "The items this Blok is opened for, read under `@args.<key>`. None when there are none, so a blok without args sends, and the agent hashes (`exclude_none`), what it always did."
+    services: tuple[BlokServiceInput, ...] | None = Field(
+        default=None,
+        description="The backend services this Blok reads from (its `query` components name them), each frozen at the version it was written against.",
+    )
+    "None when there are none, like `args`, so a blok without queries sends and hashes what it always did."
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )

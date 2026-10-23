@@ -191,11 +191,12 @@ def test_an_operation_of_the_app_is_called_by_keyword() -> None:
     """Only a base operation takes its arguments by position.
 
     The published catalog lists an operation's arguments by name, not in the order a
-    call would pass them (``math.round`` is ``precision, value``), so a position says
-    nothing. Refusing it is what keeps ``round(1.234, 2)`` from rounding 2.
+    call would pass them, so a position says nothing. ``math.round`` is base now and
+    positional (``round(1.234, 2)`` rounds 1.234); the app's own ``str.concat`` is not.
     """
-    with pytest.raises(ValueError, match=r"'math.round' does not accept arguments \['0', '1'\]"):
-        AppRegistry().register_blok("panel", '<span text="@utils.math.round(1.234, 2)" />', mode="strict")
+    AppRegistry().register_blok("rounded", '<span text="@utils.math.round(1.234, 2)" />', mode="strict")
+    with pytest.raises(ValueError, match=r"'str.concat' does not accept arguments \['0', '1'\]"):
+        AppRegistry().register_blok("panel", '<span text="@utils.str.concat(\'a\', \'b\')" />', mode="strict")
 
 
 # -- the 3D vocabulary ---------------------------------------------------------------

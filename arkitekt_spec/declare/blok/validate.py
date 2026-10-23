@@ -159,6 +159,54 @@ def idle_task_record() -> dict[str, Any]:
     }
 
 
+def idle_resource_record() -> dict[str, Any]:
+    """The value a ``query``'s ``bind`` holds before it has read anything.
+
+    The one place the read record's shape is written down (the client's
+    ``runtime/resource.ts`` writes the same fields): :func:`resource_record_match`
+    is derived from it.
+    """
+    return {
+        "status": "idle",
+        "loading": False,
+        "ready": False,
+        "failed": False,
+        "empty": False,
+        "stale": False,
+        "error": "",
+        "data": None,
+    }
+
+
+OPEN_IDENTIFIER = "*"
+"""Marks a value nothing declares the shape of: any path below it is taken as written."""
+
+
+def open_match(key: str | None) -> PortMatchInput:
+    """A value of unknown shape that may still be looked into: the blok's untyped UI state."""
+    return PortMatchInput(key=key, identifier=OPEN_IDENTIFIER)
+
+
+def _is_open(match: PortMatchInput | None) -> bool:
+    return match is not None and match.identifier == OPEN_IDENTIFIER
+
+
+def resource_record_match(name: str, data: PortMatchInput | None) -> PortMatchInput:
+    """The shape of a read's record: its fixed fields, and ``data`` as the query answers it.
+
+    A query the validator could not check leaves ``data`` open: any path below it is
+    taken as written, as the blok's untyped state always was.
+    """
+    fields = [PortMatchInput(key=key) for key in idle_resource_record() if key != "data"]
+    answer = data.model_copy(update={"key": "data"}) if data is not None else open_match("data")
+    return PortMatchInput(key=name, children=(*fields, answer))
+
+
+def _path_parts(path: str) -> list[str]:
+    """A data-model path as written (``form.iterations``, ``form/iterations``), by segment."""
+    return [part for part in path.replace("/", ".").split(".") if part]
+
+
 def _task_record_match(
     name: str, returns: tuple[PortMatchInput, ...] | None
 ) -> PortMatchInput:
@@ -259,10 +307,16 @@ class _ValidationVisitor(BlokVisitor):
         catalog: "CatalogView | None" = None,
         local_roots: frozenset[str] = frozenset(),
         mode: BlokCheckMode = "warning",
+        local_matches: Mapping[str, PortMatchInput | None] | None = None,
+        records: Mapping[str, str] | None = None,
     ) -> None:
         self.index = index
         self.catalog = catalog
         self.local_roots = local_roots
+        # The types of the blok's own UI state, by root; a root without one is untyped.
+        self.local_matches = dict(local_matches or {})
+        # Paths a read owns (a ``query``'s ``bind``), and the id of the node that writes it.
+        self.records = dict(records or {})
         self.diagnostics: list[Diagnostic] = []
         # Where a catalog finding goes: the diagnostics, or raised when strict.
         self.findings = None if mode == "strict" else self.diagnostics
@@ -270,7 +324,8 @@ class _ValidationVisitor(BlokVisitor):
     def visit_component(
         self, node: ComponentNodeInput, scope: dict[str, PortMatchInput | None], context: str
     ) -> None:
-        """Check the node against the catalog in force, if any is known."""
+        """Check the node's binds against the typed UI state, and the node against the catalog."""
+        self._check_bind(node, context)
         if self.catalog is None:
             return
         check_component(
@@ -291,6 +346,28 @@ class _ValidationVisitor(BlokVisitor):
         self, path: str, scope: dict[str, PortMatchInput | None], context: str
     ) -> None:
         self._resolve(path, scope, context)
+
+    def _check_bind(self, node: ComponentNodeInput, context: str) -> None:
+        """A literal ``bind`` writes a path of the blok's own state: one its type has, and no read's."""
+        bind = next((prop.static_value for prop in node.props or () if prop.key == "bind"), None)
+        if not isinstance(bind, str) or not bind:
+            return
+        parts = _path_parts(bind)
+        joined = ".".join(parts)
+        owner = self.records.get(joined)
+        if owner is not None and owner != node.id:
+            raise ValueError(
+                f"{context}: '{joined}' is the record query '{owner}' writes; a control bound there would "
+                f"overwrite its answer. Read it with @{joined} instead."
+            )
+        for path, writer in self.records.items():
+            if writer != node.id and joined.startswith(path + "."):
+                raise ValueError(f"{context}: '{joined}' is inside the record query '{writer}' writes under '{path}'.")
+        if owner is not None:
+            return
+        root = parts[0]
+        if root in self.local_roots and self.local_matches.get(root) is not None:
+            _resolve_port_match_path(self.local_matches[root], parts[1:], bind, context)
 
     def visit_agent_call(
         self, call: AgentProbeInput, scope: dict[str, PortMatchInput | None], context: str
@@ -395,9 +472,12 @@ class _ValidationVisitor(BlokVisitor):
             )
 
         if root in self.local_roots:
-            # The blok's own UI state: nothing declares its shape, so the path
-            # is taken as written.
-            return None
+            # The blok's own UI state: typed when the blok declares it with a class, its
+            # values or a read (``query bind=...``); taken as written otherwise.
+            match = self.local_matches.get(root)
+            if match is None:
+                return open_match(root)
+            return _resolve_port_match_path(match, path_parts[1:], path, context)
 
         if root == "state" and len(path_parts) > 1:
             canonical_state_dependency = index.canonical(path_parts[1])
@@ -451,6 +531,8 @@ def validate_blok(
     catalog: "CatalogView | None" = None,
     local_roots: Iterable[str] = (),
     mode: BlokCheckMode = "warning",
+    local_matches: Mapping[str, PortMatchInput | None] | None = None,
+    records: Mapping[str, str] | None = None,
 ) -> list[Diagnostic]:
     """Validate every reference in ``component`` resolves against ``dependencies``.
 
@@ -466,6 +548,11 @@ def validate_blok(
         dependencies: What references in the tree may resolve against.
         catalog: The catalog view in force, or ``None`` to skip every catalog rule.
         local_roots: Path roots that name the blok's own UI state.
+        local_matches: The types of those roots that have one (see
+            :func:`~arkitekt_spec.declare.blok.uistate.local_state_matches`); a path under a
+            typed root must exist in it, and a literal ``bind`` must too.
+        records: The paths reads own, to the id of the ``query`` that writes each: no other
+            component may bind them.
         mode: ``"warning"`` returns a broken catalog rule as a finding, ``"strict"``
             raises it (see :data:`~arkitekt_spec.declare.catalogs.BlokCheckMode`).
 
@@ -479,7 +566,9 @@ def validate_blok(
             structural id.
     """
     index = DependencyIndex.from_dependencies(dependencies)
-    visitor = _ValidationVisitor(index, catalog, frozenset(local_roots) - index.keys, mode)
+    visitor = _ValidationVisitor(
+        index, catalog, frozenset(local_roots) - index.keys, mode, local_matches=local_matches, records=records
+    )
     walk_component(component, visitor)
     if catalog is not None:
         _check_tree_placement(component, catalog, visitor.findings)
@@ -888,6 +977,9 @@ def _resolve_port_match_path(
     current_match = port_match
     remaining_parts = list(path_parts)
 
+    if _is_open(current_match):
+        return current_match
+
     if current_match is None:
         if remaining_parts:
             raise ValueError(
@@ -897,6 +989,8 @@ def _resolve_port_match_path(
         return None
 
     while remaining_parts:
+        if _is_open(current_match):
+            return current_match
         next_part = remaining_parts.pop(0)
         children = current_match.children or ()
 
@@ -933,6 +1027,8 @@ def _infer_iterable_item_match(
 ) -> PortMatchInput | None:
     if port_match is None:
         return None
+    if _is_open(port_match):
+        return open_match("...")
 
     children = port_match.children or ()
     if len(children) == 1 and children[0].key == "...":

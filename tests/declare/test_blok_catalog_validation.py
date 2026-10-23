@@ -19,6 +19,7 @@ from arkitekt_spec.declare.catalogs import (
     ComponentSpec,
     PropSpec,
     _parse_ui_catalog,
+    base_components,
 )
 
 from .catalog_cases import BOX, CLAMP, FOREACH, SLIDER, base_view, electron_view
@@ -96,25 +97,23 @@ def test_naming_an_undeclared_catalog_falls_back_to_base_only() -> None:
     assert registry.registered_bloks["later"].catalog == "not-declared-here"
 
 
-def test_foreach_is_an_ordinary_component_to_a_catalog() -> None:
-    """``foreach`` is BSX syntax, but the server has no concept of it either.
+def test_foreach_is_a_base_component() -> None:
+    """``foreach`` (like ``if``, ``match``, …) is the base catalog's, as on the server.
 
-    It reaches the server as a component name like any other, so a catalog that has
-    registered components must register ``foreach`` too. Exempting it here would make
-    the client accept a tree the server rejects, which is the one thing a pre-flight
-    check must never do.
+    A catalog that registered components need not register it: base's control flow is in
+    force under every catalog, so the client accepts exactly the tree the server does.
     """
     registry = AppRegistry()
     registry.declare_ui_catalog("ui", components=[BOX])
-    with pytest.raises(ValueError, match="'foreach' is not registered"):
-        registry.register_blok("bad", '<Box><foreach let="#x" items="@d.s.xs" /></Box>', catalog="ui", mode="strict")
-
-
-def test_foreach_passes_when_the_catalog_registers_it() -> None:
-    registry = AppRegistry()
-    registry.declare_ui_catalog("ui", components=[BOX, FOREACH])
-    registry.register_blok("ok", '<Box><foreach let="#x" items="@d.s.xs" /></Box>', catalog="ui")
+    registry.register_blok("ok", '<Box><foreach let="#x" items="@d.s.xs" /></Box>', catalog="ui", mode="strict")
     assert "ok" in registry.registered_bloks
+
+
+def test_a_catalog_cannot_redefine_foreach() -> None:
+    registry = AppRegistry()
+    with pytest.raises(ValueError, match=r"cannot redefine base components \['foreach'\]"):
+        registry.declare_ui_catalog("ui", components=[BOX, FOREACH])
+        registry.register_blok("bad", '<Box><foreach let="#x" items="@d.s.xs" /></Box>', catalog="ui")
 
 
 def test_structural_foreach_rules_still_fire_without_a_catalog() -> None:
@@ -319,7 +318,9 @@ def test_a_published_catalog_says_which_components_inherit_their_context() -> No
         }
     )
     components = {component.name: component for component in catalog.components}
-    assert components["foreach"].inherits_context
+    # foreach is base's: a published catalog that still lists it is read without it.
+    assert "foreach" not in components
+    assert base_components()["foreach"].inherits_context
     assert not components["Path"].inherits_context
     assert components["SVG"].children_context == LOGO_CONTEXT
 
@@ -346,13 +347,8 @@ def test_a_logo_is_held_to_the_size_of_an_icon(tree: str, demo_state: dict | Non
     registry.declare_ui_catalog(
         "looping",
         components=[
+            # foreach is the base catalog's.
             *registry.declared_catalogs["electron"].components,
-            ComponentSpec(
-                name="foreach",
-                accepts_children=True,
-                inherits_context=True,
-                props=(PropSpec(key="items", kind="LIST", required=True), PropSpec(key="let", kind="STRING", required=False)),
-            ),
         ],
         operations=[],
     )
@@ -454,13 +450,8 @@ def _looping_logo_registry() -> AppRegistry:
     registry.declare_ui_catalog(
         "looping",
         components=[
+            # foreach is the base catalog's.
             *registry.declared_catalogs["electron"].components,
-            ComponentSpec(
-                name="foreach",
-                accepts_children=True,
-                inherits_context=True,
-                props=(PropSpec(key="items", kind="LIST", required=True), PropSpec(key="let", kind="STRING", required=False)),
-            ),
         ],
         operations=[],
     )

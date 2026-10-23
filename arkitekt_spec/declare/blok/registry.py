@@ -1,5 +1,6 @@
 """Turn registered blok declarations into the inputs the agent uploads."""
 
+import warnings
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from typing import (
     TYPE_CHECKING,
@@ -11,18 +12,26 @@ from arkitekt_spec.actions import (
     AgentDependencyInput,
     AgentProbeInput,
     BlokImplementationInput,
+    BlokServiceInput,
     ComponentContext,
     ComponentNodeInput,
     PortKind,
+    PortMatchInput,
     ReturnPortInput,
     StateDependencyInput,
     UtilCallInput,
 )
+from arkitekt_spec.declare.blok.graphql import check_query, graphql_available, schema_hash
+from arkitekt_spec.declare.blok.uistate import QueryRead, query_reads
 from arkitekt_spec.declare.blok.validate import (
     EVENT_SCOPE_KEY,
     RESERVED_ROOTS,
+    idle_resource_record,
     idle_task_record,
     latest_task_reads,
+    local_roots_of,
+    resource_record_match,
+    validate_blok,
 )
 from arkitekt_spec.declare.blok.walk import (
     BlokVisitor,
@@ -30,7 +39,13 @@ from arkitekt_spec.declare.blok.walk import (
     bound_calls,
     walk_component,
 )
-from arkitekt_spec.declare.catalogs import LATEST_SEGMENT, asset_path_parts, latest_task_path_parts
+from arkitekt_spec.declare.catalogs import (
+    LATEST_SEGMENT,
+    BlokCheckMode,
+    CatalogWarning,
+    asset_path_parts,
+    latest_task_path_parts,
+)
 from arkitekt_spec.declare.definition.checks import check_blok
 from arkitekt_spec.declare.definition.dependencies import (
     build_action_dependency_input,
@@ -51,13 +66,17 @@ def build_declared_bloks(
     declared_bloks: dict[str, BlokImplementationInput] = {}
 
     for blok_key, declaration in app_registry.registered_bloks.items():
+        reads = query_reads(declaration.component)
+        # A query's bind is the blok's own state, never a dependency of that name.
+        read_roots = {read.bind.split(".")[0]: None for read in reads if read.bind}
         dependencies = _build_dependencies_for_component(
             declaration.component,
             app_registry,
             declaration.dependencies or (),
-            local_state=declaration.local_state or {},
+            local_state={**read_roots, **(declaration.local_state or {})},
             demo_state=declaration.demo_state or {},
         )
+        typed = _type_reads(blok_key, reads, app_registry, declaration.mode)
 
         if declaration.context == ComponentContext.ACTION_LOGO and dependencies:
             raise ValueError(
@@ -75,6 +94,18 @@ def build_declared_bloks(
             demo_state = {**demo_state, **declaration.local_state}
         demo_state = demo_state_for(declaration.component, dependencies, demo_state)
 
+        # The typed pass: the blok's own state as declared, and every read's record as its
+        # query answers it. References were checked untyped above; here they meet the types.
+        local_matches = _with_records(dict(declaration.local_state_matches), typed.records)
+        validate_blok(
+            declaration.component,
+            list(dependencies),
+            local_roots=local_roots_of(dependencies, demo_state),
+            local_matches=local_matches,
+            records={path: node_id for path, (node_id, _) in typed.records.items()},
+            mode=declaration.mode,
+        )
+
         fields: dict[str, Any] = dict(
             key=blok_key,
             dependencies=tuple(dependencies),
@@ -90,6 +121,9 @@ def build_declared_bloks(
             # Unset otherwise: the declaration is dumped ``exclude_unset``, so a blok without
             # args sends, and hashes, what it did before bloks took any.
             fields["args"] = declaration.args
+        if typed.services:
+            # Likewise: a blok without queries sends what it always did.
+            fields["services"] = typed.services
         # Checked as its tree; sent as the BSX it was written in, when it was, which the
         # server parses into the same tree.
         checked = check_blok(BlokImplementationInput(components=(declaration.component,), **fields))
@@ -102,19 +136,137 @@ def build_declared_bloks(
     return declared_bloks
 
 
+class _TypedReads:
+    """What the build learns of a blok's queries: each record's type, and the services they run on."""
+
+    def __init__(self) -> None:
+        self.records: dict[str, tuple[str, PortMatchInput]] = {}
+        self.services: tuple[BlokServiceInput, ...] = ()
+
+
+def _report(blok_key: str, message: str, mode: BlokCheckMode) -> None:
+    if mode == "strict":
+        raise ValueError(f"Blok {blok_key!r}: {message}")
+    warnings.warn(f"Blok {blok_key!r}: {message}", CatalogWarning, stacklevel=4)
+
+
+def _service_version(image: str | None) -> str | None:
+    """The server version a service declaration names: its image's tag (``jhnnsrs/mikro:8`` -> ``8``)."""
+    if not image or ":" not in image.rsplit("/", 1)[-1]:
+        return None
+    return image.rsplit(":", 1)[1]
+
+
+def _type_reads(
+    blok_key: str, reads: Sequence[QueryRead], app_registry: "AppRegistry", mode: BlokCheckMode
+) -> _TypedReads:
+    """Check each query against its service's schema, when the app knows it, and freeze the services.
+
+    A schema the app does not know, or graphql-core missing, leaves the query unchecked: a
+    warning, or refused in strict mode. Either way its record has its fixed fields.
+    """
+    typed = _TypedReads()
+    services: dict[str, BlokServiceInput] = {}
+    checkable = graphql_available()
+    for read in reads:
+        data: PortMatchInput | None = None
+        if read.schema is None:
+            _report(blok_key, f"{read.context} names no `schema`: the service it runs on", mode)
+        else:
+            service = app_registry.services.get(read.schema)
+            sdl = service.get_graphql_schema() if service is not None else None
+            if sdl is None:
+                _report(
+                    blok_key,
+                    f"{read.context}: this app knows no schema for the {read.schema!r} service, so its query is "
+                    f"not checked. Register the service (`App(services=[...])`) with its schema to check it.",
+                    mode,
+                )
+            elif not checkable:
+                _report(blok_key, f"{read.context}: install graphql-core to check its query", mode)
+            elif read.document is not None:
+                shape = check_query(sdl, read.document)
+                for error in shape.errors:
+                    _report(blok_key, f"{read.context}: {error}", mode)
+                data = shape.data
+            if read.schema not in services:
+                requirements = service.get_requirements() if service is not None else []
+                own = next((r for r in requirements if r.key == read.schema), requirements[0] if requirements else None)
+                services[read.schema] = BlokServiceInput(
+                    key=read.schema,
+                    service=own.service if own is not None else None,
+                    version=_service_version(getattr(service, "image", None)),
+                    schema_hash=schema_hash(sdl) if sdl is not None and checkable else None,
+                )
+        if read.bind is not None:
+            typed.records[read.bind] = (read.node_id, resource_record_match(read.bind.split(".")[-1], data))
+    typed.services = tuple(services.values())
+    return typed
+
+
+def _with_records(
+    matches: dict[str, PortMatchInput | None], records: Mapping[str, tuple[str, PortMatchInput]]
+) -> dict[str, PortMatchInput | None]:
+    """The local state's types with each record put at its path.
+
+    A record at a root (``bind="cells"``) types the root; one under a typed root
+    (``bind="ui.cells"``) becomes that key of it. Under an untyped root it stays untyped.
+    """
+    for path, (_, record) in records.items():
+        root, *rest = path.split(".")
+        if not rest:
+            matches[root] = record.model_copy(update={"key": root})
+        elif matches.get(root) is not None:
+            matches[root] = _put(matches[root], rest, record)  # type: ignore[arg-type]
+    return matches
+
+
+def _put(match: PortMatchInput, parts: list[str], record: PortMatchInput) -> PortMatchInput:
+    head, *rest = parts
+    children = list(match.children or ())
+    index = next((i for i, child in enumerate(children) if child.key == head), None)
+    if rest:
+        inner = children[index] if index is not None else PortMatchInput(key=head, kind=PortKind.DICT)
+        placed = _put(inner, rest, record)
+    else:
+        placed = record.model_copy(update={"key": head})
+    if index is None:
+        children.append(placed)
+    else:
+        children[index] = placed
+    return match.model_copy(update={"children": tuple(children)})
+
+
+def _seed_records(state: dict[str, Any], component: ComponentNodeInput) -> dict[str, Any]:
+    """``state`` with an idle read record at every ``query`` bind it does not seed itself."""
+    for read in query_reads(component):
+        if read.bind is None:
+            continue
+        *parents, last = read.bind.split(".")
+        holder = state
+        for part in parents:
+            inner = holder.get(part)
+            if not isinstance(inner, dict):
+                inner = {}
+            holder[part] = inner = dict(inner)
+            holder = inner
+        holder.setdefault(last, idle_resource_record())
+    return state
+
+
 def demo_state_for(
     component: ComponentNodeInput,
     dependencies: Iterable[AgentDependencyInput],
     demo_state: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """``demo_state`` with the idle task records ``component`` reads added.
+    """``demo_state`` with the idle task and read records ``component`` reads added.
 
     Each name a call is bound to (``.into(run)``) and each action whose latest
     task the tree reads (``dep.action.latest``) starts as a call that has not run:
     what the renderer shows until it does. The server takes every top-level key
     as a path root, so a tree that reads one of these needs it here.
     """
-    state = {**demo_state, **{name: idle_task_record() for name in bound_calls(component)}}
+    state = _seed_records({**demo_state, **{name: idle_task_record() for name in bound_calls(component)}}, component)
     for dependency_key, action_key in sorted(latest_task_reads(component, dependencies)):
         of_dependency = dict(state.get(dependency_key) or {})
         of_action = dict(of_dependency.get(action_key) or {})
