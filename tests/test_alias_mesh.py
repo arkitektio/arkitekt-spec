@@ -105,3 +105,18 @@ async def test_forward_and_turn_need_a_node() -> None:
         await proxied.aforward()
     with pytest.raises(MeshError, match="ARKITEKT_MESH_PROXY"):
         await proxied.aturn()
+
+
+def test_reach_says_where_an_alias_works_and_kind_still_counts() -> None:
+    from arkitekt_spec.declare.wiring import Alias
+
+    assert Alias(id="i", host="gateway", reach="internal").is_internal()
+    # An older server says docker; a newer one internal. Both are internal.
+    assert Alias(id="d", host="gateway", kind="docker").is_internal()
+    assert Alias(id="d", host="gateway", kind="docker").is_docker()
+    assert Alias(id="l", host="127.0.0.1").is_loopback()
+    assert Alias(id="l", host="[::1]").is_loopback()
+    assert Alias(id="r", host="box", reach="loopback").is_loopback()
+    assert not Alias(id="n", host="lab.local", reach="lan").is_loopback()
+    # Routing stays on kind: a literal tailnet host is reach mesh but not routed by the node.
+    assert not Alias(id="m", host="hub.tail.ts.net", reach="mesh", kind="absolute").is_mesh()

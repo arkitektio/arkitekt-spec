@@ -18,6 +18,9 @@ dependencies = [
     "docstring-parser>=0.11",
     "inflection>=0.5.1",
     "fieldz>=0.0.2",
+    # The public roots an unpinned alias is reached with (arkitekt_spec.declare.tls),
+    # as every client's links already use them.
+    "certifi>=2024.2.2",
 ]
 
 [dependency-groups]

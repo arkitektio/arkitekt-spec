@@ -1,0 +1,4 @@
+Test-only self-signed certificates for localhost/127.0.0.1 (valid 20 years): `hub` plays a
+hub's registered certificate, `other` a different one for the same names. Made with
+`openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 7300
+-addext "subjectAltName=DNS:localhost,IP:127.0.0.1"`. The keys are not secret.

@@ -8,8 +8,9 @@ the server the app itself logged into. Reading those is declaration; resolving t
 """
 
 import ipaddress
+import ssl as _ssl  # `Alias.ssl` (the field) shadows the module inside the class
 from dataclasses import dataclass
-from typing import Any, Protocol, Self, runtime_checkable
+from typing import Any, Literal, Protocol, Self, runtime_checkable
 
 from pydantic import BaseModel, Field, PrivateAttr
 
@@ -85,14 +86,47 @@ class Alias(BaseModel):
     """How the server reaches the instance: ``"absolute"``, ``"mesh"`` (only
     reachable over the deployment's tailnet) or ``"docker"`` (only reachable
     from inside the deployment's own docker environment).
-    Older servers do not send it; see :meth:`is_mesh` and :meth:`is_docker`."""
+    Older servers do not send it; see :meth:`is_mesh` and :meth:`is_internal`.
+    Superseded by :attr:`reach`, except for routing: a ``mesh`` kind is the
+    alias the server resolved to its hub node, reached through the mesh node."""
+    reach: Literal["loopback", "internal", "lan", "mesh", "public"] | None = None
+    """Where the address works: ``loopback`` this machine, ``internal`` only
+    inside the deployment's own network, ``lan`` the local network, ``mesh`` the
+    organization's mesh, ``public`` the internet. Older servers do not send it."""
     proxy: str | None = Field(default=None, exclude=True)
     """The HTTP proxy this alias is reached through (the mesh node's local
     proxy), set by the fakts client when it resolves the alias. Never sent or
     cached."""
+    certificates: list[str] = Field(default_factory=list, exclude=True)
+    """The certificates the instance's hub registered (PEM), set by the fakts
+    client when it resolves a TLS alias of such an instance: the alias is then
+    verified by exactly these (:meth:`ssl_context`, see
+    :mod:`arkitekt_spec.declare.tls`). Empty for any other alias. Never sent or
+    cached."""
     _mesh: MeshNode | None = PrivateAttr(default=None)
     """The mesh node this process reaches the alias through, if it runs one
     (not for an external proxy). Never sent or cached."""
+
+    def is_pinned(self) -> bool:
+        """Whether this alias is TLS verified by its hub's registered certificate."""
+        return self.ssl and bool(self.certificates)
+
+    def ssl_context(self) -> _ssl.SSLContext:
+        """The context to reach this alias with: its hub's certificate alone when
+        it is pinned (:meth:`is_pinned`), the public roots otherwise."""
+        from arkitekt_spec.declare import tls
+
+        return tls.pinned_context(self.certificates) if self.is_pinned() else tls.default_context()
+
+    def trust_natively(self) -> None:
+        """For clients that read their roots from ``SSL_CERT_FILE`` (obstore,
+        LiveKit, duckdb): make them trust this alias's hub certificate too. Does
+        nothing for an alias that is not pinned. See
+        :func:`arkitekt_spec.declare.tls.trust_natively`."""
+        if self.is_pinned():
+            from arkitekt_spec.declare import tls
+
+            tls.trust_natively(self.certificates)
 
     def through_mesh(self, proxy: str, node: MeshNode | None = None) -> Self:
         """A copy of this alias, reached through the mesh: over the HTTP
@@ -158,13 +192,30 @@ class Alias(BaseModel):
         except ValueError:
             return False
 
-    def is_docker(self) -> bool:
-        """Whether this alias is only reachable from inside the deployment's
-        own docker environment (its host is a name on that docker network).
+    def is_internal(self) -> bool:
+        """Whether this alias is only reachable from inside the deployment's own
+        network (its host is a name on that network — the docker one, today).
 
         Only the server can say so: there is nothing to tell from the host.
         """
-        return self.kind == "docker"
+        return self.reach == "internal" or self.kind == "docker"
+
+    def is_docker(self) -> bool:
+        """Deprecated: :meth:`is_internal`."""
+        return self.is_internal()
+
+    def is_loopback(self) -> bool:
+        """Whether this alias never leaves this machine: the server says so, or
+        its host is ``localhost``, ``*.localhost`` or a loopback address."""
+        if self.reach == "loopback":
+            return True
+        host = self.host.strip().strip("[]").rstrip(".").lower()
+        if host == "localhost" or host.endswith(".localhost"):
+            return True
+        try:
+            return ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            return False
 
     @property
     def challenge_path(self) -> str:
