@@ -794,6 +794,14 @@ class BlokServiceInput(ActionModel):
     model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
 
 
+class BlokPersistInput(ActionModel):
+    """A local a renderer may keep between openings, on the device: its demo value is the default."""
+
+    key: str = Field(min_length=1, description="The local: a top-level `demo_state` key that is neither a dependency nor a reserved root.")
+    description: str | None = Field(default=None, description="What the kept value is, for whoever resets it.")
+    model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
+
+
 class BlokImplementationInput(BlokRules, ActionModel):
     """Which locks does the agent provide in general"""
 
@@ -854,6 +862,15 @@ class BlokImplementationInput(BlokRules, ActionModel):
         description="The backend services this Blok reads from (its `query` components name them), each frozen at the version it was written against.",
     )
     "None when there are none, like `args`, so a blok without queries sends and hashes what it always did."
+    persist: tuple[BlokPersistInput, ...] = Field(
+        default=(),
+        # Never written when empty, like a definition's `protocols`: a blok that keeps nothing
+        # is the bytes it was before bloks could keep locals, which an older takt or kabinet
+        # (strict readers) still accepts, and its template hash does not move.
+        exclude_if=lambda persist: not persist,
+        description="The locals a renderer may keep between openings, on the device (never on a server): each a top-level `demo_state` key, whose demo value is the default. A renderer without storage keeps nothing.",
+    )
+    "The locals a renderer may keep between openings, on the device. Never dumped when empty."
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )

@@ -11,7 +11,7 @@ them as plain strings (``use_enum_values=True``).
 """
 
 from collections.abc import Iterable, Iterator, Mapping
-from typing import Any, Protocol, Self
+from typing import Any, Protocol, Self, cast
 
 from pydantic import BaseModel, field_validator, model_validator
 
@@ -366,8 +366,33 @@ class BlokRules(BaseModel):
             raise ValueError("a blok is sent as its components or as its BSX source")
         check_demo_state(blok.dependencies, blok.demo_state)
         _check_blok_args(self)
+        _check_blok_persist(self)
         _check_blok_services(self)
         return self
+
+
+#: The roots the renderer fills itself: never a local, so never persisted.
+_RENDERER_ROOTS = frozenset({"args", "$event"})
+
+
+def _check_blok_persist(rules: BaseModel) -> None:
+    """The server's ``check_blok_persist``: only locals, each once -- a top-level ``demo_state``
+    key that is not a dependency's key nor a root the renderer fills."""
+    blok: Any = rules
+    keys = [local.key for local in blok.persist or ()]
+    twice = next((key for key in keys if keys.count(key) > 1), None)
+    if twice is not None:
+        raise ValueError(f"Blok manifest persist: duplicate key {twice!r}")
+    dependencies = {dependency.key for dependency in blok.dependencies or ()}
+    demo_state: object = blok.demo_state
+    state = set(cast("Mapping[str, object]", demo_state)) if isinstance(demo_state, Mapping) else None
+    for key in keys:
+        if key in _RENDERER_ROOTS or key in dependencies:
+            raise ValueError(f"Blok manifest: persist names {key!r}, which is not a local but a root the renderer fills")
+        if state is None or key not in state:
+            raise ValueError(
+                f"Blok manifest: persist names {key!r}, which is not a demo_state key: a persisted local takes its demo value as its default"
+            )
 
 
 QUERY_COMPONENT = "query"

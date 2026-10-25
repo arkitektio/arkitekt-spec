@@ -28,6 +28,7 @@ from arkitekt_spec.actions import (
     ASSET_SOURCE_MAX_LENGTH,
     AgentDependencyInput,
     ArgPortInput,
+    BlokPersistInput,
     AssetInput,
     AssetKind,
     AssignWidgetInput,
@@ -124,6 +125,8 @@ class BlokDeclaration(BaseModel):
     for_node: str | None = None
     args: tuple[ArgPortInput, ...] = ()
     """The items the blok is opened for, read under ``@args.<key>``."""
+    persist: tuple[BlokPersistInput, ...] = ()
+    """The locals a renderer may keep between openings, on the device."""
     local_state_matches: dict[str, PortMatchInput | None] = Field(default_factory=dict)
     """The type of each ``local_state`` root, from the class it was declared with or its value."""
     mode: BlokCheckMode = "warning"
@@ -701,6 +704,7 @@ class AppRegistry(BaseModel):
         for_model: str | None = None,
         for_node: str | None = None,
         args: "Mapping[str, Any] | None" = None,
+        persist: "Mapping[str, str | None] | Sequence[str] | None" = None,
         mode: BlokCheckMode = "warning",
     ) -> None:
         """Register a blok component tree in the registry.
@@ -754,6 +758,11 @@ class AppRegistry(BaseModel):
                 blok on any item its args accept, and the tree reads the item at
                 ``@args.image`` -- null until the blok is opened for one. Html
                 bloks only.
+            persist: The locals a renderer may keep between openings, on the device
+                that set them (never on a server): ``["pose"]``, or
+                ``{"pose": "Where the gizmo left it"}`` with a description. Each is a
+                ``local_state`` (or ``demo_state``) key, whose value there is the
+                default; a renderer without storage keeps nothing.
             mode: ``"warning"`` warns about an unknown component, prop or any other
                 catalog finding; ``"strict"`` refuses the blok for it. The same goes for a
                 ``query`` the build checks against its service's schema: a field the
@@ -763,7 +772,8 @@ class AppRegistry(BaseModel):
             ValueError: If the name or component is missing, a reference does not
                 resolve, a catalog rejects the tree in strict mode, a ``local_state``
                 key is reserved or names a dependency, or ``args`` are given to a
-                blok that is not html, or the tree reads an arg it does not declare.
+                blok that is not html, or the tree reads an arg it does not declare,
+                or ``persist`` names a key that is not a local.
         """
         self._refuse_if_frozen(f"the blok {name!r}")
         if not name:
@@ -790,6 +800,16 @@ class AppRegistry(BaseModel):
         if shadowed:
             raise ValueError(
                 f"Blok '{name}' names {shadowed} in both demo_state and local_state"
+            )
+        persisted = (
+            tuple(BlokPersistInput(key=key, description=text) for key, text in persist.items())
+            if isinstance(persist, Mapping)
+            else tuple(BlokPersistInput(key=key) for key in persist or ())
+        )
+        unknown = sorted({local.key for local in persisted} - set(local_state or ()) - set(demo_state or ()))
+        if unknown:
+            raise ValueError(
+                f"Blok '{name}' cannot persist {unknown}: only a local_state or demo_state key is a local it can keep"
             )
         context = ComponentContext(context.upper()) if isinstance(context, str) else context
         arg_ports = tuple(
@@ -863,6 +883,7 @@ class AppRegistry(BaseModel):
             for_model=for_model,
             for_node=for_node,
             args=arg_ports,
+            persist=persisted,
             local_state_matches=local_state_matches,
             mode=mode,
         )

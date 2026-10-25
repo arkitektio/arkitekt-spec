@@ -124,6 +124,8 @@ def build_declared_bloks(
         if typed.services:
             # Likewise: a blok without queries sends what it always did.
             fields["services"] = typed.services
+        if declaration.persist:
+            fields["persist"] = declaration.persist
         # Checked as its tree; sent as the BSX it was written in, when it was, which the
         # server parses into the same tree.
         checked = check_blok(BlokImplementationInput(components=(declaration.component,), **fields))

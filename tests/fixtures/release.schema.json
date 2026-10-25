@@ -1038,6 +1038,15 @@
           "title": "Key",
           "type": "string"
         },
+        "persist": {
+          "default": [],
+          "description": "The locals a renderer may keep between openings, on the device (never on a server): each a top-level `demo_state` key, whose demo value is the default. A renderer without storage keeps nothing.",
+          "items": {
+            "$ref": "#/$defs/BlokPersistInput"
+          },
+          "title": "Persist",
+          "type": "array"
+        },
         "services": {
           "anyOf": [
             {
@@ -1072,6 +1081,36 @@
         "key"
       ],
       "title": "BlokImplementationInput",
+      "type": "object"
+    },
+    "BlokPersistInput": {
+      "additionalProperties": false,
+      "description": "A local a renderer may keep between openings, on the device: its demo value is the default.",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the kept value is, for whoever resets it.",
+          "title": "Description"
+        },
+        "key": {
+          "description": "The local: a top-level `demo_state` key that is neither a dependency nor a reserved root.",
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "title": "BlokPersistInput",
       "type": "object"
     },
     "BlokServiceInput": {
