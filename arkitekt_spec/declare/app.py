@@ -55,6 +55,7 @@ from arkitekt_spec.actions import (
 from arkitekt_spec.declare.actors.policy import KEEP, DisconnectPolicy
 from arkitekt_spec.declare.actors.types import Actifier, DeclaredImplementation
 from arkitekt_spec.declare.agents.hooks.registry import HooksRegistry
+from arkitekt_spec.declare.blok.action import ActionBlok, action_blok_components_in
 from arkitekt_spec.declare.blok.parser import bsx as parse_bsx
 from arkitekt_spec.declare.blok.registry import build_declared_bloks
 from arkitekt_spec.declare.blok.validate import (
@@ -812,6 +813,17 @@ class AppRegistry(BaseModel):
                 f"Blok '{name}' cannot persist {unknown}: only a local_state or demo_state key is a local it can keep"
             )
         context = ComponentContext(context.upper()) if isinstance(context, str) else context
+        if context == ComponentContext.OVERLAY:
+            raise ValueError(
+                f"Blok '{name}': an overlay is an action's own; declare it with the action "
+                f"(@app.workflow(bloks=[ActionBlok(..., context=\"overlay\")]))"
+            )
+        reading = action_blok_components_in(component)
+        if reading:
+            raise ValueError(
+                f"Blok '{name}': {reading[0].component!r} ({reading[0].id}) reads a run of an action, so only "
+                f"an action's own blok holds one (bloks=[ActionBlok(...)])"
+            )
         arg_ports = tuple(
             convert_object_to_argport(cls, key, self.structure_registry)
             for key, cls in (args or {}).items()
@@ -1762,6 +1774,7 @@ class AppRegistry(BaseModel):
         effects: Effects | None = None,
         execution: Execution = Execution.PLAIN,
         logo: "str | ComponentNodeInput | None" = None,
+        bloks: "Sequence[ActionBlok] | None" = None,
     ) -> "WrappedFunction[P, R]":
         """Register a function as an action, as a plain call rather than a decorator.
 
@@ -1810,6 +1823,10 @@ class AppRegistry(BaseModel):
                 this app declares (``register_blok(..., context="action_logo")``),
                 or a tree of its own (``bsx("<ActionLogo>...</ActionLogo>")``).
                 Without one, a client shows the app's default logo.
+            bloks: The action's own bloks, one per context
+                (``ActionBlok(bsx("<Overlay>...</Overlay>"), context="overlay")``): how a
+                client shows a run of it. They name devices only by the function's
+                dependency parameters, are checked now, and are not part of the hash.
 
         Returns:
             The function, still callable as itself.
@@ -1844,6 +1861,7 @@ class AppRegistry(BaseModel):
             effects=effects,
             execution=execution,
             logo=logo,
+            bloks=bloks,
         )
 
     def register_workflow(

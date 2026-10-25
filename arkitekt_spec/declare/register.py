@@ -3,7 +3,7 @@
 import hashlib
 import inspect
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -48,6 +48,7 @@ from arkitekt_spec.declare.actors.types import (
     DeclaredImplementation,
     RegisterConfig,
 )
+from arkitekt_spec.declare.blok.action import ActionBlok, build_action_bloks
 from arkitekt_spec.declare.coercible_types import (
     OptimisticCoercible,
 )
@@ -221,6 +222,12 @@ def register_func(
                 "A protocol with only state attributes is fine on a plain action."
             )
 
+    if config.bloks:
+        # Set only when there are some, so an action without bloks keeps its wire bytes.
+        definition = definition.model_copy(
+            update={"bloks": build_action_bloks(config.bloks, frozenset(d.key for d in dependencies), implementation_registry, f"Action {interface!r}")}
+        )
+
     optimistics: list[OptimisticInput] = [
         optimistic
         if isinstance(optimistic, OptimisticInput)
@@ -286,6 +293,7 @@ def declare_implementation(
     effects: Effects | None = None,
     execution: Execution = Execution.PLAIN,
     logo: str | ComponentNodeInput | None = None,
+    bloks: "Sequence[ActionBlok] | None" = None,
 ) -> WrappedFunction[P, R]:
     """Register a function directly: ``declare_implementation(fn, implementation_registry=...)``."""
 
@@ -321,6 +329,7 @@ def declare_implementation(
     effects: Effects | None = None,
     execution: Execution = Execution.PLAIN,
     logo: str | ComponentNodeInput | None = None,
+    bloks: "Sequence[ActionBlok] | None" = None,
 ) -> Callable[[Callable[P, R]], WrappedFunction[P, R]]:
     """Build a configured decorator: ``declare_implementation(implementation_registry=..., name=...)``."""
 
@@ -355,6 +364,7 @@ def declare_implementation(
     effects: Effects | None = None,
     execution: Execution = Execution.PLAIN,
     logo: str | ComponentNodeInput | None = None,
+    bloks: "Sequence[ActionBlok] | None" = None,
 ) -> WrappedFunction[P, R] | Callable[[Callable[P, R]], WrappedFunction[P, R]]:
     """Register a function or actor with an app registry.
 
@@ -417,6 +427,11 @@ def declare_implementation(
             the name of an action logo blok the app declares, or a tree of its
             own (``bsx("<ActionLogo>...</ActionLogo>")``), declared as the
             action logo blok ``<interface>.logo``.
+        bloks (Sequence[ActionBlok] | None): The action's own bloks, one per
+            context (``ActionBlok(bsx("<Overlay>...</Overlay>"), context="overlay")``):
+            how a client shows a run of it. Checked now against the function's
+            dependency parameters and the bloks' catalogs; sent with the definition
+            (never when there are none) and not part of its hash.
 
     Returns:
         The wrapped function, or a decorator producing it.
@@ -448,6 +463,7 @@ def declare_implementation(
         effects=effects,
         execution=execution,
         logo=logo,
+        bloks=bloks,
     )
 
     def offer(function_or_actor: Callable[P, R]) -> WrappedFunction[P, R]:

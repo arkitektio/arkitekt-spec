@@ -91,7 +91,9 @@ ACTION_LOGO_CONTEXT = "ACTION_LOGO"
 """A blok context only, never a component's: an action logo draws the same shapes as a logo."""
 LOGO_CONTEXTS = (LOGO_CONTEXT, ACTION_LOGO_CONTEXT)
 """The blok contexts held to the size of an icon."""
-CONTEXT_ROOTS: Mapping[str, str] = {SCENE_CONTEXT: "Scene", LOGO_CONTEXT: "SVG", ACTION_LOGO_CONTEXT: "ActionLogo"}
+OVERLAY_CONTEXT = "OVERLAY"
+"""A blok context only, and only an action's: drawn into the space that hosts a run of it."""
+CONTEXT_ROOTS: Mapping[str, str] = {SCENE_CONTEXT: "Scene", LOGO_CONTEXT: "SVG", ACTION_LOGO_CONTEXT: "ActionLogo", OVERLAY_CONTEXT: "Overlay"}
 """The one component a blok of each of these contexts has as its root."""
 ACTION_LOGO_TASK_ROOT = "task"
 """The path root an action logo reads its task at: null until the viewer runs the action."""

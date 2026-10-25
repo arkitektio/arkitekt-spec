@@ -120,6 +120,113 @@
       "title": "ActionArgumentInput",
       "type": "object"
     },
+    "ActionBlokInput": {
+      "additionalProperties": false,
+      "description": "An action's own blok: how a client shows a run of it in one context. It has no name, is never\nlisted on its own, and names devices only by the action's dependency keys.",
+      "properties": {
+        "catalog": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The UI catalog the blok renders against; the Orkestrator's when absent.",
+          "title": "Catalog"
+        },
+        "components": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ComponentNodeInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The UI component tree, unless the blok is sent as its `source`.",
+          "title": "Components"
+        },
+        "context": {
+          "$ref": "#/$defs/ComponentContext",
+          "default": "HTML",
+          "description": "Where a client shows the run with it: HTML in a task panel, SCENE as a 3D view of its own, OVERLAY drawn into the space that hosts the run (its root an `Overlay`)."
+        },
+        "demo_state": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The blok's own locals and their initial values: path roots beside the action's dependency keys, `self`, `task` and `args`.",
+          "title": "Demo State"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the blok shows of a run.",
+          "title": "Description"
+        },
+        "persist": {
+          "default": [],
+          "description": "The locals a renderer may keep between openings, on the device (never on a server): each a top-level `demo_state` key, whose demo value is the default.",
+          "items": {
+            "$ref": "#/$defs/BlokPersistInput"
+          },
+          "title": "Persist",
+          "type": "array"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The blok as BSX, parsed by the server into its component tree. Exactly one of `components` and `source` is sent.",
+          "title": "Source"
+        }
+      },
+      "title": "ActionBlokInput",
+      "type": "object"
+    },
     "ActionDemandInput": {
       "additionalProperties": false,
       "description": "Pure matching criteria for an action: hash or name short-circuits, arg/return\nport matches, protocols and forced port counts. Used directly by query filters and, wrapped\nin an ActionDependencyInput, by dependency declarations.",
@@ -1276,7 +1383,8 @@
         "HTML",
         "SCENE",
         "LOGO",
-        "ACTION_LOGO"
+        "ACTION_LOGO",
+        "OVERLAY"
       ],
       "title": "ComponentContext",
       "type": "string"
@@ -1796,6 +1904,15 @@
             "$ref": "#/$defs/ArgPortInput"
           },
           "title": "Args",
+          "type": "array"
+        },
+        "bloks": {
+          "default": [],
+          "description": "The action's own bloks, at most one per context: how a client shows a run of it (HTML in a task panel, OVERLAY drawn into the space that hosts the run). They name devices only by the action's dependency keys. Stored with the action, never listed on their own, and not part of its hash.",
+          "items": {
+            "$ref": "#/$defs/ActionBlokInput"
+          },
+          "title": "Bloks",
           "type": "array"
         },
         "catalogs": {

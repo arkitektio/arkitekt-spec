@@ -7,6 +7,7 @@ and :class:`RegisterConfig` holds every option the registration was given. A run
 builds the function's actor from these; building one is not declaration.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
@@ -21,6 +22,7 @@ from arkitekt_spec.actions import (
     ValidatorInput,
 )
 from arkitekt_spec.declare.actors.policy import KEEP, DisconnectPolicy
+from arkitekt_spec.declare.blok.action import ActionBlok
 from arkitekt_spec.declare.agents.context import PreparedContextReturns, PreparedContextVariables
 from arkitekt_spec.declare.coercible_types import OptimisticCoercible
 from arkitekt_spec.declare.definition.define import (
@@ -206,6 +208,8 @@ class RegisterConfig:
     """WORKFLOW may call other actions and is resumed after a crash; PLAIN may not."""
     logo: "str | ComponentNodeInput | None" = None
     """The action logo blok that draws the action: a declared action logo blok's name, or a tree (``bsx(...)``)."""
+    bloks: Sequence[ActionBlok] | None = None
+    """The action's own bloks, one per context (``ActionBlok(bsx(...), context="overlay")``): how a client shows a run of it."""
 
 
 @runtime_checkable

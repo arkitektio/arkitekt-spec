@@ -13,7 +13,7 @@ producers start emitting a new field.
 import hashlib
 import json
 from enum import Enum
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
@@ -155,6 +155,8 @@ class ComponentContext(str, Enum):
     "An SVG drawing: an agent's logo, which clients render against its demo state."
     ACTION_LOGO = "ACTION_LOGO"
     "An action's logo: an SVG in the viewer's palette, drawn against the task the viewer last ran of it (``@task``, null until then)."
+    OVERLAY = "OVERLAY"
+    "An action's own blok drawn into the space that hosts a run of it (root ``Overlay``), over the agents placed there. A blok context only."
 
 
 class PortKind(str, Enum):
@@ -967,6 +969,77 @@ class ComponentPropInput(ActionModel):
     )
 
 
+#: The roots the renderer fills for an action's blok: the run (``@task``), its args, the agent
+#: running the action (``@self``) and the value that triggered a handler.
+ACTION_BLOK_FILLED_ROOTS = frozenset({"task", "args", "self", "$event"})
+
+#: The contexts an action has a blok for, one each.
+ACTION_BLOK_CONTEXTS = frozenset({ComponentContext.HTML.value, ComponentContext.SCENE.value, ComponentContext.OVERLAY.value})
+
+
+class ActionBlokInput(ActionModel):
+    """An action's own blok: how a client shows a run of it in one context. It has no name, is never
+    listed on its own, and names devices only by the action's dependency keys."""
+
+    context: Annotated[ComponentContext, GraphQLDefault("HTML")] = Field(
+        default=ComponentContext.HTML,
+        description="Where a client shows the run with it: HTML in a task panel, SCENE as a 3D view of its own, OVERLAY drawn into the space that hosts the run (its root an `Overlay`).",
+    )
+    components: tuple["ComponentNodeInput", ...] | None = Field(
+        default=None,
+        description="The UI component tree, unless the blok is sent as its `source`.",
+    )
+    source: str | None = Field(
+        default=None,
+        description="The blok as BSX, parsed by the server into its component tree. Exactly one of `components` and `source` is sent.",
+    )
+    catalog: str | None = Field(
+        default=None, description="The UI catalog the blok renders against; the Orkestrator's when absent."
+    )
+    description: str | None = Field(default=None, description="What the blok shows of a run.")
+    demo_state: JSONSerializable | None = Field(
+        validation_alias=AliasChoices("demo_state", "demoState"),
+        serialization_alias="demoState",
+        default=None,
+        description="The blok's own locals and their initial values: path roots beside the action's dependency keys, `self`, `task` and `args`.",
+    )
+    persist: tuple[BlokPersistInput, ...] = Field(
+        default=(),
+        # Never written when empty, like a definition's `protocols`.
+        exclude_if=lambda persist: not persist,
+        description="The locals a renderer may keep between openings, on the device (never on a server): each a top-level `demo_state` key, whose demo value is the default.",
+    )
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
+    )
+
+    @model_validator(mode="after")
+    def _an_action_blok(self) -> Self:
+        """The server's ``ActionBlokInputModel``: sent one way, in a context an action has a blok
+        for, its locals none of the roots the renderer fills, and only those persisted."""
+        if self.components is not None and self.source is not None:
+            raise ValueError("a blok is sent as its components or as its BSX source, not both")
+        if self.components is None and self.source is None:
+            raise ValueError("a blok is sent as its components or as its BSX source")
+        context = ComponentContext(self.context).value
+        if context not in ACTION_BLOK_CONTEXTS:
+            raise ValueError(f"Blok manifest: an action's blok is html, scene or overlay, not {context.lower()}")
+        state = self.demo_state if isinstance(self.demo_state, dict) else {}
+        filled = sorted(ACTION_BLOK_FILLED_ROOTS & set(state))
+        if filled:
+            raise ValueError(f"Blok manifest: demo_state names {filled[0]!r}, which the renderer fills for an action's blok")
+        keys = [local.key for local in self.persist]
+        twice = next((key for key in keys if keys.count(key) > 1), None)
+        if twice is not None:
+            raise ValueError(f"Blok manifest persist: duplicate key {twice!r}")
+        unknown = next((key for key in keys if key not in state), None)
+        if unknown is not None:
+            raise ValueError(
+                f"Blok manifest: persist names {unknown!r}, which is not a demo_state key: a persisted local takes its demo value as its default"
+            )
+        return self
+
+
 class DefinitionInput(DefinitionRules, ActionModel):
     """A definition
 
@@ -1035,6 +1108,23 @@ class DefinitionInput(DefinitionRules, ActionModel):
         description="Where this action means to hook in, as plain names (`on_scene_annotation`): a hint for whoever fires that hook, never a contract. The server stores them beside the ones it infers and checks nothing; a caller still matches the ports itself. Not part of the action's identity, so changing them does not change its hash.",
     )
     "Where this action means to hook in, as plain names: a hint, never a contract. Not part of the hash.\nDefault: []"
+    bloks: Annotated[tuple[ActionBlokInput, ...], GraphQLDefault("[]")] = Field(
+        default=(),
+        # Never written when empty, like `protocols`: a definition without bloks is the bytes it
+        # was before actions had any, which an older takt or kabinet (strict readers) accepts.
+        exclude_if=lambda bloks: not bloks,
+        description="The action's own bloks, at most one per context: how a client shows a run of it (HTML in a task panel, OVERLAY drawn into the space that hosts the run). They name devices only by the action's dependency keys. Stored with the action, never listed on their own, and not part of its hash.",
+    )
+    "The action's own bloks, one per context. Not part of the hash; never dumped when empty."
+
+    @model_validator(mode="after")
+    def _one_blok_per_context(self) -> Self:
+        """An action has one blok per context: the one a client picks for where it shows the run."""
+        contexts = [ComponentContext(blok.context).value for blok in self.bloks]
+        twice = next((context for context in contexts if contexts.count(context) > 1), None)
+        if twice is not None:
+            raise ValueError(f"Definition {self.key}: the {twice.lower()} blok is given twice; an action has one blok per context")
+        return self
     port_groups: Annotated[tuple["PortGroupInput", ...], GraphQLDefault("[]")] = Field(
         validation_alias=AliasChoices("port_groups", "portGroups"),
         serialization_alias="portGroups",
