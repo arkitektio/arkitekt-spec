@@ -22,7 +22,7 @@ from arkitekt_spec.actions import (
     ValidatorInput,
 )
 from arkitekt_spec.declare.actors.policy import KEEP, DisconnectPolicy
-from arkitekt_spec.declare.blok.action import ActionBlok
+from arkitekt_spec.declare.blok.action import ActionBloks
 from arkitekt_spec.declare.agents.context import PreparedContextReturns, PreparedContextVariables
 from arkitekt_spec.declare.coercible_types import OptimisticCoercible
 from arkitekt_spec.declare.definition.define import (
@@ -208,8 +208,8 @@ class RegisterConfig:
     """WORKFLOW may call other actions and is resumed after a crash; PLAIN may not."""
     logo: "str | ComponentNodeInput | None" = None
     """The action logo blok that draws the action: a declared action logo blok's name, or a tree (``bsx(...)``)."""
-    bloks: Sequence[ActionBlok] | None = None
-    """The action's own bloks, one per context (``ActionBlok(bsx(...), context="overlay")``): how a client shows a run of it."""
+    bloks: ActionBloks | None = None
+    """The action's own bloks, one per context, which each one's root names (``"<Overlay>...</Overlay>"``): how a client shows a run of it."""
 
 
 @runtime_checkable

@@ -30,7 +30,7 @@ def test_a_local_task_is_a_task_and_only_logs(caplog: pytest.LogCaptureFixture) 
     task = Task.local(id="t1")
     assert isinstance(task, LocalTask) and isinstance(task, Task)
     assert is_task(LocalTask) and is_task(Task)
-    assert (task.id, task.user, task.org, task.token) == ("t1", "local", "local", None)
+    assert (task.id, task.user, task.assigner, task.org, task.token) == ("t1", "local", "local", "local", None)
     with caplog.at_level(logging.INFO, logger="arkitekt.task"):
         task.log("hello")
         task.log("careful", LogLevel.WARN)

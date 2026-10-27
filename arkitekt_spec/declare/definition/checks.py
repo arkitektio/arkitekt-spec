@@ -10,7 +10,7 @@ They run once, on the assembled declaration (:meth:`AppRegistry.to_implement_age
 walking down to every port, widget and blok -- the one place that sees all of it.
 """
 
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator
 
 from arkitekt_spec.actions import (
     AgentDependencyInput,
@@ -101,23 +101,27 @@ def check_implementation(
 
 
 def check_blok(blok: BlokImplementationInput) -> BlokImplementationInput:
-    """Every component of a blok is valid against the blok's dependencies."""
-    from arkitekt_spec.declare.blok.validate import (
-        check_logo_complexity,
-        check_logo_palette,
-        local_roots_of,
-        validate_blok,
-    )
+    """Every rule of the language a blok's tree must keep, against what the blok declares.
 
-    dependencies = list(blok.dependencies or ())
-    local_roots = local_roots_of(dependencies, blok.demo_state)
+    No catalog is consulted: what draws it is the UI's to say. Raises the first error as a
+    :class:`~arkitekt_spec.blok.vocabulary.BlokError`.
+    """
+    from arkitekt_spec.declare.blok.validate import BlokScope, validate_blok
+
+    context = ComponentContext(blok.context).value
+    scope = BlokScope(
+        kind="action_logo" if context == ComponentContext.ACTION_LOGO.value else "agent",
+        context=context,
+        dependencies=tuple(blok.dependencies or ()),
+        locals=blok.locals,
+        queries=blok.queries,
+        subscriptions=blok.subscriptions,
+        args=tuple(port.key for port in blok.args or ()),
+        catalogs=blok.catalogs,
+        demo=blok.demo,
+    )
     for component in blok.components or ():
-        validate_blok(component, dependencies, local_roots=local_roots)
-        if blok.context in (ComponentContext.LOGO, ComponentContext.ACTION_LOGO):
-            demo_state = blok.demo_state if isinstance(blok.demo_state, Mapping) else None
-            check_logo_complexity(component, demo_state)
-            if blok.context == ComponentContext.ACTION_LOGO:
-                check_logo_palette(component, demo_state)
+        validate_blok(component, scope)
     return blok
 
 
@@ -131,7 +135,7 @@ def check_agent_input(agent: ImplementAgentInput) -> ImplementAgentInput:
             name = implementation.interface or implementation.definition.name
             raise ValueError(
                 f"implementation '{name}' is drawn by the logo {implementation.logo!r}, "
-                f"which is not an action logo blok this app declares (app.blok(..., context=\"action_logo\"))"
+                f"which is not an action logo blok this app declares (app.blok(name, \"<ActionLogo>...</ActionLogo>\"))"
             )
     for blok in agent.bloks or ():
         check_blok(blok)

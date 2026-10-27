@@ -20,7 +20,7 @@ subset can draw and drops the rest, saying what it dropped:
 - masks, filters, patterns, images, markers, scripts and event handlers have no
   component and are dropped.
 
-The result is BSX source, so ``app.blok(name, from_svg(path), context="logo")`` sends
+The result is BSX source, so ``app.blok(name, from_svg(path))`` sends
 it as source. It is checked before it is returned: it parses back into the tree it was
 printed from, and passes the logo checks registration runs.
 """
@@ -36,20 +36,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from arkitekt_spec.actions import ComponentContext, ComponentNodeInput, ComponentPropInput
-from arkitekt_spec.declare.blok.parser import bsx
-from arkitekt_spec.declare.blok.unparse import to_bsx
-from arkitekt_spec.declare.blok.validate import (
-    check_context_root,
-    check_logo_complexity,
-    check_logo_palette,
-)
-from arkitekt_spec.declare.catalogs import (
-    ACTION_LOGO_CONTEXT,
-    CONTEXT_ROOTS,
-    LOGO_CONTEXTS,
-    LOGO_PAINT_TOKENS,
-    load_standard_catalog,
-)
+from arkitekt_spec.blok.bsx import parse_bsx
+from arkitekt_spec.blok.catalogs import standard_catalog
+from arkitekt_spec.blok.unparse import to_bsx
+from arkitekt_spec.blok.vocabulary import load_vocabulary
+from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
+
+LOGO_CONTEXTS = ("LOGO", "ACTION_LOGO")
+"""The blok contexts a logo is drawn in: an agent's logo and an action's."""
+LOGO_ROOTS = {context: root for root, context in load_vocabulary().blok_roots.items() if context in LOGO_CONTEXTS}
+"""The root of each logo blok: ``AgentLogo`` for an agent's, ``ActionLogo`` for an action's."""
+LOGO_PAINT_TOKENS = load_vocabulary().theme.logo_pens
+"""The pens a logo paints with: colours of the viewer's theme, never of the logo's own."""
 
 
 class SvgConversionWarning(UserWarning):
@@ -74,19 +72,19 @@ def from_svg(
     Args:
         svg: The SVG document as text (``str`` or ``bytes``), or the path of a file.
             Text and path are told apart by type: a ``str`` is never read as a path.
-        context: ``logo`` (root ``SVG``, any colour) or ``action_logo`` (root
-            ``ActionLogo``, palette tokens only).
+        context: ``logo`` (an agent's logo, rooted at ``AgentLogo``) or ``action_logo``
+            (an action's, rooted at ``ActionLogo``). Both paint with the pens only.
         title: The logo's title; the SVG's own ``<title>`` when left out.
-        palette: Colours to paint with a token, e.g. ``{"#0f172a": "ink"}``. Keys are
-            any CSS colour, values ``LOGO_PAINT_TOKENS``. Applies in both contexts; in
-            an action logo a colour it does not name goes to the nearest token.
+        palette: Colours to paint with a pen, e.g. ``{"#0f172a": "ink"}``. Keys are
+            any CSS colour, values ``LOGO_PAINT_TOKENS``; a colour it does not name goes
+            to the nearest pen.
         precision: Round the numbers in ``d``, ``points`` and transforms to this many
             decimals, to fit a detailed drawing into the path data a logo may hold.
         strict: Raise on anything that would be dropped or approximated, instead of
             warning with :class:`SvgConversionWarning`.
 
     Returns:
-        BSX source. Pass it to ``app.blok(name, ..., context=...)``. For an inline
+        BSX source. Pass it to ``app.blok(name, ...)``. For an inline
         ``@app.action(logo=...)``, which reads a string as a blok *name*, parse it
         first: ``logo=bsx(from_svg(path, context="action_logo"))``.
 
@@ -106,32 +104,26 @@ def from_svg(
     root = _parse(svg)
     converter = _Converter(
         root,
-        action=context_name == ACTION_LOGO_CONTEXT,
+        action=True,
         palette=_palette(palette or {}),
         precision=precision,
         strict=strict,
     )
-    tree = _finish(
-        converter.convert(CONTEXT_ROOTS[context_name], title), CONTEXT_ROOTS[context_name]
-    )
+    root_name = LOGO_ROOTS[context_name]
+    tree = _finish(converter.convert(root_name, title), f"{root_name}[0]")
 
     source = to_bsx(tree)
-    if bsx(source) != tree:  # pragma: no cover - a converter bug, not an input error
+    if parse_bsx(source) != tree:  # pragma: no cover - a converter bug, not an input error
         raise SvgConversionError(
             "the converted logo does not parse back into the tree it was printed from"
         )
-    try:
-        check_context_root(tree, context_name)
-        check_logo_complexity(tree)
-        if converter.action:
-            check_logo_palette(tree)
-    except ValueError as error:
+    kind = "action_logo" if context_name == "ACTION_LOGO" else "agent"
+    errors = [finding for finding in check_blok_tree(tree, BlokScope(kind=kind, context=context_name)) if finding.level == "error"]
+    if errors:
         hint = ""
-        if "path data" in str(error) and precision is None:
+        if "path data" in errors[0].message and precision is None:
             hint = "; pass precision=2 (or fewer decimals) to round it"
-        raise SvgConversionError(
-            f"the converted logo is too much for a logo: {error}{hint}"
-        ) from error
+        raise SvgConversionError(f"the converted logo is too much for a logo: {errors[0].message}{hint}")
 
     for message in converter.warnings:
         warnings.warn(message, SvgConversionWarning, stacklevel=2)
@@ -318,11 +310,10 @@ URL = re.compile(r"url\(\s*['\"]?#([^'\")\s]+)['\"]?\s*\)\s*(.*)$", re.DOTALL)
 
 @functools.cache
 def _logo_props() -> dict[str, frozenset[str]]:
-    """The props each logo component takes, from the standard catalog."""
+    """The props each logo component takes, from the logo module."""
     return {
         component.name: frozenset(prop.key for prop in component.props) - NOT_LOGO_PROPS
-        for component in load_standard_catalog().components
-        if component.context == "LOGO" or component.children_context == "LOGO"
+        for component in standard_catalog("logo").components
     }
 
 

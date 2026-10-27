@@ -10,7 +10,8 @@ inherit from it), so enum-valued fields are compared by value: the models store
 them as plain strings (``use_enum_values=True``).
 """
 
-from collections.abc import Iterable, Iterator, Mapping
+import re
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import Any, Protocol, Self, cast
 
 from pydantic import BaseModel, field_validator, model_validator
@@ -165,31 +166,6 @@ def resolve_port_path(path: str, ports: Iterable[Any]) -> bool:
     return True
 
 
-def check_demo_state(dependencies: Iterable[Any] | None, demo_state: Any) -> None:  # noqa: ANN401
-    """A blok's ``demo_state`` names the states each dependency references, and nothing but those and its actions."""
-    if not isinstance(demo_state, Mapping):
-        return
-    states: Mapping[str, Any] = demo_state  # pyright: ignore[reportUnknownVariableType]
-    for dependency in dependencies or ():
-        if dependency.key not in states:
-            continue
-        demo: Mapping[str, Any] = states[dependency.key]
-        state_keys = {demand.key for demand in dependency.state_dependencies or ()}
-        for state_key in state_keys:
-            if state_key not in demo:
-                raise ValueError(
-                    f"demo_state for '{dependency.key}' missing key '{state_key}' referenced in blok"
-                )
-        # An action the blok demands may hold its latest task (``self.blur.latest``).
-        action_keys = {demand.key for demand in dependency.action_dependencies or ()}
-        extra = set(demo.keys()) - state_keys - action_keys
-        if extra:
-            raise ValueError(
-                f"demo_state for '{dependency.key}' has extra keys not referenced in blok: "
-                f"{sorted(extra)}"
-            )
-
-
 def _ensure_unique(values: Iterable[str], label: str) -> None:
     seen: set[str] = set()
     for value in values:
@@ -218,6 +194,8 @@ class PortRules(BaseModel):
         children = port.children
         if kind == "STRUCTURE" and port.identifier is None:
             raise ValueError("When specifying a structure you need to provide an identifier")
+        if kind == "ENUM" and not port.choices:
+            raise ValueError("When specifying an enum you need to provide its 'choices'")
         if kind == "QUANTITY" and not port.reference_unit:
             raise ValueError(
                 "When specifying a quantity you need to provide a 'reference_unit' "
@@ -353,73 +331,159 @@ class DefinitionRules(BaseModel):
         return self
 
 
+_CATALOG = re.compile(r"[a-z][a-z0-9_-]*@[0-9]+")
+_FIELD_PATH = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*")
+_LOCAL_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_GRAPHQL_COMMENT = re.compile(r"#[^\n]*")
+
+
+def operation_keyword(document: str) -> str:
+    """The kind of a GraphQL document's first operation: ``query`` (also for ``{ ... }``),
+    ``mutation``, ``subscription``, or ``fragment`` when it starts with one."""
+    text = _GRAPHQL_COMMENT.sub("", document).lstrip()
+    if text.startswith("{"):
+        return "query"
+    match = re.match(r"[A-Za-z_]+", text)
+    return match.group(0) if match else ""
+
+
+def _unique(keys: list[str], what: str) -> None:
+    from arkitekt_spec.blok.vocabulary import BlokError
+
+    twice = next((key for key in keys if keys.count(key) > 1), None)
+    if twice is not None:
+        raise BlokError("manifest.duplicate", what=what, key=twice)
+
+
+class _Keyed(Protocol):
+    key: str
+
+
+class _Document(Protocol):
+    key: str
+    document: str
+
+
+class _Query(_Document, Protocol):
+    more: str | None
+
+
+class _Subscription(_Document, Protocol):
+    history: str | None
+
+
+class _Demo(Protocol):
+    deps: object
+
+
+class _BlokDeclarations(Protocol):
+    """What :func:`check_blok_declarations` reads of a v2 blok (agent or action blok)."""
+
+    components: object
+    source: str | None
+    catalogs: tuple[str, ...]
+    locals: Sequence[_Keyed]
+    queries: Sequence[_Query]
+    subscriptions: Sequence[_Subscription]
+    demo: _Demo | None
+
+
+def check_blok_declarations(blok: _BlokDeclarations, kind: str) -> None:
+    """The server's ``check_blok_manifest`` for what a v2 blok declares beside its tree.
+
+    Sent one way; its catalogs spelled ``name@version``; its locals, queries and subscriptions
+    each named once, by a name no root reserves; a query a ``query``, a subscription a
+    ``subscription``, neither a mutation; a subscription's history a declared query; and,
+    for an action logo, nothing but the task it is drawn against.
+
+    Raises:
+        ValueError: On the first rule broken.
+    """
+    from arkitekt_spec.blok.vocabulary import BlokError, load_vocabulary
+
+    if blok.components is not None and blok.source is not None:
+        raise BlokError("manifest.sent", problem="not both")
+    if blok.components is None and blok.source is None:
+        raise BlokError("manifest.sent", problem="and this one has neither")
+    reserved = load_vocabulary().reserved
+    for catalog in blok.catalogs or ():
+        if not _CATALOG.fullmatch(catalog):
+            raise BlokError("manifest.catalog", catalog=catalog)
+    named: tuple[tuple[str, Sequence[_Keyed]], ...] = (("locals", blok.locals), ("queries", blok.queries), ("subscriptions", blok.subscriptions))
+    for what, entries in named:
+        keys = [entry.key for entry in entries]
+        _unique(keys, what)
+        for key in keys:
+            if not _LOCAL_NAME.fullmatch(key):
+                raise BlokError("manifest.name", what=what, key=key)
+            if what == "locals" and key in reserved:
+                raise BlokError("roots.reserved", name=key)
+    for query in blok.queries or ():
+        _check_operation("query", query.key, operation_keyword(query.document))
+        if query.more is not None and not _FIELD_PATH.fullmatch(query.more):
+            raise BlokError("query.more", name=query.key, more=query.more, problem="is not a field path into its data (positions, images.items)")
+    declared = {query.key for query in blok.queries or ()}
+    for subscription in blok.subscriptions or ():
+        _check_operation("subscription", subscription.key, operation_keyword(subscription.document))
+        if subscription.history is not None and subscription.history not in declared:
+            raise BlokError("query.history", name=subscription.key, history=subscription.history)
+    dependencies: Sequence[_Keyed] = getattr(blok, "dependencies", None) or ()
+    if kind == "action_logo" and (blok.locals or blok.queries or blok.subscriptions or dependencies):
+        raise BlokError("manifest.action_logo")
+    demo = blok.demo
+    deps = demo.deps if demo is not None else None
+    if isinstance(deps, Mapping):
+        allowed = {dependency.key for dependency in dependencies} | {"self"}
+        given: Mapping[str, object] = cast("Mapping[str, object]", deps)
+        unknown = sorted(set(given) - allowed)
+        if unknown:
+            raise BlokError("manifest.demo", keys=", ".join(unknown))
+
+
+def _check_operation(kind: str, name: str, operation: str) -> None:
+    """A query's document is a ``query``, a subscription's a ``subscription``; neither writes."""
+    from arkitekt_spec.blok.vocabulary import BlokError
+
+    if operation == kind:
+        return
+    if operation == "mutation":
+        raise BlokError("query.read_only", kind=kind, name=name, problem="is a mutation: a blok reads, and writes only through a task")
+    raise BlokError("query.kind", kind=kind, name=name, operation=operation or "document without an operation")
+
+
+def _wrong_context(kind: str, context: object) -> ValueError:
+    """``context.kind``: a blok of ``kind`` drawn in a context its kind has no blok for."""
+    from arkitekt_spec.blok.vocabulary import BlokError, load_vocabulary
+
+    contexts = load_vocabulary().kind(kind).contexts
+    return BlokError("context.kind", n="n" if kind[:1] in "aeiou" else "", kind=kind, contexts=", ".join(contexts), context=str(context))
+
+
 class BlokRules(BaseModel):
-    """A blok implementation: sent as its tree or its source, and its demo state matches its
-    dependencies' state demands."""
+    """An agent's blok: sent as its tree or its source, its declarations well-formed."""
 
     @model_validator(mode="after")
-    def _demo_state(self) -> Self:
+    def _manifest(self) -> Self:
         blok: Any = self
-        if blok.components is not None and blok.source is not None:
-            raise ValueError("a blok is sent as its components or as its BSX source, not both")
-        if blok.components is None and blok.source is None:
-            raise ValueError("a blok is sent as its components or as its BSX source")
-        check_demo_state(blok.dependencies, blok.demo_state)
+        context = _value(blok.context)
+        if context == "OVERLAY":
+            raise _wrong_context("agent", context)
+        check_blok_declarations(blok, "action_logo" if context == "ACTION_LOGO" else "agent")
         _check_blok_args(self)
-        _check_blok_persist(self)
-        _check_blok_services(self)
         return self
 
 
-#: The roots the renderer fills itself: never a local, so never persisted.
-_RENDERER_ROOTS = frozenset({"args", "$event"})
+class ActionBlokRules(BaseModel):
+    """An action's blok: sent one way, in a context an action has a blok for."""
 
-
-def _check_blok_persist(rules: BaseModel) -> None:
-    """The server's ``check_blok_persist``: only locals, each once -- a top-level ``demo_state``
-    key that is not a dependency's key nor a root the renderer fills."""
-    blok: Any = rules
-    keys = [local.key for local in blok.persist or ()]
-    twice = next((key for key in keys if keys.count(key) > 1), None)
-    if twice is not None:
-        raise ValueError(f"Blok manifest persist: duplicate key {twice!r}")
-    dependencies = {dependency.key for dependency in blok.dependencies or ()}
-    demo_state: object = blok.demo_state
-    state = set(cast("Mapping[str, object]", demo_state)) if isinstance(demo_state, Mapping) else None
-    for key in keys:
-        if key in _RENDERER_ROOTS or key in dependencies:
-            raise ValueError(f"Blok manifest: persist names {key!r}, which is not a local but a root the renderer fills")
-        if state is None or key not in state:
-            raise ValueError(
-                f"Blok manifest: persist names {key!r}, which is not a demo_state key: a persisted local takes its demo value as its default"
-            )
-
-
-QUERY_COMPONENT = "query"
-"""The base catalog's GraphQL read: it runs on the service its ``schema`` prop names."""
-
-
-def _check_blok_services(rules: BaseModel) -> None:
-    """The server's ``check_blok_services``: each service named once, every ``query`` on a named one."""
-    blok: Any = rules
-    keys = [service.key for service in blok.services or ()]
-    twice = next((key for key in keys if keys.count(key) > 1), None)
-    if twice is not None:
-        raise ValueError(f"Blok manifest services: duplicate key {twice!r}")
-    declared = set(keys)
-
-    def visit(nodes: Iterable[Any] | None) -> None:
-        for node in nodes or ():
-            if node.component == QUERY_COMPONENT:
-                schema = next((prop.static_value for prop in node.props or () if prop.key == "schema"), None)
-                if isinstance(schema, str) and schema not in declared:
-                    raise ValueError(
-                        f"Blok manifest: component {node.id!r} queries the {schema!r} service, which the blok does not "
-                        f"declare in its services (declared: {sorted(declared) or 'none'})"
-                    )
-            visit(node.children)
-
-    visit(blok.components)
+    @model_validator(mode="after")
+    def _manifest(self) -> Self:
+        blok: Any = self
+        context = _value(blok.context)
+        if context not in ("HTML", "SCENE", "OVERLAY"):
+            raise _wrong_context("action", context)
+        check_blok_declarations(blok, "action")
+        return self
 
 
 def _check_blok_args(rules: BaseModel) -> None:
@@ -434,8 +498,6 @@ def _check_blok_args(rules: BaseModel) -> None:
     twice = next((key for key in keys if keys.count(key) > 1), None)
     if twice is not None:
         raise ValueError(f"Blok manifest args: duplicate key {twice!r}")
-    if any(dependency.key == "args" for dependency in blok.dependencies or ()):
-        raise ValueError("Blok manifest: a blok with args reads them under 'args', so no dependency can be called that")
 
 
 class AgentRules(BaseModel):

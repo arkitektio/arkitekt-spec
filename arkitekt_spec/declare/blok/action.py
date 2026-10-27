@@ -1,88 +1,97 @@
 """An action's own bloks: how a client shows a run of it, declared inline with the action.
 
-``@app.workflow(bloks=[ActionBlok(bsx("<Overlay>...</Overlay>"), context="overlay")])``: one
-blok per context (``html`` for a task panel, ``overlay`` drawn into the space that hosts the
-run), sent with the action's definition, never listed on its own, and not part of the action's
-hash. It names devices only by the action's dependency keys -- the parameters annotated with a
-protocol -- so a client binds them to the agents a run got. Checked here, at decoration, as the
-server checks it at registration.
+``@app.workflow(bloks=["<Overlay>...</Overlay>", "<Html>...</Html>"])``: one blok per context,
+named by its root (``<Html>`` for a task panel, ``<Scene>`` for a 3D view of its own,
+``<Overlay>`` drawn into the space that hosts the run), sent with the action's definition, never
+listed on its own, and not part of the action's hash. A bare tree is a blok with nothing else
+declared; :class:`ActionBlok` adds locals, queries, a demo, ...; one blok needs no list. It reads the run as ``task``, its args as ``args``, the agent running
+it as ``self`` and the agents the run got as ``deps.<key>`` -- the action's dependency keys, the
+parameters annotated with a protocol. Checked here, at decoration, as the server checks it at
+registration.
 """
 
-import re
-import warnings
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from arkitekt_spec.actions import (
     ACTION_BLOK_CONTEXTS,
-    ACTION_BLOK_FILLED_ROOTS,
     ActionBlokInput,
-    AgentProbeInput,
-    BlokPersistInput,
-    ComponentContext,
+    AgentDependencyInput,
+    BlokDemoInput,
     ComponentNodeInput,
-    UtilCallInput,
 )
-from arkitekt_spec.declare.blok.parser import bsx as parse_bsx
-from arkitekt_spec.declare.blok.validate import check_context_root, validate_blok_catalog
-from arkitekt_spec.declare.blok.walk import bound_calls, walk_component
-from arkitekt_spec.declare.catalogs import BlokCheckMode, CatalogWarning
+from arkitekt_spec.blok.bsx import parse_bsx
+from arkitekt_spec.blok.vocabulary import BlokError, Finding, load_vocabulary
+from arkitekt_spec.declare.blok.declarations import (
+    Local,
+    Query,
+    Subscription,
+    demo_input,
+    local_inputs,
+    query_inputs,
+    subscription_inputs,
+)
+from arkitekt_spec.declare.blok.origin import declared_at, finding_key, warn_at
+from arkitekt_spec.declare.blok.registry import catalogs_of, check_unknown_module
+from arkitekt_spec.declare.blok.infer import resolve_scope
+from arkitekt_spec.declare.blok.validate import BlokScope, blok_context, check_blok_tree
+from arkitekt_spec.declare.catalogs import BlokCheckMode
 from arkitekt_spec.scalars import JSONSerializable
 
 if TYPE_CHECKING:
     from arkitekt_spec.declare.app import AppRegistry
 
-ACTION_BLOK_TASK_ROOT = "task"
-"""The root an action's blok reads the run it is shown for under: ``@task.progress``, ``@task.ask``."""
-ACTION_BLOK_SELF_KEY = "self"
-"""The key an action's blok reads the agent running the action under: ``@self.<state>``."""
-AT_COMPONENT = "At"
-"""Anchors its children at the agent bound to ``dependency``, where it stands in the hosting space."""
+ANCHOR_COMPONENT = "Anchor"
+"""Anchors its children at the agent bound to ``dep``, where it stands in the hosting space."""
 ROUTE_COMPONENT = "Route"
 """With ``through``, a line through the agents bound to those dependencies."""
-ACTION_BLOK_COMPONENTS = ("At", "Route", "TaskAsk")
-"""The components that read a run or a dependency of one: only an action's own bloks hold them."""
-
-_ACTION_BLOK_READS = frozenset({ACTION_BLOK_TASK_ROOT, "args", ACTION_BLOK_SELF_KEY, "$event", "utils"})
+ASK_COMPONENT = "ask"
+"""The run's open ask form."""
+ACTION_BLOK_COMPONENTS = (ANCHOR_COMPONENT, ROUTE_COMPONENT, ASK_COMPONENT)
+"""The components that read a run or a dependency of one: an agent's blok never holds them."""
 
 
 @dataclass(frozen=True)
 class ActionBlok:
-    """An action's own blok for one context, declared with the action (``bloks=[...]``).
+    """An action's own blok for one context, declared with the action (``bloks=...``).
 
     Args:
-        component: The tree, as BSX (sent as such) or already parsed (``bsx(...)``).
-        context: ``"html"`` for a task panel, ``"scene"`` for a 3D view of its own, or
-            ``"overlay"`` drawn into the space that hosts the run: its root an ``<Overlay>``,
-            whose ``<At dependency="...">`` anchors children at the agent the run got for that
-            dependency.
-        local_state: The blok's own locals and their initial values (``{"show_path": True}``).
-        persist: The locals a renderer may keep between openings, on the device:
-            ``["show_path"]``, or ``{"show_path": "Whether the route is drawn"}``.
-        catalog: The UI catalog it renders against; the Orkestrator's when left out.
+        component: The tree, as v2 BSX (sent as such) or already parsed. Its root names the
+            context: ``<Html>`` for a task panel, ``<Scene>`` for a 3D view of its own, or
+            ``<Overlay>`` drawn into the space that hosts the run (whose
+            ``<Anchor dep="robot">`` anchors children at the agent the run got for ``robot``).
+        locals: Its form state, written only through ``bind``: each a :class:`Local` (a port,
+            its kind from its default, ``Local[T]()`` or ``Local(type=T)``), or a bare default.
+        demo: What a preview renders it with (``{"task": ..., "args": ..., "deps": ...}``).
+        queries: Its declared reads.
+        subscriptions: Its declared streams.
+        catalogs: The catalogs it needs (``"ui@1"``); those its components come from when left out.
+        module: The module (an app's own extras) it renders against; the Orkestrator's when left out.
         description: What it shows of a run.
-
-    The tree reads the action's dependency keys, ``@self`` (the agent running the action),
-    ``@task`` (the run: ``progress``, ``message``, ``status``, ``ask``, ``latest``), ``@args``
-    (the run's args) and its own locals.
     """
 
     component: str | ComponentNodeInput
-    context: str | ComponentContext = ComponentContext.HTML
-    local_state: Mapping[str, JSONSerializable] | None = None
-    persist: Mapping[str, str | None] | Sequence[str] | None = None
-    catalog: str | None = None
+    locals: "Mapping[str, Local[object] | JSONSerializable] | None" = None
+    demo: "BlokDemoInput | Mapping[str, JSONSerializable] | None" = None
+    queries: "Mapping[str, Query] | None" = None
+    subscriptions: "Mapping[str, Subscription] | None" = None
+    catalogs: Sequence[str] | None = None
+    module: str | None = None
     description: str | None = None
 
 
-def through_keys(value: str) -> list[str]:
-    """The dependency keys a ``through`` prop names: ``"['robot', 'frame']"`` (as BSX writes a
-    list), ``'["robot"]'`` or ``"robot, frame"`` -- the server's ``through_keys``."""
-    inner = value.strip()
-    if inner.startswith("[") and inner.endswith("]"):
-        inner = inner[1:-1]
-    return [item.strip().strip("'\"").strip() for item in inner.split(",") if item.strip()]
+ActionBloks = ActionBlok | str | ComponentNodeInput | Sequence[ActionBlok | str | ComponentNodeInput]
+"""What ``bloks=`` takes: one blok or several, each an :class:`ActionBlok` or a bare tree."""
+
+
+def as_action_bloks(bloks: ActionBloks | None) -> tuple[ActionBlok, ...]:
+    """``bloks=`` as a tuple of :class:`ActionBlok`: a single one (a BSX string is one) listed,
+    bare trees wrapped."""
+    if bloks is None:
+        return ()
+    listed = (bloks,) if isinstance(bloks, (ActionBlok, str, ComponentNodeInput)) else tuple(bloks)
+    return tuple(each if isinstance(each, ActionBlok) else ActionBlok(each) for each in listed)
 
 
 def _nodes(node: ComponentNodeInput) -> Iterator[ComponentNodeInput]:
@@ -96,116 +105,109 @@ def action_blok_components_in(node: ComponentNodeInput) -> list[ComponentNodeInp
     return [each for each in _nodes(node) if each.component in ACTION_BLOK_COMPONENTS]
 
 
-class _Reads:
-    """Every path root an action's blok reads is one it has, and every agent it calls is a dependency."""
-
-    def __init__(self, roots: frozenset[str], callable_keys: frozenset[str]) -> None:
-        self.roots = roots
-        self.callable_keys = callable_keys
-
-    def visit_component(self, node: ComponentNodeInput, scope: dict[str, object], context: str) -> None:
-        return None
-
-    def visit_path(self, path: str, scope: dict[str, object], context: str) -> None:
-        root = next((segment for segment in re.split(r"[/.]", path) if segment), "")
-        if root in scope or root in self.roots:
-            return
-        raise ValueError(
-            f"{context} reads {root!r}, which is neither a dependency of the action, `self`, `task`, "
-            f"`args` nor a local of the blok (its dependencies: {sorted(self.callable_keys - {ACTION_BLOK_SELF_KEY})})"
-        )
-
-    def visit_agent_call(self, call: AgentProbeInput, scope: dict[str, object], context: str) -> None:
-        if call.dependency not in self.callable_keys:
-            raise ValueError(f"{context} calls {call.dependency!r}, which is not a dependency of the action")
-
-    def visit_util_call(self, call: UtilCallInput, scope: dict[str, object], context: str) -> None:
-        return None
-
-    def declare_foreach_local(self, name: str, items_path: str, scope: dict[str, object], context: str) -> None:
-        self.visit_path(items_path, scope, context)
-
-    def declare_bound_call(self, name: str, call: AgentProbeInput, context: str) -> None:
-        return None
-
-
-def check_action_blok_tree(component: ComponentNodeInput, dependency_keys: frozenset[str], local_keys: frozenset[str]) -> None:
-    """The server's ``check_action_blok`` for a tree: its reads, its calls, and every ``<At
-    dependency>`` / ``<Route through>`` naming dependencies of the action."""
-    declared = frozenset(prop.declares_value for node in _nodes(component) for prop in node.props or () if prop.declares_value)
-    roots = dependency_keys | local_keys | declared | frozenset(bound_calls(component)) | _ACTION_BLOK_READS
-    walk_component(component, _Reads(roots, dependency_keys | {ACTION_BLOK_SELF_KEY}))
+def anchored_keys(component: ComponentNodeInput) -> list[tuple[str, str]]:
+    """Every dependency key an ``<Anchor dep>`` or ``<Route through>`` names, with the node's id."""
+    named: list[tuple[str, str]] = []
     for node in _nodes(component):
         for prop in node.props or ():
-            if not isinstance(prop.static_value, str):
-                continue
-            if node.component == AT_COMPONENT and prop.key == "dependency":
-                named = [prop.static_value]
-            elif node.component == ROUTE_COMPONENT and prop.key == "through":
-                named = through_keys(prop.static_value)
-            else:
-                continue
-            unknown = [key for key in named if key not in dependency_keys]
-            if unknown:
-                raise ValueError(
-                    f"Blok manifest: component {node.id!r} names {unknown[0]!r}, which is not a dependency of the "
-                    f"action (its dependencies: {', '.join(repr(key) for key in sorted(dependency_keys)) or 'none'})"
-                )
+            if node.component == ANCHOR_COMPONENT and prop.key == "dep" and isinstance(prop.static_value, str):
+                named.append((prop.static_value, node.id))
+            elif node.component == ROUTE_COMPONENT and prop.key == "through" and isinstance(prop.static_value, list):
+                named.extend((key, node.id) for key in prop.static_value if isinstance(key, str))
+    return named
 
 
 def build_action_bloks(
-    bloks: Sequence[ActionBlok],
-    dependency_keys: frozenset[str],
+    bloks: ActionBloks,
+    dependencies: Sequence[AgentDependencyInput],
     registry: "AppRegistry",
     owner: str,
     mode: BlokCheckMode = "warning",
+    arg_keys: Sequence[str] | None = None,
 ) -> tuple[ActionBlokInput, ...]:
-    """The wire bloks of an action, checked against its dependency keys and their catalogs.
+    """The wire bloks of an action, checked against its dependencies, its args and their catalogs.
 
     Raises:
-        ValueError: If two bloks share a context, a context is not html, scene or overlay, a
-            local is a root the renderer fills or a dependency, a persisted key is not a
-            local, an overlay's root is not ``Overlay``, a path or call reaches beyond the
-            action, or ``At``/``Path`` name a key that is not a dependency of the action.
+        ValueError: If two bloks share a context, a root is not ``<Html>``, ``<Scene>`` or
+            ``<Overlay>``, a blok breaks a rule of the language (a :class:`BlokError` with its code), or an
+            ``Anchor``/``Route`` names a key that is not a dependency of the action.
     """
     built: list[ActionBlokInput] = []
-    for blok in bloks:
+    keys = {dependency.key for dependency in dependencies}
+    at = declared_at()
+    for blok in as_action_bloks(bloks):
+        view = registry.blok_view(blok.module)
         source = blok.component if isinstance(blok.component, str) else None
-        component = parse_bsx(blok.component) if isinstance(blok.component, str) else blok.component
-        context = ComponentContext(blok.context.upper() if isinstance(blok.context, str) else blok.context)
+        try:
+            component = parse_bsx(blok.component, view=view) if isinstance(blok.component, str) else blok.component
+            context = blok_context(component)
+        except BlokError as error:
+            raise error.within(f"{owner} (blok)") from None
         if context.value not in ACTION_BLOK_CONTEXTS:
-            raise ValueError(f"{owner}: an action's blok is html, scene or overlay, not {context.value.lower()}")
+            raise ValueError(f"{owner}: an action's blok is an <Html>, <Scene> or <Overlay>, not <{component.component}>")
         if any(other.context == context.value for other in built):
             raise ValueError(f"{owner}: the {context.value.lower()} blok is given twice; an action has one blok per context")
-        local_state = dict(blok.local_state or {})
-        clashing = sorted((ACTION_BLOK_FILLED_ROOTS | dependency_keys) & set(local_state))
-        if clashing:
-            raise ValueError(f"{owner}: its blok cannot keep local state under {clashing}: the renderer fills it, or it names a dependency")
-        persisted = (
-            tuple(BlokPersistInput(key=key, description=text) for key, text in blok.persist.items())
-            if isinstance(blok.persist, Mapping)
-            else tuple(BlokPersistInput(key=key) for key in blok.persist or ())
+        for key, node_id in anchored_keys(component):
+            if key not in keys:
+                raise ValueError(
+                    f"{owner}: component {node_id!r} names {key!r}, which is not a dependency of the action "
+                    f"(its dependencies: {', '.join(repr(k) for k in sorted(keys)) or 'none'})"
+                )
+        try:
+            locals_ = local_inputs(blok.locals, registry)
+        except BlokError as error:
+            raise error.within(f"{owner} ({context.value.lower()} blok)") from None
+        queries = query_inputs(blok.queries)
+        subscriptions = subscription_inputs(blok.subscriptions)
+        demo = demo_input(blok.demo)
+        catalogs = tuple(blok.catalogs or ()) or catalogs_of(component, view)
+        scope = BlokScope(
+            kind="action",
+            context=context.value,
+            dependencies=tuple(dependencies),
+            locals=locals_,
+            queries=queries,
+            subscriptions=subscriptions,
+            args=tuple(arg_keys) if arg_keys is not None else None,
+            catalogs=catalogs,
+            demo=demo,
         )
-        unknown = sorted({local.key for local in persisted} - set(local_state))
-        if unknown:
-            raise ValueError(f"{owner}: its blok cannot persist {unknown}: only a local_state key is a local it can keep")
-        check_context_root(component, context.value)
-        check_action_blok_tree(component, dependency_keys, frozenset(local_state))
-        for diagnostic in validate_blok_catalog(component, registry.catalog_view(blok.catalog), mode):
-            warnings.warn(f"{owner} ({context.value.lower()} blok): {diagnostic.message}", CatalogWarning, stacklevel=4)
-        # Checked as its tree; sent as the BSX it was written in, when it was.
-        built.append(
-            ActionBlokInput(
-                context=context,
-                components=None if source is not None else (component,),
-                source=source,
-                catalog=blok.catalog,
-                description=blok.description,
-                demo_state=local_state or None,
-                persist=persisted,
-            )
-        )
+        scope = resolve_scope(component, scope, view)
+        reported: set[str] = set()
+        for finding in check_unknown_module(blok.module, registry):
+            if mode == "strict":
+                raise BlokError.from_finding(finding)
+            warn_at(f"{owner} ({context.value.lower()} blok): {finding.message} [{finding.code}]", at)
+        for finding in check_blok_tree(component, scope, view):
+            if finding.level == "error" or mode == "strict":
+                where = f", {finding.path}" if finding.path else ""
+                raise BlokError.from_finding(Finding(code=finding.code, level=finding.level, message=f"{owner} ({context.value.lower()} blok{where}): {finding.message}"))
+            if finding_key(finding) not in reported:
+                reported.add(finding_key(finding))
+                warn_at(f"{owner} ({context.value.lower()} blok): {finding.message} [{finding.code}]", at)
+        fields: dict[str, object] = {"context": context, "vocab": load_vocabulary().vocab}
+        optional: dict[str, object] = {
+            "components": None if source is not None else (component,),
+            "source": source,
+            "module": blok.module,
+            "description": blok.description,
+            "catalogs": catalogs or None,
+            "locals": locals_ or None,
+            "demo": demo,
+            "queries": queries or None,
+            "subscriptions": subscriptions or None,
+        }
+        fields.update({name: value for name, value in optional.items() if value is not None})
+        built.append(ActionBlokInput.model_validate(fields))
     return tuple(built)
 
 
-__all__ = ["ActionBlok", "build_action_bloks", "check_action_blok_tree", "through_keys"]
+__all__ = [
+    "ACTION_BLOK_COMPONENTS",
+    "ActionBlok",
+    "ActionBloks",
+    "action_blok_components_in",
+    "anchored_keys",
+    "as_action_bloks",
+    "build_action_bloks",
+]

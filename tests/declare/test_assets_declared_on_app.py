@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from arkitekt_spec.actions import AssetKind
+from arkitekt_spec.blok.vocabulary import BlokError
 from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.blok import bsx
 from arkitekt_spec.declare.errors import RegistryFrozenError
@@ -85,8 +86,8 @@ def test_assets_travel_into_a_merge_and_a_frozen_registry_takes_no_new_one(regis
 def test_a_blok_names_an_asset_of_its_own_app(registry: AppRegistry) -> None:
     registry.register_asset("scope", "models/scope.glb")
     registry.register_asset("logo", "logo.png")
-    registry.register_blok("view", '<Scene><Model src="@self.assets.scope" /></Scene>', context="scene")
-    registry.register_blok("panel", '<img src="@self.assets.logo" />')
+    registry.register_blok("view", "<Scene><Model src={self.assets.scope} /></Scene>")
+    registry.register_blok("panel", "<Html><Image src={self.assets.logo} /></Html>")
 
     bloks = {blok.key: blok for blok in registry.to_implement_agent_input(name="app").bloks}
     # Sent as the BSX it was written in, which the server parses into this tree.
@@ -97,20 +98,20 @@ def test_a_blok_names_an_asset_of_its_own_app(registry: AppRegistry) -> None:
 
 
 @pytest.mark.parametrize(
-    ("tree", "message"),
+    ("tree", "code"),
     [
-        ('<Scene><Model src="@self.assets.absent" /></Scene>', "which this app has not registered"),
-        ('<Scene><Model src="@camera.assets.scope" /></Scene>', "Only an app's own assets"),
-        ('<Scene><Model src="@self.assets" /></Scene>', "an asset is named '<dependency>.assets.<name>'"),
-        ('<Scene><Model src="@self.assets.scope.glb" /></Scene>', "an asset is named '<dependency>.assets.<name>'"),
-        ('<Scene><Model src="sha256:abc" /></Scene>', "is an ASSET prop and must name an asset"),
+        ("<Scene><Model src={self.assets.absent} /></Scene>", "deps.asset"),
+        ("<Scene><Model src={self.assets} /></Scene>", "catalog.asset"),
+        ("<Scene><Model src={self.assets.scope.glb} /></Scene>", "catalog.asset"),
+        ('<Scene><Model src="sha256:abc" /></Scene>', "catalog.asset"),
     ],
 )
-def test_a_blok_naming_no_asset_of_the_app_is_refused(registry: AppRegistry, tree: str, message: str) -> None:
+def test_a_blok_naming_no_asset_of_the_app_is_refused(registry: AppRegistry, tree: str, code: str) -> None:
     registry.register_asset("scope", "models/scope.glb")
-    with pytest.raises(ValueError, match=message):
-        registry.register_blok("view", tree, context="scene", mode="strict")
+    with pytest.raises(BlokError) as caught:
+        registry.register_blok("view", tree, mode="strict")
         registry.to_implement_agent_input(name="app")
+    assert caught.value.code == code
 
 
 def test_a_changed_file_is_a_changed_declaration(tmp_path: Path) -> None:
@@ -165,7 +166,7 @@ def test_a_file_the_app_does_not_hold_is_named_by_its_source_and_hash(registry: 
     assert (badge.kind, badge.size) == ("IMAGE", None)
     assert registry.registered_assets["robot"].path is None
 
-    registry.register_blok("view", '<Scene><Model src="@self.assets.robot" /></Scene>', context="scene")
+    registry.register_blok("view", '<Scene><Model src="@self.assets.robot" /></Scene>')
     inspected = {asset.name: asset for asset in registry.get_inspected_assets()}
     assert inspected["robot"].path is None and inspected["robot"].source == SOURCE + "?download=1"
 

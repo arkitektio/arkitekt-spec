@@ -1,14 +1,20 @@
-"""Shared traversal for blok component trees.
+"""Walking a v2 blok tree: every value it reads, every call it makes, with what is in scope.
 
-Validation (:mod:`rekuest.blok.parser`) and dependency inference
-(:mod:`rekuest.blok.registry`) walk the same ``ComponentNodeInput`` shape --
-props, agent/util calls, nested arguments -- under the same ``foreach`` scoping
-rules. Two hand-written walkers drifted once already (``foreach`` item inference
-only ever landed in the parser), so the traversal lives here and the callers
-supply a visitor.
+Validation (:mod:`.validate`) and dependency inference (:mod:`.registry`) walk the same
+tree under the same scoping rules, so the traversal lives here and they supply a visitor:
+
+- ``into`` names are in scope in the whole tree (the button that starts a run and the panel
+  that shows it are rarely nested), each written by one call site;
+- a ``foreach``'s ``let`` is in scope in its children and in its own ``key``, not in its
+  ``items``;
+- ``event`` is in scope in a callback prop (one that holds a task call or an effect, a
+  query's refetch or fetch_more included), ``error`` inside the ``<error>`` slot of a
+  ``<suspense>``.
 """
 
-from typing import Any, Protocol
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Protocol, TypeVar
 
 from arkitekt_spec.actions import (
     ActionArgumentInput,
@@ -17,259 +23,242 @@ from arkitekt_spec.actions import (
     ComponentPropInput,
     UtilCallInput,
 )
+from arkitekt_spec.blok.vocabulary import load_vocabulary
 
 FOREACH_COMPONENT = "foreach"
 FOREACH_LET_PROP = "let"
 FOREACH_ITEMS_PROP = "items"
+FOREACH_KEY_PROP = "key"
+IF_COMPONENT = "if"
+ELSE_COMPONENT = "else"
+SUSPENSE_COMPONENT = "suspense"
+ERROR_SLOT = "error"
+WHEN_PROP = "when"
+BIND_PROP = "bind"
+
+Binding = TypeVar("Binding")
 
 
-class BlokVisitor(Protocol):
-    """Callbacks invoked by :func:`walk_component`.
+@dataclass(frozen=True)
+class Where:
+    """Where a value sits: the node, the prop, and which scoped roots are in force there."""
 
-    ``scope`` maps a local name declared by an enclosing ``foreach`` to whatever
-    :meth:`declare_foreach_local` returned for it. ``context`` is a human-readable
-    location (``"prop 'text' of <Button> (Card/Button[0])"``) for error messages.
+    node: ComponentNodeInput
+    key: str
+    callback: bool
+    in_error: bool
 
-    :meth:`visit_component` fires once per node, before its own props, so a visitor
-    sees a component before anything it carries.
-    """
-
-    def visit_component(
-        self, node: ComponentNodeInput, scope: dict[str, Any], context: str
-    ) -> None:  # pragma: no cover - protocol
-        ...
-
-    def visit_path(
-        self, path: str, scope: dict[str, Any], context: str
-    ) -> None:  # pragma: no cover - protocol
-        ...
-
-    def visit_agent_call(
-        self, call: AgentProbeInput, scope: dict[str, Any], context: str
-    ) -> None:  # pragma: no cover - protocol
-        ...
-
-    def visit_util_call(
-        self, call: UtilCallInput, scope: dict[str, Any], context: str
-    ) -> None:  # pragma: no cover - protocol
-        ...
-
-    def declare_foreach_local(
-        self, name: str, items_path: str, scope: dict[str, Any], context: str
-    ) -> Any:  # pragma: no cover - protocol
-        ...
-
-    def declare_bound_call(
-        self, name: str, call: AgentProbeInput, context: str
-    ) -> Any:  # pragma: no cover - protocol
-        ...
-
-
-def action_key_for(call: AgentProbeInput) -> str:
-    """The action key an agent call names.
-
-    An operation may be dotted (``dep.a.b``); the action itself is the last
-    segment, since ``AppRegistry.implementations`` is keyed by bare interface.
-    Both the validator and the dependency collector resolve operations through
-    here so they cannot disagree about what an action is called.
-    """
-    return call.operation.split(".")[-1]
+    @property
+    def text(self) -> str:
+        """The place, for a message: ``onClick of <Button> (Card[0]/Button[0])``."""
+        return f"{self.key} of <{self.node.component}> ({self.node.id})"
 
 
 def node_context(node: ComponentNodeInput) -> str:
-    """Render a node as ``<Component> (structural/id)`` for error messages."""
+    """Render a node as ``<Component> (id)`` for messages."""
     return f"<{node.component}> ({node.id})"
 
 
-def prop_context(node: ComponentNodeInput, prop: ComponentPropInput) -> str:
-    """Render a prop location for error messages."""
-    return f"prop '{prop.key}' of {node_context(node)}"
+def action_key_for(call: AgentProbeInput) -> str:
+    """The action a task call names."""
+    return call.operation.split(".")[-1]
 
 
-def foreach_parts(
-    node: ComponentNodeInput,
-) -> tuple[str | None, str | None]:
-    """Return ``(let_name, items_path)`` for a ``foreach`` node, else ``(None, None)``."""
-    if node.component.lower() != FOREACH_COMPONENT:
-        return None, None
-
-    let_name = next(
-        (
-            prop.declares_value
-            for prop in node.props or ()
-            if prop.key == FOREACH_LET_PROP and prop.declares_value
-        ),
-        None,
-    )
-    items_path = next(
-        (
-            prop.dynamic_value.path
-            for prop in node.props or ()
-            if prop.key == FOREACH_ITEMS_PROP
-            and prop.dynamic_value is not None
-            and prop.dynamic_value.path is not None
-        ),
-        None,
-    )
-    return let_name, items_path
+def is_effect(call: UtilCallInput) -> bool:
+    """Whether ``call`` is an effect (``ui.copy``, ``task.answer``, ``query.refetch``,
+    ``query.fetch_more``), not a pure function."""
+    function = load_vocabulary().function(call.operation)
+    return function is not None and function.effect
 
 
-def bound_calls(node: ComponentNodeInput) -> dict[str, tuple[AgentProbeInput, str]]:
-    """Every call the tree binds to a name (``@dep.op(...).into(name)``), with where.
+def is_callback_value(prop: ComponentPropInput) -> bool:
+    """Whether a prop holds a callback's one thing: a task call or an effect."""
+    return prop.agent_call is not None or (prop.util_call is not None and is_effect(prop.util_call))
 
-    A bound call's task is a value of the blok: the name holds what the call is
-    doing and what it returned. Unlike a ``foreach`` local it is visible in the
-    whole tree -- the button that starts a run and the panel that shows its
-    result are rarely nested in each other.
-    """
-    found: dict[str, tuple[AgentProbeInput, str]] = {}
 
-    def visit(current: ComponentNodeInput, repeated: bool) -> None:
+def into_sites(node: ComponentNodeInput) -> dict[str, list[tuple[AgentProbeInput, str]]]:
+    """Every name a task call writes its record to (``... into move``), with each call site."""
+    found: dict[str, list[tuple[AgentProbeInput, str]]] = {}
+
+    def visit(current: ComponentNodeInput) -> None:
         for prop in current.props or ():
-            if prop.agent_call is None or not prop.declares_value:
-                continue
-            context = prop_context(current, prop)
-            if repeated:
-                # One name, as many buttons as there are items: every run would
-                # write the same record, and only the last click would show.
-                raise ValueError(
-                    f"'{prop.declares_value}' is bound inside a {FOREACH_COMPONENT} in {context}. "
-                    f"A call is bound to one name, and a repeated call would share it; "
-                    f"bind it outside the loop."
+            if prop.agent_call is not None and prop.declares_value:
+                found.setdefault(prop.declares_value, []).append(
+                    (prop.agent_call, f"{prop.key} of {node_context(current)}")
                 )
-            if prop.declares_value in found:
-                raise ValueError(
-                    f"'{prop.declares_value}' is bound twice: in {found[prop.declares_value][1]} "
-                    f"and in {context}. Each call needs a name of its own."
-                )
-            found[prop.declares_value] = (prop.agent_call, context)
-        inside = repeated or current.component.lower() == FOREACH_COMPONENT
         for child in current.children or ():
-            visit(child, inside)
+            visit(child)
 
-    visit(node, False)
+    visit(node)
     return found
 
 
-def walk_component(
-    node: ComponentNodeInput,
-    visitor: BlokVisitor,
-    scope: dict[str, Any] | None = None,
-) -> None:
-    """Walk ``node`` and its subtree, invoking ``visitor`` for the node and every reference."""
-    if scope is None:
-        # The root: bound calls are declared before anything is walked, so a
-        # path may name one that is bound further down, or in another branch.
-        scope = {
-            name: visitor.declare_bound_call(name, call, context)
-            for name, (call, context) in bound_calls(node).items()
-        }
-    current_scope = dict(scope)
-
-    visitor.visit_component(node, current_scope, node_context(node))
-
-    binding = _declare_foreach(node, visitor, current_scope)
-    if binding is not None:
-        let_name, value = binding
-        current_scope[let_name] = value
-
-    for prop in node.props or ():
-        _walk_prop(node, prop, visitor, current_scope)
-
-    for child in node.children or ():
-        walk_component(child, visitor, current_scope)
-
-
-def _declare_foreach(
-    node: ComponentNodeInput, visitor: BlokVisitor, scope: dict[str, Any]
-) -> tuple[str, Any] | None:
-    """Return the ``(name, value)`` a ``foreach`` node binds, or ``None``.
-
-    ``scope`` is read-only here: the caller owns the binding so scope mutation
-    happens in exactly one place (:func:`walk_component`).
-    """
-    if node.component.lower() != FOREACH_COMPONENT:
+def foreach_let(node: ComponentNodeInput) -> str | None:
+    """The loop variable a ``foreach`` declares."""
+    if node.component != FOREACH_COMPONENT:
         return None
-
-    let_name, items_path = foreach_parts(node)
-    if let_name is None or items_path is None:
-        missing = [
-            name
-            for name, value in (
-                (FOREACH_LET_PROP, let_name),
-                (FOREACH_ITEMS_PROP, items_path),
-            )
-            if value is None
-        ]
-        raise ValueError(
-            f"{node_context(node)} is missing required prop(s) {missing}. A "
-            f"{FOREACH_COMPONENT} needs {FOREACH_ITEMS_PROP}=\"@<path>\" and "
-            f"{FOREACH_LET_PROP}=\"#<name>\"."
-        )
-
-    # The items path is resolved in the *enclosing* scope: a foreach cannot
-    # iterate over the variable it is about to declare.
-    return let_name, visitor.declare_foreach_local(
-        let_name,
-        items_path,
-        scope,
-        f"prop '{FOREACH_ITEMS_PROP}' of {node_context(node)}",
+    return next(
+        (prop.declares_value for prop in node.props or () if prop.key == FOREACH_LET_PROP and prop.declares_value),
+        None,
     )
+
+
+def iter_nodes(node: ComponentNodeInput) -> list[ComponentNodeInput]:
+    """``node`` and every node below it, depth first."""
+    nodes = [node]
+    for child in node.children or ():
+        nodes.extend(iter_nodes(child))
+    return nodes
+
+
+class TreeVisitor(Protocol[Binding]):
+    """What :func:`walk_tree` calls. ``scope`` maps ``let`` and ``into`` names to their bindings."""
+
+    def visit_component(
+        self, node: ComponentNodeInput, ancestors: tuple[ComponentNodeInput, ...], scope: Mapping[str, Binding]
+    ) -> None:  # pragma: no cover - protocol
+        """Once per node, before its props."""
+        ...
+
+    def visit_path(self, path: str, where: Where, scope: Mapping[str, Binding]) -> None:  # pragma: no cover - protocol
+        """A value read at ``path``."""
+        ...
+
+    def visit_agent_call(
+        self, call: AgentProbeInput, where: Where, scope: Mapping[str, Binding], into: str | None
+    ) -> None:  # pragma: no cover - protocol
+        """A task call (before its arguments)."""
+        ...
+
+    def visit_util_call(
+        self, call: UtilCallInput, where: Where, scope: Mapping[str, Binding], top: bool
+    ) -> None:  # pragma: no cover - protocol
+        """A function or effect call (before its arguments); ``top`` when it is the prop's value."""
+        ...
+
+    def bind_let(
+        self, name: str, items: ComponentPropInput | None, where: Where, scope: Mapping[str, Binding]
+    ) -> Binding:  # pragma: no cover - protocol
+        """What a ``foreach``'s loop variable is bound to, its ``items`` read in ``scope``."""
+        ...
+
+    def bind_into(self, name: str, call: AgentProbeInput) -> Binding:  # pragma: no cover - protocol
+        """What an ``into`` name is bound to: the record of ``call``."""
+        ...
+
+
+def walk_tree(node: ComponentNodeInput, visitor: TreeVisitor[Binding]) -> None:
+    """Walk ``node`` with ``visitor``: every node, then every value of its props, in scope."""
+    scope: dict[str, Binding] = {
+        name: visitor.bind_into(name, sites[0][0]) for name, sites in into_sites(node).items()
+    }
+    _walk_node(node, visitor, scope, (), False)
+
+
+def _walk_node(
+    node: ComponentNodeInput,
+    visitor: TreeVisitor[Binding],
+    scope: dict[str, Binding],
+    ancestors: tuple[ComponentNodeInput, ...],
+    in_error: bool,
+) -> None:
+    visitor.visit_component(node, ancestors, scope)
+    inner = dict(scope)
+    let = foreach_let(node)
+    if let is not None:
+        items = next((prop for prop in node.props or () if prop.key == FOREACH_ITEMS_PROP), None)
+        where = Where(node=node, key=FOREACH_ITEMS_PROP, callback=False, in_error=in_error)
+        inner[let] = visitor.bind_let(let, items, where, scope)
+    for prop in node.props or ():
+        # A foreach reads its items outside the loop, its key inside it.
+        prop_scope = scope if (let is not None and prop.key == FOREACH_ITEMS_PROP) else inner
+        _walk_prop(node, prop, visitor, prop_scope, in_error)
+    in_slot = in_error or (
+        node.component == ERROR_SLOT and bool(ancestors) and ancestors[-1].component == SUSPENSE_COMPONENT
+    )
+    for child in node.children or ():
+        _walk_node(child, visitor, inner, (*ancestors, node), in_slot)
 
 
 def _walk_prop(
     node: ComponentNodeInput,
     prop: ComponentPropInput,
-    visitor: BlokVisitor,
-    scope: dict[str, Any],
+    visitor: TreeVisitor[Binding],
+    scope: Mapping[str, Binding],
+    in_error: bool,
 ) -> None:
-    context = prop_context(node, prop)
-
+    where = Where(node=node, key=prop.key, callback=is_callback_value(prop), in_error=in_error)
     if prop.dynamic_value is not None and prop.dynamic_value.path is not None:
-        visitor.visit_path(prop.dynamic_value.path, scope, context)
-
+        visitor.visit_path(prop.dynamic_value.path, where, scope)
     if prop.agent_call is not None:
-        _walk_agent_call(prop.agent_call, visitor, scope, context)
-
+        visitor.visit_agent_call(prop.agent_call, where, scope, prop.declares_value)
+        for argument in prop.agent_call.arguments or ():
+            _walk_argument(argument, visitor, scope, where)
     if prop.util_call is not None:
-        _walk_util_call(prop.util_call, visitor, scope, context)
+        _walk_util(prop.util_call, visitor, scope, where, top=True)
 
 
-def _walk_agent_call(
-    call: AgentProbeInput, visitor: BlokVisitor, scope: dict[str, Any], context: str
+def _walk_util(
+    call: UtilCallInput, visitor: TreeVisitor[Binding], scope: Mapping[str, Binding], where: Where, *, top: bool
 ) -> None:
-    visitor.visit_agent_call(call, scope, context)
+    visitor.visit_util_call(call, where, scope, top)
     for argument in call.arguments or ():
-        _walk_argument(argument, visitor, scope, context)
-
-
-def _walk_util_call(
-    call: UtilCallInput, visitor: BlokVisitor, scope: dict[str, Any], context: str
-) -> None:
-    visitor.visit_util_call(call, scope, context)
-    for argument in call.arguments or ():
-        _walk_argument(argument, visitor, scope, context)
+        _walk_argument(argument, visitor, scope, where)
 
 
 def _walk_argument(
-    argument: ActionArgumentInput,
-    visitor: BlokVisitor,
-    scope: dict[str, Any],
-    context: str,
+    argument: ActionArgumentInput, visitor: TreeVisitor[Binding], scope: Mapping[str, Binding], where: Where
 ) -> None:
-    nested_context = f"argument '{argument.key or 'positional'}' of {context}"
-
     if argument.value_path is not None:
-        visitor.visit_path(argument.value_path, scope, nested_context)
-
+        visitor.visit_path(argument.value_path, where, scope)
     if argument.agent_call is not None:
-        _walk_agent_call(argument.agent_call, visitor, scope, nested_context)
-
+        visitor.visit_agent_call(argument.agent_call, where, scope, None)
+        for nested in argument.agent_call.arguments or ():
+            _walk_argument(nested, visitor, scope, where)
     if argument.util_call is not None:
-        _walk_util_call(argument.util_call, visitor, scope, nested_context)
+        _walk_util(argument.util_call, visitor, scope, where, top=False)
+    for nested in (*(argument.value_list or ()), *(argument.value_dict or ())):
+        _walk_argument(nested, visitor, scope, where)
 
-    for nested in argument.value_list or ():
-        _walk_argument(nested, visitor, scope, nested_context)
 
-    for nested in argument.value_dict or ():
-        _walk_argument(nested, visitor, scope, nested_context)
+def argument_paths(arguments: tuple[ActionArgumentInput, ...]) -> list[str]:
+    """Every path a list of arguments reads (a query's variables), depth first."""
+    paths: list[str] = []
+
+    def visit(argument: ActionArgumentInput) -> None:
+        if argument.value_path is not None:
+            paths.append(argument.value_path)
+        for call in (argument.util_call, argument.agent_call):
+            for nested in (call.arguments or ()) if call is not None else ():
+                visit(nested)
+        for nested in (*(argument.value_list or ()), *(argument.value_dict or ())):
+            visit(nested)
+
+    for argument in arguments:
+        visit(argument)
+    return paths
+
+
+__all__ = [
+    "BIND_PROP",
+    "ELSE_COMPONENT",
+    "ERROR_SLOT",
+    "FOREACH_COMPONENT",
+    "FOREACH_ITEMS_PROP",
+    "FOREACH_KEY_PROP",
+    "FOREACH_LET_PROP",
+    "IF_COMPONENT",
+    "SUSPENSE_COMPONENT",
+    "WHEN_PROP",
+    "TreeVisitor",
+    "Where",
+    "action_key_for",
+    "argument_paths",
+    "foreach_let",
+    "into_sites",
+    "is_callback_value",
+    "is_effect",
+    "iter_nodes",
+    "node_context",
+    "walk_tree",
+]

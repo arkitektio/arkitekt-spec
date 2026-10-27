@@ -9,8 +9,10 @@ is converted unasked: only enums are derived without being registered first.
 """
 
 import re
+import sys
 from collections.abc import Callable
 from enum import Enum
+from pathlib import Path
 from typing import (
     Any,
     Literal,
@@ -19,6 +21,7 @@ from typing import (
 )
 
 import inflection
+from pydantic import BaseModel, ConfigDict
 
 from arkitekt_spec.actions import (
     ChoiceAssignWidgetInput,
@@ -34,28 +37,112 @@ from arkitekt_spec.declare.structures.utils import build_instance_predicate
 from arkitekt_spec.scalars import Identifier, validate_identifier
 
 
+def package_slot(package: str) -> str:
+    """``package`` as the package slot of ``@package/key``: everything the server refuses
+    there replaced by ``-``."""
+    return re.sub(r"[^A-Za-z0-9_.-]+", "-", package).strip("-") or "app"
+
+
 def model_identifier(package: str, cls: type[Any]) -> str:
     """The identifier a model travels as when none is given: ``@package/snake_case_name``.
 
-    ``package`` is whatever names the declaring side -- an app's identifier, or
-    the class's module -- with everything the server refuses in that slot
-    replaced by ``-``.
+    ``package`` names the declaring side: the app's identifier, or the class's
+    module for a registry no app owns (a service package's).
     """
-    slot = re.sub(r"[^A-Za-z0-9_.-]+", "-", package).strip("-") or "app"
-    return f"@{slot}/{inflection.underscore(cls.__name__)}"
+    return f"@{package_slot(package)}/{inflection.underscore(cls.__name__)}"
 
 
-def cls_to_identifier(cls: type[Any]) -> Identifier:
-    """Derive an identifier string from a class's module and name.
+INSTALLED_DIRECTORIES = frozenset({"site-packages", "dist-packages"})
+"""Directories an installer puts other distributions in: never an app's own source."""
 
-    The server requires ``@package/key`` (``^@[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$``)
-    and rejects an implementation whose structure ports carry anything else, so
-    the module goes in the package slot and the class name in the key slot.
-    Dots are legal in both slots, so this is a pure reshaping of the old
-    ``module.name`` form and keeps identifiers exactly as unique as before.
+
+def source_root(constructed_in: Path) -> Path | None:
+    """The directory an app's own source lives in, given the file that constructs the app.
+
+    The top-level package the file is in -- climbing while a directory has an
+    ``__init__.py`` -- or, for a plain script, its directory. ``None`` for code
+    that has no file (typed into a console).
+    """
+    if not constructed_in.is_file():
+        return None
+    root = constructed_in.resolve().parent
+    while root.parent != root and (root.parent / "__init__.py").is_file():
+        root = root.parent
+    return root
+
+
+class AppNamespace(BaseModel):
+    """The app a registry belongs to, and what counts as the app's own source.
+
+    A class the app defines itself derives its identifier in the app's namespace
+    (``@<identifier>/<name>``), so it is the same however the app is launched: a
+    class in a script is ``__main__.Method`` when the script is run and
+    ``script.Method`` when it is imported. A class from anywhere else -- an
+    installed library, another package -- keeps its module-derived identifier, so
+    a library type is the same in every app that uses it.
+
+    A class is the app's own when (see :meth:`defines`):
+
+    - its module is ``__main__`` or ``module``, the module that constructed the app; or
+    - its module's file is under ``root`` (the top-level package or script directory
+      of that module, see :func:`source_root`) and not inside a ``site-packages`` or
+      ``dist-packages`` directory below it, which holds installed distributions
+      (a virtualenv kept in the app's directory).
+
+    The rule reads files, not module names, so it gives the same answer whether
+    the app is run as a script, with ``-m`` or imported.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    identifier: str
+    """The app's identifier: the namespace of what it defines."""
+    root: Path | None = None
+    """The directory of the app's own source; ``None`` when it has no file."""
+    module: str | None = None
+    """The name of the module that constructed the app (``__main__`` when run)."""
+
+    def defines(self, cls: type[Any]) -> bool:
+        """Whether ``cls`` is a class this app defines itself (see the class docstring)."""
+        module_name = cls.__module__
+        if module_name == "__main__" or (self.module is not None and module_name == self.module):
+            return True
+        if self.root is None:
+            return False
+        module = sys.modules.get(module_name)
+        if module is None:
+            return False
+        try:
+            file = module.__file__
+        except AttributeError:  # a builtin module has none
+            return False
+        if file is None:
+            return False
+        try:
+            relative = Path(file).resolve().relative_to(self.root)
+        except ValueError:
+            return False
+        return INSTALLED_DIRECTORIES.isdisjoint(relative.parts)
+
+    def of(self, cls: type[Any]) -> str | None:
+        """The namespace ``cls`` derives its identifier in: the app's when it defines it, else none."""
+        return self.identifier if self.defines(cls) else None
+
+
+def cls_to_identifier(cls: type[Any], namespace: str | None = None) -> Identifier:
+    """Derive an identifier for an enum or a memory structure: ``@<namespace>/<classname>``.
+
+    ``namespace`` is the identifier of the app that defines the class (see
+    :class:`AppNamespace`), so the same app gets the same identifier however it is
+    launched. A class the app does not define itself -- a library's -- and one in
+    a registry no app owns pass none and fall back to the class's module.
+
+    The server requires ``@package/key`` (``^@[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$``),
+    so the namespace goes in the package slot and the class name in the key slot.
     """
     try:
-        return validate_identifier(f"@{cls.__module__.lower()}/{cls.__name__.lower()}")
+        package = package_slot(namespace) if namespace is not None else cls.__module__.lower()
+        return validate_identifier(f"@{package}/{cls.__name__.lower()}")
     except AttributeError as e:
         raise StructureDefinitionError(
             f"Cannot convert {cls} to identifier. The class needs to have a"
@@ -111,13 +198,13 @@ def is_global_structure(cls: type[Any]) -> bool:
     )
 
 
-def fullfilled_enum_from_cls(cls: type[Enum]) -> FullFilledEnum:
-    """Build a FullFilledEnum from an Enum subclass."""
+def fullfilled_enum_from_cls(cls: type[Enum], namespace: str | None = None) -> FullFilledEnum:
+    """Build a FullFilledEnum from an Enum subclass, its identifier in ``namespace`` (see :func:`cls_to_identifier`)."""
     choices = enum_choices(cls)
 
     return FullFilledEnum(
         cls=cls,
-        identifier=cls_to_identifier(cls),
+        identifier=cls_to_identifier(cls, namespace),
         choices=choices,
         members=dict(cls.__members__),
         predicate=build_instance_predicate(cls),

@@ -8,7 +8,7 @@ in :mod:`rekuest.annotations.parsers` while a callable is being defined.
 All markers share a consistent PascalCase, callable surface and are re-exported
 from the top-level :mod:`rekuest` package::
 
-    from arkitekt import Description, Default, Units, Requires, Provides
+    from arkitekt import Description, Default, Key, Units, Requires, Provides
 
     def measure(
         exposure: Annotated[Duration, Units("ms", "s"), Description("Exposure time")],
@@ -44,6 +44,30 @@ class Description:
     def __repr__(self) -> str:
         """Return a string representation of the Description marker."""
         return f"Description({self.value})"
+
+
+class Key:
+    """Name a return: the key it is read by, in place of ``return0``.
+
+    Use inside :data:`typing.Annotated` on a return annotation (or on an element of a
+    ``tuple[...]`` return)::
+
+        def count(image: Image) -> Annotated[int, Key("count")]: ...
+
+    A bloks reads it as ``<record>.returns.count``. A ``NamedTuple`` return names
+    every return at once, by its fields. An argument is keyed by its parameter
+    name, so ``Key`` is refused there.
+    """
+
+    def __init__(self, value: str) -> None:
+        """Initialize the Key marker with the return's key."""
+        if not isinstance(value, str) or not value.isidentifier():  # type: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(f"Key value must be an identifier, got {value!r}")
+        self.value = value
+
+    def __repr__(self) -> str:
+        """Return a string representation of the Key marker."""
+        return f"Key({self.value!r})"
 
 
 class Default:

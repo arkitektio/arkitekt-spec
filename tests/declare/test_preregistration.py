@@ -19,6 +19,7 @@ from arkitekt_spec.declare.structures.errors import (
     StructureDefinitionError,
     StructureRegistryError,
 )
+from arkitekt_spec.declare.structures.convert import AppNamespace
 from arkitekt_spec.declare.structures.registry import StructureRegistry
 from arkitekt_spec.declare.structures.types import (
     FullFilledEnum,
@@ -182,3 +183,20 @@ def test_a_memory_structure_can_be_named_and_described() -> None:
     assert isinstance(fullfilled, FullFilledMemoryStructure)
     assert fullfilled.identifier == "@myapp/thing"
     assert fullfilled.description == "A thing"
+
+
+class Method(Enum):
+    """A choice the app declares in its own file."""
+
+    OTSU = "otsu"
+    LI = "li"
+
+
+def test_a_given_identifier_is_kept_in_a_namespaced_registry() -> None:
+    named = StructureRegistry(namespace=AppNamespace(identifier="myapp", module=__name__))
+    assert named.register_as_memory_structure(PlainThing, "@kept/thing").identifier == "@kept/thing"
+    assert named.derive_enum(Method).identifier == "@myapp/method"
+
+
+def test_a_registry_no_app_owns_falls_back_to_the_module() -> None:
+    assert StructureRegistry().derive_enum(Method).identifier == f"@{Method.__module__.lower()}/method"

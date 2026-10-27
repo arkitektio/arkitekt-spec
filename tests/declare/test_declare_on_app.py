@@ -133,18 +133,6 @@ def test_a_merged_package_brings_its_protocols() -> None:
     ) is package.structure_registry.protocol_for(Lab)
 
 
-def test_a_blok_names_declared_protocols_by_key() -> None:
-    registry = app_knowing_sample_as("@a/sample")
-    registry.declare(app="lab")(Lab)
-
-    registry.register_blok("b", "<div />", dependencies={"lab": Lab})
-
-    (dependency,) = registry.registered_bloks["b"].dependencies
-    assert (dependency.key, dependency.app) == ("lab", "lab")
-    with pytest.raises(KeyError, match="not a protocol this app declared"):
-        registry.register_blok("c", "<div />", dependencies={"x": Sample})
-
-
 # --------------------------------------------------------------------------- #
 # A protocol's public annotated attributes are its state demands
 # --------------------------------------------------------------------------- #

@@ -1,51 +1,48 @@
-"""Turn registered blok declarations into the inputs the agent uploads."""
+"""Turn an app's blok declarations into the inputs its agent uploads.
 
-import warnings
-from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
-from typing import (
-    TYPE_CHECKING,
-    Any,
-)
+An agent's blok reads its own agent as ``self``: the states it reads (``self.arm.joints``) and
+the actions it calls or watches (``self.move(...)``, ``self.tasks.move``) become the demands
+of the one dependency it has, ``self``, built against this app's own declarations. Its
+queries are checked against their services' schemas where the app knows them, which also
+types their values. Then the whole tree is validated against all of it.
+"""
+
+from collections.abc import Mapping, Sequence
+from dataclasses import replace as dataclass_replace
+from typing import TYPE_CHECKING
 
 from arkitekt_spec.actions import (
     ActionDependencyInput,
     AgentDependencyInput,
     AgentProbeInput,
+    BlokDemoInput,
     BlokImplementationInput,
-    BlokServiceInput,
+    BlokLocalInput,
+    BlokQueryInput,
+    BlokSubscriptionInput,
     ComponentContext,
     ComponentNodeInput,
+    ComponentPropInput,
     PortKind,
     PortMatchInput,
     ReturnPortInput,
     StateDependencyInput,
     UtilCallInput,
 )
-from arkitekt_spec.declare.blok.graphql import check_query, graphql_available, schema_hash
-from arkitekt_spec.declare.blok.uistate import QueryRead, query_reads
-from arkitekt_spec.declare.blok.validate import (
-    EVENT_SCOPE_KEY,
-    RESERVED_ROOTS,
-    idle_resource_record,
-    idle_task_record,
-    latest_task_reads,
-    local_roots_of,
-    resource_record_match,
-    validate_blok,
-)
+from arkitekt_spec.blok.catalogs import BASE_NAME, ORKESTRATOR_MODULE, BlokView
+from arkitekt_spec.blok.vocabulary import JSON, BlokError, Finding, load_vocabulary
+from arkitekt_spec.declare.blok.graphql import check_query, graphql_available
+from arkitekt_spec.declare.blok.infer import ArgPorts, resolve_local, resolve_scope
+from arkitekt_spec.declare.blok.origin import DeclaredAt, finding_key, warn_at
+from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
 from arkitekt_spec.declare.blok.walk import (
-    BlokVisitor,
+    Where,
     action_key_for,
-    bound_calls,
-    walk_component,
+    argument_paths,
+    iter_nodes,
+    walk_tree,
 )
-from arkitekt_spec.declare.catalogs import (
-    LATEST_SEGMENT,
-    BlokCheckMode,
-    CatalogWarning,
-    asset_path_parts,
-    latest_task_path_parts,
-)
+from arkitekt_spec.declare.catalogs import BlokCheckMode
 from arkitekt_spec.declare.definition.checks import check_blok
 from arkitekt_spec.declare.definition.dependencies import (
     build_action_dependency_input,
@@ -55,538 +52,284 @@ from arkitekt_spec.declare.definition.dependencies import (
 if TYPE_CHECKING:
     from arkitekt_spec.declare.app import AppRegistry
 
-# The dependency key a blok's own agent goes by.
 SELF_KEY = "self"
+"""The dependency key a blok's own agent goes by."""
 
 
-def build_declared_bloks(
+class _SelfReads:
+    """What a tree (and its query variables) reads of ``self``: states, actions, assets."""
+
+    def __init__(self) -> None:
+        self.states: set[str] = set()
+        self.actions: set[str] = set()
+        self.assets: set[str] = set()
+
+    def read(self, path: str) -> None:
+        vocabulary = load_vocabulary()
+        parts = path.split(".")
+        if parts[0] == "deps" and len(parts) > 1 and parts[1] == SELF_KEY:
+            parts = parts[1:]
+        if parts[0] != SELF_KEY or len(parts) < 2:
+            return
+        head = parts[1]
+        if head == vocabulary.tasks_segment:
+            if len(parts) > 2:
+                self.actions.add(parts[2])
+        elif head == vocabulary.assets_segment:
+            if len(parts) > 2:
+                self.assets.add(parts[2])
+        elif head not in vocabulary.agent_fields:
+            self.states.add(head)
+
+    def visit_component(self, node: ComponentNodeInput, ancestors: tuple[ComponentNodeInput, ...], scope: Mapping[str, None]) -> None:
+        return None
+
+    def visit_path(self, path: str, where: Where, scope: Mapping[str, None]) -> None:
+        if path.split(".")[0] not in scope:
+            self.read(path)
+
+    def visit_agent_call(self, call: AgentProbeInput, where: Where, scope: Mapping[str, None], into: str | None) -> None:
+        if call.dependency == SELF_KEY:
+            self.actions.add(action_key_for(call))
+
+    def visit_util_call(self, call: UtilCallInput, where: Where, scope: Mapping[str, None], top: bool) -> None:
+        return None
+
+    def bind_let(self, name: str, items: ComponentPropInput | None, where: Where, scope: Mapping[str, None]) -> None:
+        return None
+
+    def bind_into(self, name: str, call: AgentProbeInput) -> None:
+        return None
+
+
+def self_reads(
+    tree: ComponentNodeInput,
+    queries: Sequence[BlokQueryInput] = (),
+    subscriptions: Sequence[BlokSubscriptionInput] = (),
+) -> _SelfReads:
+    """What ``tree`` and the variables of its queries read of ``self``."""
+    reads = _SelfReads()
+    walk_tree(tree, reads)
+    for declared in (*queries, *subscriptions):
+        for path in argument_paths(declared.variables):
+            reads.read(path)
+    return reads
+
+
+def self_dependency(reads: _SelfReads, app_registry: "AppRegistry") -> AgentDependencyInput | None:
+    """The ``self`` dependency a blok's reads demand of this app, or None when it reads none of it.
+
+    Raises:
+        BlokError: If it calls or watches an action, reads a state, or names an asset this app
+            does not declare.
+    """
+    vocabulary = load_vocabulary()
+    for name in sorted(reads.assets):
+        if name not in app_registry.registered_assets:
+            raise BlokError("deps.asset", path=f"self.assets.{name} (registered: {', '.join(sorted(app_registry.registered_assets)) or 'none'})")
+    clashing = sorted(set(app_registry.states) & vocabulary.reserved_state_names)
+    if clashing and reads.states:
+        raise BlokError("deps.reserved_state", name=clashing[0])
+    actions: list[ActionDependencyInput] = []
+    for action in sorted(reads.actions):
+        implementation = app_registry.implementations.get(action)
+        if implementation is None:
+            raise BlokError("deps.unknown_action", path=f"self.{action}", key=SELF_KEY, action=action, actions=", ".join(sorted(app_registry.implementations)) or "none")
+        actions.append(build_action_dependency_input(key=action, definition=implementation.definition, action_key=action))
+    states: list[StateDependencyInput] = []
+    for state in sorted(reads.states):
+        implementation_state = app_registry.states.get(state)
+        if implementation_state is None:
+            raise BlokError("deps.unknown_state", path=f"self.{state}", key=SELF_KEY, state=state, states=", ".join(sorted(app_registry.states)) or "none")
+        states.append(build_state_dependency_input(key=state, state_key=state, definition=implementation_state.definition))
+    if not actions and not states and not reads.assets:
+        return None
+    return AgentDependencyInput(
+        key=SELF_KEY,
+        app=None,
+        optional=False,
+        auto_resolvable=False,
+        action_dependencies=tuple(actions) or None,
+        state_dependencies=tuple(states) or None,
+    )
+
+
+def check_unknown_module(module: str | None, app_registry: "AppRegistry") -> list[Finding]:
+    """``module.unknown`` when ``module`` is neither declared by this app nor the Orkestrator's:
+    its components are then unknowable, so nothing of them is checked."""
+    if module is None or module == ORKESTRATOR_MODULE or module in app_registry.declared_catalogs:
+        return []
+    declared = ", ".join(sorted({ORKESTRATOR_MODULE, *app_registry.declared_catalogs}))
+    return [Finding.of("module.unknown", f"module {module}", module=module, modules=declared)]
+
+
+def self_arg_ports(app_registry: "AppRegistry") -> ArgPorts:
+    """The full arg ports of this app's actions, as ``self`` calls them: what a local passed to
+    one whole takes its port from."""
+    return {SELF_KEY: {interface: implementation.definition.args or () for interface, implementation in app_registry.implementations.items()}}
+
+
+def _report(owner: str, finding: Finding, mode: BlokCheckMode, at: DeclaredAt | None = None, reported: frozenset[str] = frozenset()) -> None:
+    """Raise an error (any finding, in strict mode); warn the rest once, at the declaring line."""
+    if finding.level == "error" or mode == "strict":
+        where = f" ({finding.path})" if finding.path else ""
+        raise BlokError.from_finding(dataclass_replace(finding, path=None, message=f"{owner}{where}: {finding.message}"))
+    if finding_key(finding) not in reported:
+        warn_at(f"{owner}: {finding.message} [{finding.code}]", at)
+
+
+def type_queries(
+    owner: str,
+    queries: Sequence[BlokQueryInput],
+    subscriptions: Sequence[BlokSubscriptionInput],
     app_registry: "AppRegistry",
-) -> dict[str, BlokImplementationInput]:
-    """Generate blok inputs from their declarations against an app registry."""
-    declared_bloks: dict[str, BlokImplementationInput] = {}
+    mode: BlokCheckMode,
+    at: DeclaredAt | None = None,
+) -> dict[str, PortMatchInput]:
+    """Check each declared query and subscription against its service's schema, where this app
+    knows it, and return each query's value as the schema answers it.
 
-    for blok_key, declaration in app_registry.registered_bloks.items():
-        reads = query_reads(declaration.component)
-        # A query's bind is the blok's own state, never a dependency of that name.
-        read_roots = {read.bind.split(".")[0]: None for read in reads if read.bind}
-        dependencies = _build_dependencies_for_component(
-            declaration.component,
-            app_registry,
-            declaration.dependencies or (),
-            local_state={**read_roots, **(declaration.local_state or {})},
-            demo_state=declaration.demo_state or {},
+    A service the app knows no schema for, or graphql-core missing, leaves it unchecked: a
+    warning, refused in strict mode. A mutation, or a document that is not its kind, is refused.
+    """
+    values: dict[str, PortMatchInput] = {}
+    checkable = graphql_available()
+    for kind, declared in (*(("query", q) for q in queries), *(("subscription", s) for s in subscriptions)):
+        service = app_registry.services.get(declared.service)
+        sdl = service.get_graphql_schema() if service is not None else None
+        if sdl is None:
+            _report(owner, Finding.of("query.schema", f"{kind} {declared.key}", kind=kind, name=declared.key, problem=f"this app knows no schema for the {declared.service!r} service, so it is not checked; register the service with its schema to check it"), mode, at)
+            continue
+        if not checkable:
+            _report(owner, Finding.of("query.schema", f"{kind} {declared.key}", kind=kind, name=declared.key, problem="install graphql-core to check it"), mode, at)
+            continue
+        shape = check_query(sdl, declared.document, kind)
+        for error in shape.errors:
+            code = "query.read_only" if "mutation" in error or "operation" in error else "query.schema"
+            _report(owner, Finding.of(code, f"{kind} {declared.key}", kind=kind, name=declared.key, problem=error), mode, at)
+        names = {variable.name for variable in shape.variables}
+        for variable in declared.variables:
+            if variable.key is not None and variable.key not in names:
+                _report(owner, Finding.of("query.variable", f"{kind} {declared.key}", kind=kind, name=declared.key, variable=variable.key, problem="is not a variable of its document"), mode, at)
+        if isinstance(declared, BlokQueryInput):
+            given = {variable.key for variable in declared.variables}
+            for variable in shape.variables:
+                if variable.required and variable.name not in given:
+                    _report(owner, Finding.of("query.variable", f"{kind} {declared.key}", kind=kind, name=declared.key, variable=variable.name, problem="is required and the blok sets nothing for it"), mode, at)
+            if shape.data is not None:
+                values[declared.key] = shape.data.model_copy(update={"key": "value"})
+                if declared.more is not None:
+                    problem = _more_problem(shape.data, declared.more)
+                    if problem is not None:
+                        _report(owner, Finding.of("query.more", f"{kind} {declared.key}", name=declared.key, more=declared.more, problem=problem), mode, at)
+    return values
+
+
+def _more_problem(data: PortMatchInput, more: str) -> str | None:
+    """Why ``more`` is no list field of a query's data, or None when it is one."""
+    current = data
+    for part in more.split("."):
+        child = next((candidate for candidate in current.children or () if candidate.key == part), None)
+        if child is None:
+            return f"is no field of its result ({part!r} is not in {current.key or 'its data'})"
+        current = child
+    if current.kind != PortKind.LIST:
+        return "is no list field of its result, so new pages have nothing to append to"
+    return None
+
+
+def catalogs_of(tree: ComponentNodeInput, view: BlokView) -> tuple[str, ...]:
+    """The standard catalogs (``ui@1``) whose components the tree uses; base is every renderer's."""
+    found: set[str] = set()
+    for node in iter_nodes(tree):
+        spec = view.component(node.component)
+        if spec is not None and spec.catalog is not None and "@" in spec.catalog and not spec.catalog.startswith(f"{BASE_NAME}@"):
+            found.add(spec.catalog)
+    return tuple(sorted(found))
+
+
+def build_declared_bloks(app_registry: "AppRegistry") -> dict[str, BlokImplementationInput]:
+    """Generate the blok inputs of every declaration against ``app_registry``.
+
+    Raises:
+        BlokError: If a blok reads what the app does not declare, or breaks a rule of the
+            language (see :mod:`.validate`).
+    """
+    declared: dict[str, BlokImplementationInput] = {}
+    for key, declaration in app_registry.registered_bloks.items():
+        owner = f"Blok {key!r}"
+        context = ComponentContext(declaration.context).value
+        kind = "action_logo" if context == ComponentContext.ACTION_LOGO.value else "agent"
+        dependency = None
+        if kind == "agent":
+            dependency = self_dependency(self_reads(declaration.component, declaration.queries, declaration.subscriptions), app_registry)
+        dependencies = (dependency,) if dependency is not None else ()
+        query_values = type_queries(owner, declaration.queries, declaration.subscriptions, app_registry, declaration.mode, declaration.declared_at)
+        view = app_registry.blok_view(declaration.module)
+        demo = declaration.demo if declaration.demo is not None else _demo(dependency, app_registry)
+        catalogs = declaration.catalogs or catalogs_of(declaration.component, view)
+        scope = BlokScope(
+            kind=kind,
+            context=context,
+            dependencies=dependencies,
+            locals=declaration.locals,
+            queries=declaration.queries,
+            subscriptions=declaration.subscriptions,
+            args=tuple(port.key for port in declaration.args),
+            catalogs=catalogs,
+            demo=demo,
+            query_values=query_values,
+            assets=frozenset(app_registry.registered_assets),
         )
-        typed = _type_reads(blok_key, reads, app_registry, declaration.mode)
-
-        if declaration.context == ComponentContext.ACTION_LOGO and dependencies:
-            raise ValueError(
-                f"Blok '{blok_key}': an action logo reads only @task, but it reads "
-                f"{sorted(dependency.key for dependency in dependencies)}"
-            )
-
-        demo_state = declaration.demo_state
-        if demo_state is None:
-            demo_state = _autogenerate_demo_state(dependencies, app_registry)
-        if declaration.local_state:
-            # The wire has one field for both: the server takes every top-level
-            # demo_state key as a path root, and the renderer seeds its data
-            # model from it.
-            demo_state = {**demo_state, **declaration.local_state}
-        demo_state = demo_state_for(declaration.component, dependencies, demo_state)
-
-        # The typed pass: the blok's own state as declared, and every read's record as its
-        # query answers it. References were checked untyped above; here they meet the types.
-        local_matches = _with_records(dict(declaration.local_state_matches), typed.records)
-        validate_blok(
-            declaration.component,
-            list(dependencies),
-            local_roots=local_roots_of(dependencies, demo_state),
-            local_matches=local_matches,
-            records={path: node_id for path, (node_id, _) in typed.records.items()},
-            mode=declaration.mode,
-        )
-
-        fields: dict[str, Any] = dict(
-            key=blok_key,
-            dependencies=tuple(dependencies),
-            description=declaration.description,
-            demo_state=demo_state,
-            catalog=declaration.catalog,
-            context=declaration.context,
-            default=declaration.default,
-            for_model=declaration.for_model,
-            for_node=declaration.for_node,
-        )
-        if declaration.args:
-            # Unset otherwise: the declaration is dumped ``exclude_unset``, so a blok without
-            # args sends, and hashes, what it did before bloks took any.
-            fields["args"] = declaration.args
-        if typed.services:
-            # Likewise: a blok without queries sends what it always did.
-            fields["services"] = typed.services
-        if declaration.persist:
-            fields["persist"] = declaration.persist
-        # Checked as its tree; sent as the BSX it was written in, when it was, which the
-        # server parses into the same tree.
-        checked = check_blok(BlokImplementationInput(components=(declaration.component,), **fields))
-        declared_bloks[blok_key] = (
-            BlokImplementationInput(source=declaration.source, **fields)
+        scope = resolve_scope(declaration.component, scope, view, arg_ports=self_arg_ports(app_registry))
+        # What the declaration already told (registering it) is not told again.
+        for finding in check_blok_tree(declaration.component, scope, view):
+            _report(owner, finding, declaration.mode, declaration.declared_at, declaration.reported)
+        # Empty declarations stay unset, so a dump with ``exclude_unset`` (what an agent sends)
+        # carries only what the blok declares; ``vocab`` is always there.
+        fields: dict[str, object] = {
+            "key": key,
+            "vocab": load_vocabulary().vocab,
+            "dependencies": dependencies,
+            "context": declaration.context,
+        }
+        optional: dict[str, object] = {
+            "description": declaration.description,
+            "module": declaration.module,
+            "default": declaration.default or None,
+            "for_model": declaration.for_model,
+            "for_node": declaration.for_node,
+            "args": declaration.args or None,
+            "catalogs": catalogs or None,
+            "locals": declaration.locals or None,
+            "demo": demo,
+            "queries": declaration.queries or None,
+            "subscriptions": declaration.subscriptions or None,
+        }
+        fields.update({name: value for name, value in optional.items() if value is not None})
+        checked = check_blok(BlokImplementationInput.model_validate({**fields, "components": (declaration.component,)}))
+        declared[key] = (
+            BlokImplementationInput.model_validate({**fields, "source": declaration.source})
             if declaration.source is not None
             else checked
         )
+    return declared
 
-    return declared_bloks
 
+def resolved_locals(blok: BlokImplementationInput, app_registry: "AppRegistry") -> tuple[BlokLocalInput, ...]:
+    """The locals of a built blok as its tree resolves them, with this app's full arg ports: what
+    a server stores as the blok's resolved locals. The input itself carries them as written."""
+    from arkitekt_spec.blok.bsx import parse_bsx
 
-class _TypedReads:
-    """What the build learns of a blok's queries: each record's type, and the services they run on."""
+    view = app_registry.blok_view(blok.module)
+    trees = blok.components or ((parse_bsx(blok.source, view=view),) if blok.source is not None else ())
+    scope = BlokScope(locals=tuple(blok.locals or ()), dependencies=tuple(blok.dependencies))
+    if not trees:
+        return tuple(resolve_local(local, (), ()) for local in scope.locals)
+    return resolve_scope(trees[0], scope, view, arg_ports=self_arg_ports(app_registry)).locals
 
-    def __init__(self) -> None:
-        self.records: dict[str, tuple[str, PortMatchInput]] = {}
-        self.services: tuple[BlokServiceInput, ...] = ()
 
-
-def _report(blok_key: str, message: str, mode: BlokCheckMode) -> None:
-    if mode == "strict":
-        raise ValueError(f"Blok {blok_key!r}: {message}")
-    warnings.warn(f"Blok {blok_key!r}: {message}", CatalogWarning, stacklevel=4)
-
-
-def _service_version(image: str | None) -> str | None:
-    """The server version a service declaration names: its image's tag (``jhnnsrs/mikro:8`` -> ``8``)."""
-    if not image or ":" not in image.rsplit("/", 1)[-1]:
-        return None
-    return image.rsplit(":", 1)[1]
-
-
-def _type_reads(
-    blok_key: str, reads: Sequence[QueryRead], app_registry: "AppRegistry", mode: BlokCheckMode
-) -> _TypedReads:
-    """Check each query against its service's schema, when the app knows it, and freeze the services.
-
-    A schema the app does not know, or graphql-core missing, leaves the query unchecked: a
-    warning, or refused in strict mode. Either way its record has its fixed fields.
-    """
-    typed = _TypedReads()
-    services: dict[str, BlokServiceInput] = {}
-    checkable = graphql_available()
-    for read in reads:
-        data: PortMatchInput | None = None
-        if read.schema is None:
-            _report(blok_key, f"{read.context} names no `schema`: the service it runs on", mode)
-        else:
-            service = app_registry.services.get(read.schema)
-            sdl = service.get_graphql_schema() if service is not None else None
-            if sdl is None:
-                _report(
-                    blok_key,
-                    f"{read.context}: this app knows no schema for the {read.schema!r} service, so its query is "
-                    f"not checked. Register the service (`App(services=[...])`) with its schema to check it.",
-                    mode,
-                )
-            elif not checkable:
-                _report(blok_key, f"{read.context}: install graphql-core to check its query", mode)
-            elif read.document is not None:
-                shape = check_query(sdl, read.document)
-                for error in shape.errors:
-                    _report(blok_key, f"{read.context}: {error}", mode)
-                data = shape.data
-            if read.schema not in services:
-                requirements = service.get_requirements() if service is not None else []
-                own = next((r for r in requirements if r.key == read.schema), requirements[0] if requirements else None)
-                services[read.schema] = BlokServiceInput(
-                    key=read.schema,
-                    service=own.service if own is not None else None,
-                    version=_service_version(getattr(service, "image", None)),
-                    schema_hash=schema_hash(sdl) if sdl is not None and checkable else None,
-                )
-        if read.bind is not None:
-            typed.records[read.bind] = (read.node_id, resource_record_match(read.bind.split(".")[-1], data))
-    typed.services = tuple(services.values())
-    return typed
-
-
-def _with_records(
-    matches: dict[str, PortMatchInput | None], records: Mapping[str, tuple[str, PortMatchInput]]
-) -> dict[str, PortMatchInput | None]:
-    """The local state's types with each record put at its path.
-
-    A record at a root (``bind="cells"``) types the root; one under a typed root
-    (``bind="ui.cells"``) becomes that key of it. Under an untyped root it stays untyped.
-    """
-    for path, (_, record) in records.items():
-        root, *rest = path.split(".")
-        if not rest:
-            matches[root] = record.model_copy(update={"key": root})
-        elif matches.get(root) is not None:
-            matches[root] = _put(matches[root], rest, record)  # type: ignore[arg-type]
-    return matches
-
-
-def _put(match: PortMatchInput, parts: list[str], record: PortMatchInput) -> PortMatchInput:
-    head, *rest = parts
-    children = list(match.children or ())
-    index = next((i for i, child in enumerate(children) if child.key == head), None)
-    if rest:
-        inner = children[index] if index is not None else PortMatchInput(key=head, kind=PortKind.DICT)
-        placed = _put(inner, rest, record)
-    else:
-        placed = record.model_copy(update={"key": head})
-    if index is None:
-        children.append(placed)
-    else:
-        children[index] = placed
-    return match.model_copy(update={"children": tuple(children)})
-
-
-def _seed_records(state: dict[str, Any], component: ComponentNodeInput) -> dict[str, Any]:
-    """``state`` with an idle read record at every ``query`` bind it does not seed itself."""
-    for read in query_reads(component):
-        if read.bind is None:
-            continue
-        *parents, last = read.bind.split(".")
-        holder = state
-        for part in parents:
-            inner = holder.get(part)
-            if not isinstance(inner, dict):
-                inner = {}
-            holder[part] = inner = dict(inner)
-            holder = inner
-        holder.setdefault(last, idle_resource_record())
-    return state
-
-
-def demo_state_for(
-    component: ComponentNodeInput,
-    dependencies: Iterable[AgentDependencyInput],
-    demo_state: Mapping[str, Any],
-) -> dict[str, Any]:
-    """``demo_state`` with the idle task and read records ``component`` reads added.
-
-    Each name a call is bound to (``.into(run)``) and each action whose latest
-    task the tree reads (``dep.action.latest``) starts as a call that has not run:
-    what the renderer shows until it does. The server takes every top-level key
-    as a path root, so a tree that reads one of these needs it here.
-    """
-    state = _seed_records({**demo_state, **{name: idle_task_record() for name in bound_calls(component)}}, component)
-    for dependency_key, action_key in sorted(latest_task_reads(component, dependencies)):
-        of_dependency = dict(state.get(dependency_key) or {})
-        of_action = dict(of_dependency.get(action_key) or {})
-        of_action.setdefault(LATEST_SEGMENT, idle_task_record())
-        of_dependency[action_key] = of_action
-        state[dependency_key] = of_dependency
-    return state
-
-
-class _ReferenceCollector(BlokVisitor):
-    """Collects the dependency keys, actions and states a blok tree references."""
-
-    def __init__(
-        self,
-        aliases: dict[str, str],
-        local_roots: frozenset[str] = frozenset(),
-        names_of: Callable[[str], tuple[Collection[str], Collection[str]]] | None = None,
-    ) -> None:
-        self.aliases = aliases
-        # Per dependency key, the actions and the states it has to offer: what
-        # tells ``self.blur.latest`` (a task) from ``self.stage.latest`` (a field).
-        self.names_of = names_of
-        # Roots of the blok's own UI state: they name no dependency.
-        self.local_roots = local_roots
-        # Names calls are bound to (``.into(name)``).
-        self.bound: set[str] = set()
-        self.actions: dict[str, set[str]] = {}
-        self.states: dict[str, set[str]] = {}
-        # A ``state.<key>`` reference that names no dependency; resolvable only
-        # when the blok has exactly one dependency to attribute it to.
-        self.implicit_states: set[str] = set()
-        # ``assets.<dependency>.<name>`` references: (dependency key, asset name).
-        self.assets: set[tuple[str, str]] = set()
-
-    def canonical(self, key: str) -> str:
-        return self.aliases.get(key, key)
-
-    @property
-    def dependency_keys(self) -> set[str]:
-        return set(self.actions) | set(self.states)
-
-    def visit_path(self, path: str, scope: dict[str, Any], context: str) -> None:
-        path_parts = path.split(".")
-        if not path_parts or path_parts[0] in scope:
-            return
-
-        root = path_parts[0]
-        if root == "utils" or root == EVENT_SCOPE_KEY or root in self.local_roots:
-            return
-
-        if root == "state":
-            if len(path_parts) >= 3:
-                self.states.setdefault(self.canonical(path_parts[1]), set()).add(
-                    path_parts[2]
-                )
-            elif len(path_parts) >= 2:
-                self.implicit_states.add(path_parts[1])
-            return
-
-        named = asset_path_parts(path)
-        if named is not None:
-            dependency, name = named
-            self.assets.add((self.canonical(dependency), name))
-            # The asset is its dependency's: the key has to be one the blok maps
-            # to an agent, even when nothing else of that agent is used.
-            self.states.setdefault(self.canonical(dependency), set())
-            return
-
-        latest = latest_task_path_parts(path)
-        if latest is not None and self.names_of is not None:
-            dependency, name = self.canonical(latest[0]), latest[1]
-            actions, states = self.names_of(dependency)
-            if name in actions and name in states:
-                raise ValueError(
-                    f"'{path}' in {context} could be the latest task of the action '{name}' "
-                    f"or the field '{LATEST_SEGMENT}' of the state '{name}'. Rename one of them."
-                )
-            if name in actions:
-                # The latest task of an action is the action's: demanded like a call to it.
-                self.actions.setdefault(dependency, set()).add(name)
-                return
-
-        if len(path_parts) >= 2:
-            self.states.setdefault(self.canonical(root), set()).add(path_parts[1])
-
-    def visit_agent_call(
-        self, call: AgentProbeInput, scope: dict[str, Any], context: str
-    ) -> None:
-        self.actions.setdefault(self.canonical(call.dependency), set()).add(
-            action_key_for(call)
-        )
-
-    def visit_component(
-        self, node: ComponentNodeInput, scope: dict[str, Any], context: str
-    ) -> None:
-        # Components carry no references; only their props do.
-        return None
-
-    def visit_util_call(
-        self, call: UtilCallInput, scope: dict[str, Any], context: str
-    ) -> None:
-        return None
-
-    def declare_foreach_local(
-        self, name: str, items_path: str, scope: dict[str, Any], context: str
-    ) -> None:
-        # The item's schema is only knowable once dependencies exist, which is
-        # what this pass is building. Declaring the name is enough here.
-        self.visit_path(items_path, scope, context)
-
-    def declare_bound_call(self, name: str, call: AgentProbeInput, context: str) -> None:
-        # In scope from here on, so a path rooted at it names no dependency.
-        self.bound.add(name)
-
-
-def _build_dependencies_for_component(
-    component: ComponentNodeInput,
-    app_registry: "AppRegistry",
-    explicit_dependencies: Sequence[AgentDependencyInput],
-    local_state: Mapping[str, Any] | None = None,
-    demo_state: Mapping[str, Any] | None = None,
-) -> list[AgentDependencyInput]:
-    """Resolve a blok's dependencies, preferring explicitly declared ones.
-
-    Dependencies referenced by the tree but not declared explicitly are inferred
-    from the agent's *own* implementations and states. A dependency satisfied by
-    another app cannot be inferred that way -- pass it in via
-    ``register_blok(dependencies={"key": DeclaredProtocol})``.
-
-    A root named in ``local_state`` is the blok's own UI state and no dependency.
-    So is a ``demo_state`` key the tree never calls and that names none of this
-    agent's states: every root would otherwise be read as this agent under
-    another name.
-    """
-    explicit_by_key = {
-        dependency.key: dependency for dependency in explicit_dependencies
-    }
-    aliases = {
-        dependency.app: dependency.key
-        for dependency in explicit_dependencies
-        if dependency.app is not None
-    }
-
-    def names_of(dependency_key: str) -> tuple[Collection[str], Collection[str]]:
-        explicit = explicit_by_key.get(dependency_key)
-        if explicit is None:
-            return app_registry.implementations.keys(), app_registry.states.keys()
-        return (
-            {demand.key for demand in explicit.action_dependencies or ()},
-            {demand.key for demand in explicit.state_dependencies or ()},
-        )
-
-    collector = _ReferenceCollector(aliases, frozenset(local_state or ()), names_of)
-    walk_component(component, collector)
-
-    taken = (
-        RESERVED_ROOTS
-        | collector.local_roots
-        | set(demo_state or ())
-        | set(explicit_by_key)
-        | collector.dependency_keys
-    )
-    clashing = sorted(collector.bound & taken)
-    if clashing:
-        raise ValueError(
-            f"A call cannot be bound to {clashing}: the name is reserved, or already names "
-            f"a dependency or the blok's own state."
-        )
-
-    for dependency, name in sorted(collector.assets):
-        if dependency != SELF_KEY:
-            raise ValueError(
-                f"Blok names the asset '{name}' of '{dependency}'. Only an app's own "
-                f"assets can be named for now: '@{SELF_KEY}.assets.<name>'."
-            )
-        if name not in app_registry.registered_assets:
-            raise ValueError(
-                f"Blok names the asset '{name}', which this app has not registered. "
-                f"Registered assets: {sorted(app_registry.registered_assets)}"
-            )
-
-    called_locals = collector.local_roots & set(collector.actions)
-    if called_locals:
-        raise ValueError(
-            f"Blok local state {sorted(called_locals)} is also the target of an agent "
-            f"call. A root is either the blok's own state or a dependency, not both."
-        )
-
-    for key in set(demo_state or ()) - set(explicit_by_key) - RESERVED_ROOTS:
-        referenced = collector.states.get(key)
-        if referenced is None or key in collector.actions:
-            continue
-        if referenced.isdisjoint(app_registry.states):
-            del collector.states[key]
-
-    dependency_keys = collector.dependency_keys | set(explicit_by_key)
-
-    if collector.implicit_states:
-        if len(dependency_keys) != 1:
-            raise ValueError(
-                "Cannot resolve unscoped state references in blok without exactly one "
-                f"explicit dependency key. Found dependencies: {sorted(dependency_keys)}"
-            )
-
-        dependency_key = next(iter(dependency_keys))
-        collector.states.setdefault(dependency_key, set()).update(
-            collector.implicit_states
-        )
-
-    dependencies: list[AgentDependencyInput] = []
-
-    for dependency_key in sorted(dependency_keys):
-        explicit = explicit_by_key.get(dependency_key)
-        if explicit is not None:
-            # The declared dependency already carries its own demands, resolved
-            # against the protocol rather than this agent's implementations.
-            dependencies.append(explicit)
-            continue
-
-        action_demands = tuple(
-            _create_action_dependency(action_key, app_registry)
-            for action_key in sorted(collector.actions.get(dependency_key, set()))
-        )
-        state_demands = tuple(
-            _create_state_dependency(state_key, app_registry)
-            for state_key in sorted(collector.states.get(dependency_key, set()))
-        )
-
-        dependencies.append(
-            AgentDependencyInput(
-                key=dependency_key,
-                app=None,
-                optional=False,
-                auto_resolvable=False,
-                action_dependencies=action_demands or None,
-                state_dependencies=state_demands or None,
-            )
-        )
-
-    return dependencies
-
-
-def _create_action_dependency(
-    action_key: str,
-    app_registry: "AppRegistry",
-) -> ActionDependencyInput:
-    implementation = app_registry.implementations.get(action_key)
-    if implementation is None:
-        raise ValueError(
-            f"Blok references unknown action '{action_key}'. It is not implemented "
-            f"by this agent -- if another app provides it, declare the dependency "
-            f"explicitly via register_blok(dependencies=[...])."
-        )
-
-    return build_action_dependency_input(
-        key=action_key,
-        definition=implementation.definition,
-        action_key=action_key,
-    )
-
-
-def _create_state_dependency(
-    state_key: str,
-    app_registry: "AppRegistry",
-) -> StateDependencyInput:
-    state_implementation = app_registry.states.get(state_key)
-    if state_implementation is None:
-        raise ValueError(
-            f"Blok references unknown state '{state_key}'. It is not provided "
-            f"by this agent -- if another app provides it, declare the dependency "
-            f"explicitly via register_blok(dependencies=[...])."
-        )
-
-    return build_state_dependency_input(
-        key=state_key,
-        state_key=state_key,
-        definition=state_implementation.definition,
-    )
-
-
-def _autogenerate_demo_state(
-    dependencies: Iterable[AgentDependencyInput],
-    app_registry: "AppRegistry",
-) -> dict[str, Any]:
-    """Synthesize a placeholder value for every state the blok reads.
-
-    Values come from the state's declared *ports*, not from instantiating the
-    state class: a state with required fields cannot be constructed with no
-    arguments, and its ports already describe the shape the renderer needs.
-
-    A dependency whose states have no local definition (one satisfied by another
-    app) is omitted entirely -- a partial entry would fail the demo_state
-    completeness check on ``BlokImplementationInput``.
-    """
-    demo_state: dict[str, Any] = {}
-
-    for dependency in dependencies:
-        dependency_demo_state: dict[str, Any] = {}
-        complete = True
-
-        for state_demand in dependency.state_dependencies or ():
-            state_implementation = app_registry.states.get(state_demand.key)
-            if state_implementation is None:
-                complete = False
-                break
-
-            dependency_demo_state[state_demand.key] = {
-                port.key: _demo_value_for_port(port)
-                for port in state_implementation.definition.ports or ()
-            }
-
-        if complete and dependency_demo_state:
-            demo_state[dependency.key] = dependency_demo_state
-
-    return demo_state
-
-
-_DEMO_SCALARS: dict[PortKind, Any] = {
+_DEMO_SCALARS: dict[PortKind, JSON] = {
     PortKind.STRING: "",
     PortKind.INT: 0,
     PortKind.FLOAT: 0.0,
@@ -597,21 +340,29 @@ _DEMO_SCALARS: dict[PortKind, Any] = {
 }
 
 
-def _demo_value_for_port(port: ReturnPortInput) -> Any:
-    """A placeholder value matching a port's declared shape."""
-    # Only arg ports carry a default.
-    default = getattr(port, "default", None)
-    if default is not None:
-        return default
+def _demo(dependency: AgentDependencyInput | None, app_registry: "AppRegistry") -> BlokDemoInput | None:
+    """A placeholder for every state of ``self`` the blok reads, from the states' ports."""
+    if dependency is None or not dependency.state_dependencies:
+        return None
+    states: dict[str, JSON] = {}
+    for demand in dependency.state_dependencies:
+        state = app_registry.states.get(demand.key)
+        if state is None:
+            return None
+        states[demand.key] = {port.key: _demo_value(port) for port in state.definition.ports or ()}
+    return BlokDemoInput(deps={SELF_KEY: states})
 
+
+def _demo_value(port: ReturnPortInput) -> JSON:
     if port.nullable:
         return None
-
     if port.kind == PortKind.ENUM:
-        first_choice = next(iter(port.choices or ()), None)
-        return first_choice.value if first_choice is not None else ""
-
+        first = next(iter(port.choices or ()), None)
+        value = first.value if first is not None else ""
+        return value if isinstance(value, (str, int, float, bool)) else ""
     if port.kind in (PortKind.MODEL, PortKind.INTERFACE):
-        return {child.key: _demo_value_for_port(child) for child in port.children or ()}
+        return {child.key: _demo_value(child) for child in port.children or ()}
+    return _DEMO_SCALARS.get(PortKind(port.kind), None)
 
-    return _DEMO_SCALARS.get(port.kind)
+
+__all__ = ["SELF_KEY", "build_declared_bloks", "catalogs_of", "check_unknown_module", "resolved_locals", "self_arg_ports", "self_dependency", "self_reads", "type_queries"]

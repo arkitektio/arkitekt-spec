@@ -40,6 +40,7 @@ from arkitekt_spec.actions import (
 from arkitekt_spec.declare.agents.errors import StateRequirementsNotMet
 from arkitekt_spec.declare.agents.types import resolve_service_clients, unwrap_injectable
 from arkitekt_spec.declare.structures.convert import (
+    AppNamespace,
     cls_to_identifier,
     fullfilled_enum_from_cls,
     fullfilled_enum_from_literal,
@@ -341,6 +342,21 @@ class StructureRegistry(BaseModel):
     identifier_model_map: dict[str, FullFilledModel] = Field(
         default_factory=dict, exclude=True
     )
+    namespace: AppNamespace | None = Field(default=None, exclude=True)
+    """The app this registry belongs to and what its own source is, set by the app.
+
+    An identifier derived here -- an enum's, a memory structure's or a model's
+    left without one -- is in the app's namespace for a class the app defines
+    itself, so it does not change with how the app is launched, and the class's
+    module for anything else (a library's type is the same in every app). See
+    :class:`AppNamespace` for the rule. ``None`` for a registry no app owns, which
+    always falls back to the class's module.
+    """
+
+    def namespace_of(self, cls: type[Any]) -> str | None:
+        """The namespace ``cls`` derives its identifier in: the app's for a class the app
+        defines itself, else ``None`` (the class's module)."""
+        return self.namespace.of(cls) if self.namespace is not None else None
     clients: dict[str, type] = Field(default_factory=dict, exclude=True)
     """What each registered service returns, by service name: the client classes.
 
@@ -479,7 +495,7 @@ class StructureRegistry(BaseModel):
         fullfilled_type = (
             fullfilled_enum_from_literal(cls)
             if is_literal(cls)
-            else fullfilled_enum_from_cls(cls)
+            else fullfilled_enum_from_cls(cls, self.namespace_of(cls))
         )
         self.fullfill_registration(fullfilled_type)
         return fullfilled_type
@@ -650,8 +666,9 @@ class StructureRegistry(BaseModel):
 
         Args:
             cls: The class to keep on the shelve.
-            identifier: What to call it. Defaults to a name derived from the class
-                (``numpy.ndarray`` -> ``@numpy/ndarray``). It is internal
+            identifier: What to call it. Defaults to the class name in the app's
+                namespace for a class the app defines (``@myapp/blob``), else in its
+                module (``numpy.ndarray`` -> ``@numpy/ndarray``). It is internal
                 bookkeeping, since a memory structure has nowhere to travel to.
             description: What it is, for the UI.
             predicate: How to recognise one. Defaults to an isinstance check.
@@ -661,7 +678,7 @@ class StructureRegistry(BaseModel):
         """
         fullfilled_type = FullFilledMemoryStructure(
             cls=cls,
-            identifier=identifier or cls_to_identifier(cls),
+            identifier=identifier or cls_to_identifier(cls, self.namespace_of(cls)),
             predicate=predicate or build_instance_predicate(cls),
             description=description,
         )
@@ -1003,7 +1020,8 @@ class StructureRegistry(BaseModel):
         Args:
             *cls: The class, when used without parentheses.
             identifier: What it travels as, ``@package/key``. Defaults to
-                ``@<the class's module>/<snake_case class name>``.
+                ``@<the app's identifier>/<snake_case class name>`` for a class the
+                app defines, else ``@<the class's module>/<snake_case class name>``.
             description: What it is, for the UI. Defaults to the class docstring.
 
         Returns:
@@ -1020,7 +1038,7 @@ class StructureRegistry(BaseModel):
             target = ensure_model_dataclass(target)
             self.register_as_model(
                 target,
-                identifier or model_identifier(target.__module__, target),
+                identifier or model_identifier(self.namespace_of(target) or target.__module__, target),
                 description=description or target.__doc__,
             )
             return target
@@ -1219,6 +1237,7 @@ class StructureRegistry(BaseModel):
             A registry holding the same entries in maps of its own.
         """
         return StructureRegistry(
+            namespace=self.namespace,
             identifier_structure_map=dict(self.identifier_structure_map),
             identifier_enum_map=dict(self.identifier_enum_map),
             identifier_memory_structure_map=dict(self.identifier_memory_structure_map),

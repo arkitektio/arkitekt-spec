@@ -46,7 +46,15 @@ exclude = ["**/__pycache__", "tests"]
 # The wire format is held to strict; the declaration layer (moved from rekuest, which
 # checked it in standard mode) to standard -- see `strict` below.
 typeCheckingMode = "standard"
-strict = ["arkitekt_spec/*.py"]
+strict = [
+    "arkitekt_spec/*.py",
+    # The blok language v2: held to strict.
+    "arkitekt_spec/blok/vocabulary.py",
+    "arkitekt_spec/blok/expr.py",
+    "arkitekt_spec/blok/bsx.py",
+    "arkitekt_spec/blok/unparse.py",
+    "arkitekt_spec/blok/catalogs/__init__.py",
+]
 # The opaque action-language lists are `dict[str, Any]` by design.
 reportAny = false
 reportExplicitAny = false
@@ -58,6 +66,8 @@ extend-select = ["ANN", "D1"]
 "tests/*" = ["ANN001", "ANN201", "ANN202", "ANN206", "ANN401", "D1"]
 # The declaration layer introspects arbitrary user functions, so `Any` is its
 # vocabulary; its docstring coverage is rekuest's, where it came from.
+# A malformed data file (the vocabulary, a catalog) is a ValueError, whatever type it got wrong.
+"arkitekt_spec/blok/**" = ["TRY004"]
 "arkitekt_spec/declare/**" = [
     "ANN401", "D1", "BLE001", "TRY004", "SIM102", "SIM103", "RUF012", "C408", "PLR1704", "LOG015",
 ]

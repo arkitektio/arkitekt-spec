@@ -1,9 +1,9 @@
-"""A blok's GraphQL reads, checked against the schema of the service they run on.
+"""A blok's declared queries and subscriptions, checked against the schema of their service.
 
-A base ``query`` component names its service (``schema="mikro"``) and carries one GraphQL
+A declared ``Query`` names its service (``service="mikro"``) and carries one GraphQL
 document. When the app's registry has that service's SDL (``@registry.service(schema=...)``),
 the document is validated against it and its selection set becomes the shape of the record's
-``data``, so ``@cells.data.datasets`` is a path the validator can follow like any state.
+``value``, so ``queries.cells.value.datasets`` is a path the validator can follow like any state.
 
 graphql-core is optional for the spec: without it a query is not checked, and the caller says
 so once. Nothing here imports it at module level.
@@ -16,12 +16,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from arkitekt_spec.actions import PortKind, PortMatchInput
-
-QUERY_COMPONENT = "query"
-QUERY_SCHEMA_PROP = "schema"
-QUERY_DOCUMENT_PROP = "query"
-QUERY_VARIABLES_PROP = "variables"
-QUERY_BIND_PROP = "bind"
 
 ITEM = "..."
 
@@ -53,23 +47,26 @@ class QueryShape:
     variables: tuple[QueryVariable, ...] = field(default=())
 
 
-def read_only_problem(document: str) -> str | None:
-    """Why a document may not run in a blok, or ``None``: exactly one ``query`` operation.
+def read_only_problem(document: str, kind: str = "query") -> str | None:
+    """Why a document may not be a blok's ``kind`` (``query`` or ``subscription``), or ``None``.
 
-    The client's ``readOnlyQueryProblem``: a mutation or subscription is refused, whatever it
-    would do, because a change goes through an action.
+    A query is exactly one ``query`` operation, a subscription exactly one ``subscription``;
+    a mutation is refused whatever it would do, because a change goes through a task.
     """
     from graphql import GraphQLSyntaxError, OperationDefinitionNode, OperationType, parse
 
     try:
         definitions = parse(document).definitions
     except GraphQLSyntaxError as error:
-        return f"the query is not valid GraphQL: {error.message}"
+        return f"the {kind} is not valid GraphQL: {error.message}"
     operations = [d for d in definitions if isinstance(d, OperationDefinitionNode)]
-    if any(operation.operation != OperationType.QUERY for operation in operations):
-        return "only queries can run in a blok: a change goes through an action, never a mutation"
+    if any(operation.operation == OperationType.MUTATION for operation in operations):
+        return "a blok never runs a mutation: a change goes through a task (a service's action)"
+    wanted = OperationType.SUBSCRIPTION if kind == "subscription" else OperationType.QUERY
+    if any(operation.operation != wanted for operation in operations):
+        return f"a declared {kind} holds a {kind} operation, nothing else"
     if len(operations) != 1:
-        return "the document must hold exactly one query"
+        return f"the document must hold exactly one {kind}"
     return None
 
 
@@ -146,8 +143,8 @@ def schema_hash(sdl: str) -> str:
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def check_query(sdl: str, document: str) -> QueryShape:
-    """Validate ``document`` against ``sdl`` and read the shape of its answer."""
+def check_query(sdl: str, document: str, kind: str = "query") -> QueryShape:
+    """Validate ``document`` (a ``query`` or a ``subscription``) against ``sdl`` and read the shape of its answer."""
     from graphql import (
         FragmentDefinitionNode,
         GraphQLSyntaxError,
@@ -157,7 +154,7 @@ def check_query(sdl: str, document: str) -> QueryShape:
         validate,
     )
 
-    problem = read_only_problem(document)
+    problem = read_only_problem(document, kind)
     if problem is not None:
         return QueryShape(errors=(problem,))
     schema = _build(sdl)
@@ -171,8 +168,8 @@ def check_query(sdl: str, document: str) -> QueryShape:
 
     operation = next(d for d in ast.definitions if isinstance(d, OperationDefinitionNode))
     fragments = {d.name.value: d for d in ast.definitions if isinstance(d, FragmentDefinitionNode)}
-    query_type = schema.query_type
-    assert query_type is not None  # validate() refuses a query on a schema without one
+    query_type = schema.subscription_type if kind == "subscription" else schema.query_type
+    assert query_type is not None  # validate() refuses an operation on a schema without its root
     variables = tuple(
         QueryVariable(
             name=definition.variable.name.value,

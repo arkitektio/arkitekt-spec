@@ -32,6 +32,7 @@ import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from importlib import resources
 from typing import Literal
 
@@ -93,8 +94,6 @@ LOGO_CONTEXTS = (LOGO_CONTEXT, ACTION_LOGO_CONTEXT)
 """The blok contexts held to the size of an icon."""
 OVERLAY_CONTEXT = "OVERLAY"
 """A blok context only, and only an action's: drawn into the space that hosts a run of it."""
-CONTEXT_ROOTS: Mapping[str, str] = {SCENE_CONTEXT: "Scene", LOGO_CONTEXT: "SVG", ACTION_LOGO_CONTEXT: "ActionLogo", OVERLAY_CONTEXT: "Overlay"}
-"""The one component a blok of each of these contexts has as its root."""
 ACTION_LOGO_TASK_ROOT = "task"
 """The path root an action logo reads its task at: null until the viewer runs the action."""
 BLOK_ARGS_ROOT = "args"
@@ -159,6 +158,15 @@ class OperationSpec:
 
 
 @dataclass(frozen=True)
+class EventFieldSpec:
+    """A field of the payload a component hands a callback prop (``event.<key>``)."""
+
+    key: str
+    kind: str
+    description: str | None = None
+
+
+@dataclass(frozen=True)
 class PropSpec:
     """A prop a component accepts."""
 
@@ -166,6 +174,10 @@ class PropSpec:
     kind: str
     required: bool
     description: str | None = None
+    event: tuple[EventFieldSpec, ...] | None = None
+    """For a ``CALLBACK`` prop of a v2 catalog, the payload it is called with; ``()`` when none."""
+    values: tuple[str, ...] | None = None
+    """For a ``STRING`` prop, the closed set of literals the component draws; None: any string."""
 
 
 @dataclass(frozen=True)
@@ -186,6 +198,10 @@ class ComponentSpec:
     """Components of which at least one must be an ancestor, at any depth."""
     not_downstream_of: tuple[str, ...] = ()
     """Components of which none may be an ancestor."""
+    text_prop: str | None = None
+    """The prop text children fill (``<Button>Grip</Button>`` sets ``label``); None: it takes no text."""
+    catalog: str | None = dataclass_field(default=None, compare=False)
+    """The catalog that provides it, as ``name@version`` (``ui@1``)."""
 
     def prop(self, key: str) -> PropSpec | None:
         """The prop called ``key``, or ``None``."""
@@ -259,7 +275,7 @@ def _parse(raw: dict) -> Catalog:  # type: ignore[type-arg]
 @functools.lru_cache(maxsize=1)
 def load_base_catalog() -> Catalog:
     """The vendored manifest, parsed and validated (cached)."""
-    text = resources.files(__package__).joinpath("base_v1.json").read_text(encoding="utf-8")
+    text = resources.files(__package__ or "arkitekt_spec.declare.catalogs").joinpath("base_v1.json").read_text(encoding="utf-8")
     return _parse(json.loads(text))
 
 
@@ -331,14 +347,28 @@ def _parse_components(raw: dict, entries: Iterable[dict], *, camel: bool) -> lis
                     f"catalog {raw.get('name')!r}: {name}.{prop['key']} has unknown kind {prop['kind']!r}"
                 )
             keys.add(prop["key"])
+            event = prop.get("event")
+            values = prop.get("values")
+            if values is not None and (not isinstance(values, list) or not all(isinstance(value, str) for value in values)):
+                raise ValueError(f"catalog {raw.get('name')!r}: {name}.{prop['key']} has values that are not a list of strings")
             props.append(
                 PropSpec(
                     key=prop["key"],
                     kind=prop["kind"],
                     required=bool(prop.get("required", False)),
                     description=prop.get("description"),
+                    event=(
+                        tuple(
+                            EventFieldSpec(key=field["key"], kind=field["kind"], description=field.get("description"))
+                            for field in event
+                        )
+                        if isinstance(event, list)
+                        else None
+                    ),
+                    values=tuple(values) if values is not None else None,  # pyright: ignore[reportUnknownArgumentType]
                 )
             )
+        version = raw.get("version")
         components.append(
             ComponentSpec(
                 name=name,
@@ -350,10 +380,26 @@ def _parse_components(raw: dict, entries: Iterable[dict], *, camel: bool) -> lis
                 inherits_context=bool(field(entry, "inherits_context") or False),
                 downstream_of=tuple(field(entry, "downstream_of") or ()),  # type: ignore[arg-type]
                 not_downstream_of=tuple(field(entry, "not_downstream_of") or ()),  # type: ignore[arg-type]
+                text_prop=field(entry, "text_prop") or None,  # type: ignore[arg-type]
+                catalog=f"{raw.get('name')}@{version}" if version is not None else raw.get("name"),
             )
         )
 
     return components
+
+
+def parse_catalog_components(raw: "Mapping[str, object]", *, camel: bool) -> list[ComponentSpec]:
+    """Every component of a catalog payload, base ones included: a published catalog spells its
+    keys in camelCase, the spec's own files (base, the v2 catalogs, the orkestrator module) in snake_case.
+
+    Raises:
+        ValueError: If two components share a name, or a prop has an unknown kind or context.
+    """
+    try:
+        entries: object = raw.get("components", [])
+        return _parse_components(dict(raw), entries if isinstance(entries, list) else [], camel=camel)  # pyright: ignore[reportUnknownArgumentType]
+    except (KeyError, TypeError) as error:
+        raise ValueError(f"not a catalog payload: {error!r}") from error
 
 
 def _parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]
@@ -405,7 +451,7 @@ def load_standard_catalog() -> Catalog:
     keeps a blok written against it from drifting from what is rendered. Where it is wrong,
     the fix is an Orkestrator release, not a patch here.
     """
-    text = resources.files(__package__).joinpath("orkestrator.json").read_text(encoding="utf-8")
+    text = resources.files(__package__ or "arkitekt_spec.declare.catalogs").joinpath("orkestrator.json").read_text(encoding="utf-8")
     catalog = _parse_ui_catalog(json.loads(text))
     if catalog.name != STANDARD_CATALOG_NAME:
         raise ValueError(f"the standard catalog is named {catalog.name!r}, not {STANDARD_CATALOG_NAME!r}")
@@ -415,7 +461,7 @@ def load_standard_catalog() -> Catalog:
 @functools.lru_cache(maxsize=1)
 def standard_catalog_release() -> str:
     """The Orkestrator release the vendored standard catalog was copied from, e.g. ``v2.19.0``."""
-    return resources.files(__package__).joinpath("orkestrator.release").read_text(encoding="utf-8").strip()
+    return resources.files(__package__ or "arkitekt_spec.declare.catalogs").joinpath("orkestrator.release").read_text(encoding="utf-8").strip()
 
 
 def is_standard_catalog(name: str | None) -> bool:

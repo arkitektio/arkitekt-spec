@@ -10,7 +10,7 @@ import pytest
 from arkitekt_spec.actions import ComponentNodeInput
 from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.blok import SvgConversionError, SvgConversionWarning, bsx, from_svg
-from arkitekt_spec.declare.blok.validate import check_logo_palette
+from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
 
 LUCIDE = """<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide">
@@ -75,8 +75,9 @@ def drawn(source: str, component: str) -> list[dict[str, object]]:
     return [props(node) for node in nodes(bsx(source)) if node.component == component]
 
 
-def register(source: str, context: str = "logo") -> None:
-    AppRegistry().register_blok("converted", source, context=context)
+def register(source: str) -> None:
+    """Register a converted logo; its root (``<AgentLogo>``/``<ActionLogo>``) names its context."""
+    AppRegistry().register_blok("converted", source)
 
 
 # --------------------------------------------------------------------------- reading
@@ -86,7 +87,7 @@ def test_an_icon_set_svg_keeps_its_root_paint_on_a_group() -> None:
     source, lost = convert(LUCIDE)
     assert lost == []
     root = bsx(source)
-    assert root.component == "SVG"
+    assert root.component == "AgentLogo"
     assert props(root) == {"viewBox": "0 0 24 24"}
     (group,) = root.children or ()
     assert props(group) == {
@@ -118,12 +119,12 @@ def test_an_inkscape_file_is_flattened_through_its_cascade() -> None:
     gradient = defs.children[1]
     assert props(gradient) == {"x1": "0", "y1": "0", "x2": "1", "y2": "1"}
     assert [props(stop) for stop in gradient.children or ()] == [
-        {"offset": "0", "stopColor": "#0b1220"},
-        {"offset": "100%", "stopColor": "#1b2a44"},
+        {"offset": "0", "stopColor": "ink"},
+        {"offset": "100%", "stopColor": "brand-strong"},
     ]
 
-    # The layer group had no props: it gave its child to the root.
-    assert drawing.component == "G" and props(drawing) == {"clipPath": "url(#tile)"}
+    # The layer group had no props: it gave its child to the root, which inks what nothing paints.
+    assert drawing.component == "G" and props(drawing) == {"clipPath": "url(#tile)", "fill": "ink"}
     (ground, cell, frame) = drawing.children or ()
     assert props(ground)["fill"] == "url(#ground)"
     assert props(cell) == {
@@ -131,11 +132,11 @@ def test_an_inkscape_file_is_flattened_through_its_cascade() -> None:
         "cx": "32",
         "cy": "32",
         "r": "12",
-        "fill": "#34d399",
-        "stroke": "#0e7490",
+        "fill": "brand",
+        "stroke": "brand-strong",
         "strokeWidth": "3",
     }
-    assert props(frame)["stroke"] == "#94a3b8"
+    assert props(frame)["stroke"] == "brand"
     assert props(frame)["fill"] == "none"
     assert props(frame)["strokeOpacity"] == "0.3"
     assert "unused" not in source
@@ -148,14 +149,14 @@ def test_a_file_and_its_text_convert_alike(tmp_path) -> None:
     assert from_svg(path) == from_svg(LUCIDE) == from_svg(LUCIDE.encode())
 
 
-def test_hex_colours_stay_static_and_no_ids_are_printed() -> None:
+def test_hex_colours_become_the_nearest_pen_and_no_ids_are_printed() -> None:
     source, _ = convert(
         svg('<rect id="r" width="4" height="4" fill="#fff" /><circle r="2" fill="#abcdef" />')
     )
     assert "id=" not in source
     assert [shape["fill"] for shape in drawn(source, "Rect") + drawn(source, "Circle")] == [
-        "#fff",
-        "#abcdef",
+        "surface",
+        "brand-soft",
     ]
     register(source)
 
@@ -221,7 +222,7 @@ def test_a_gradient_inherits_through_its_href_chain() -> None:
     (gradient,) = [node for node in nodes(bsx(source)) if node.component == "RadialGradient"]
     assert props(gradient) == {"r": "9", "gradientUnits": "userSpaceOnUse"}
     assert [props(stop) for stop in gradient.children or ()] == [
-        {"offset": "0", "stopColor": "#000"}
+        {"offset": "0", "stopColor": "ink"}
     ]
 
 
@@ -231,7 +232,7 @@ def test_a_paint_naming_something_else_falls_back() -> None:
             '<defs><pattern id="p" /></defs><rect width="4" height="4" fill="url(#p) #123456" /><rect width="2" height="2" fill="url(#gone)" />'
         )
     )
-    assert [rect["fill"] for rect in drawn(source, "Rect")] == ["#123456", "none"]
+    assert [rect["fill"] for rect in drawn(source, "Rect")] == ["brand-strong", "none"]
     assert lost == [
         "url(#p) names a <pattern>, which a logo cannot paint with; it was dropped",
         "url(#gone) names no element; the paint was dropped",
@@ -248,7 +249,7 @@ def test_what_a_logo_cannot_draw_is_dropped_with_a_warning() -> None:
         '<path d="M0 0" mask="url(#m)" onclick="alert(1)" stroke-miterlimit="4" />'
     )
     source, lost = convert(svg(body))
-    assert drawn(source, "Path") == [{"d": "M0 0"}]
+    assert drawn(source, "Path") == [{"d": "M0 0", "fill": "ink"}]
     assert "alert" not in source and "script" not in source.lower()
     assert lost == [
         "<mask> has no logo component and was dropped",
@@ -269,7 +270,7 @@ def test_text_that_would_read_as_an_expression_is_dropped() -> None:
         svg('<title>@home</title><text x="1" y="2">$5 <tspan>off</tspan></text><text>ok</text>')
     )
     assert "title" not in props(bsx(source))
-    assert drawn(source, "SvgText") == [{"text": "ok"}]
+    assert drawn(source, "SvgText") == [{"text": "ok", "fill": "ink"}]
     assert lost == [
         "title='@home' reads as an expression in BSX and was dropped",
         "text='$5 off' reads as an expression in BSX and was dropped",
@@ -290,7 +291,7 @@ def test_text_inherits_its_group_font() -> None:
             "fontFamily": "Inter",
             "fontSize": "8",
             "text": "AB",
-            "fill": "#000",
+            "fill": "ink",
         }
     ]
 
@@ -313,7 +314,7 @@ def test_an_action_logo_paints_with_tokens_only() -> None:
     )
     tree = bsx(source)
     assert tree.component == "ActionLogo"
-    check_logo_palette(tree)
+    assert check_blok_tree(tree, BlokScope(kind="action_logo", context="ACTION_LOGO")) == []
     assert [(rect.get("fill"), rect.get("stroke")) for rect in drawn(source, "Rect")] == [
         ("ink", "muted"),
         ("surface", "brand-strong"),
@@ -326,14 +327,14 @@ def test_an_action_logo_paints_with_tokens_only() -> None:
         {"offset": "50%", "stopColor": "surface"},
         {"offset": "1", "stopColor": "ink"},
     ]
-    register(source, context="action_logo")
+    register(source)
 
 
 def test_an_unpainted_shape_in_an_action_logo_is_inked() -> None:
     source, _ = convert(svg('<path d="M0 0L4 4" />'), context="action_logo")
     (path,) = [node for node in nodes(bsx(source)) if node.component == "Path"]
     assert props(path) == {"d": "M0 0L4 4", "fill": "ink"}
-    register(source, context="action_logo")
+    register(source)
 
 
 def test_an_action_logo_registers_inline_on_an_action() -> None:
@@ -348,7 +349,7 @@ def test_an_action_logo_registers_inline_on_an_action() -> None:
 
 @pytest.mark.parametrize(
     ("context", "expected"),
-    [("logo", ["#e11d48", "#2563eb", "ink"]), ("action_logo", ["brand", "brand", "ink"])],
+    [("logo", ["brand", "brand", "ink"]), ("action_logo", ["brand", "brand", "ink"])],
 )
 def test_current_colour_paints_the_colour_set_around_it(context: str, expected: list[str]) -> None:
     source, lost = convert(
@@ -391,7 +392,7 @@ def test_groups_collapse_to_keep_a_deep_file_within_the_depth_limit() -> None:
         + "</g>" * 10
     )
     source, _ = convert(deep)
-    assert drawn(source, "Path") == [{"d": "M0 0", "opacity": ".5", "transform": "translate(1 1)"}]
+    assert drawn(source, "Path") == [{"d": "M0 0", "opacity": ".5", "transform": "translate(1 1)", "fill": "ink"}]
     register(source)
 
 

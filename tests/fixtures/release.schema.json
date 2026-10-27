@@ -124,18 +124,14 @@
       "additionalProperties": false,
       "description": "An action's own blok: how a client shows a run of it in one context. It has no name, is never\nlisted on its own, and names devices only by the action's dependency keys.",
       "properties": {
-        "catalog": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The UI catalog the blok renders against; the Orkestrator's when absent.",
-          "title": "Catalog"
+        "catalogs": {
+          "default": [],
+          "description": "The catalogs it needs, as name@version.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Catalogs",
+          "type": "array"
         },
         "components": {
           "anyOf": [
@@ -158,35 +154,17 @@
           "default": "HTML",
           "description": "Where a client shows the run with it: HTML in a task panel, SCENE as a 3D view of its own, OVERLAY drawn into the space that hosts the run (its root an `Overlay`)."
         },
-        "demo_state": {
+        "demo": {
           "anyOf": [
             {
-              "type": "string"
-            },
-            {
-              "type": "integer"
-            },
-            {
-              "type": "number"
-            },
-            {
-              "type": "boolean"
-            },
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "items": {},
-              "type": "array"
+              "$ref": "#/$defs/BlokDemoInput"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "The blok's own locals and their initial values: path roots beside the action's dependency keys, `self`, `task` and `args`.",
-          "title": "Demo State"
+          "description": "What a preview renders it with."
         },
         "description": {
           "anyOf": [
@@ -201,13 +179,35 @@
           "description": "What the blok shows of a run.",
           "title": "Description"
         },
-        "persist": {
+        "locals": {
           "default": [],
-          "description": "The locals a renderer may keep between openings, on the device (never on a server): each a top-level `demo_state` key, whose demo value is the default.",
+          "description": "Its locals: form state that feeds a call, written only through bind.",
           "items": {
-            "$ref": "#/$defs/BlokPersistInput"
+            "$ref": "#/$defs/BlokLocalInput"
           },
-          "title": "Persist",
+          "title": "Locals",
+          "type": "array"
+        },
+        "module": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The module the blok renders against besides its catalogs; the Orkestrator's when absent.",
+          "title": "Module"
+        },
+        "queries": {
+          "default": [],
+          "description": "Its declared reads.",
+          "items": {
+            "$ref": "#/$defs/BlokQueryInput"
+          },
+          "title": "Queries",
           "type": "array"
         },
         "source": {
@@ -222,8 +222,26 @@
           "default": null,
           "description": "The blok as BSX, parsed by the server into its component tree. Exactly one of `components` and `source` is sent.",
           "title": "Source"
+        },
+        "subscriptions": {
+          "default": [],
+          "description": "Its declared streams.",
+          "items": {
+            "$ref": "#/$defs/BlokSubscriptionInput"
+          },
+          "title": "Subscriptions",
+          "type": "array"
+        },
+        "vocab": {
+          "const": 2,
+          "description": "The blok language version the blok speaks; v2 is the only one.",
+          "title": "Vocab",
+          "type": "integer"
         }
       },
+      "required": [
+        "vocab"
+      ],
       "title": "ActionBlokInput",
       "type": "object"
     },
@@ -1002,6 +1020,164 @@
       "title": "AssetKind",
       "type": "string"
     },
+    "BlokDemoInput": {
+      "additionalProperties": false,
+      "description": "What a preview renders the blok with, mirroring the roots it reads. Never what it shows live.",
+      "properties": {
+        "args": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What it is opened on.",
+          "title": "Args"
+        },
+        "deps": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per dependency key (`self` included), its states and tasks: `{self: {arm: {joints: [...]}}}`.",
+          "title": "Deps"
+        },
+        "queries": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per declared query, the value it answers.",
+          "title": "Queries"
+        },
+        "subscriptions": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per declared subscription, its value.",
+          "title": "Subscriptions"
+        },
+        "task": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "items": {},
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The task record it is about (task and action bloks, action logos).",
+          "title": "Task"
+        }
+      },
+      "title": "BlokDemoInput",
+      "type": "object"
+    },
     "BlokImplementationInput": {
       "additionalProperties": false,
       "description": "Which locks does the agent provide in general",
@@ -1019,21 +1195,17 @@
             }
           ],
           "default": null,
-          "description": "The items this Blok is opened for, declared like an action's args and read under `@args.<key>`. A UI offers the Blok on any item its args accept. HTML bloks only.",
+          "description": "The items this Blok is opened for, declared like an action's args and read under `args.<key>`. A UI offers the Blok on any item its args accept. HTML bloks only.",
           "title": "Args"
         },
-        "catalog": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The optional catalog name if this Blok should be registered inside a specific namespace in your Electron app's UI component registry.",
-          "title": "Catalog"
+        "catalogs": {
+          "default": [],
+          "description": "The catalogs it needs, as name@version ('ui@1', 'scene@1').",
+          "items": {
+            "type": "string"
+          },
+          "title": "Catalogs",
+          "type": "array"
         },
         "components": {
           "anyOf": [
@@ -1062,35 +1234,17 @@
           "title": "Default",
           "type": "boolean"
         },
-        "demo_state": {
+        "demo": {
           "anyOf": [
             {
-              "type": "string"
-            },
-            {
-              "type": "integer"
-            },
-            {
-              "type": "number"
-            },
-            {
-              "type": "boolean"
-            },
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "items": {},
-              "type": "array"
+              "$ref": "#/$defs/BlokDemoInput"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "An optional JSON-serializable object providing demo state values for this Blok's internal reactive data model, useful for testing and development purposes.",
-          "title": "Demo State"
+          "description": "What a preview renders it with."
         },
         "dependencies": {
           "default": [],
@@ -1145,30 +1299,36 @@
           "title": "Key",
           "type": "string"
         },
-        "persist": {
+        "locals": {
           "default": [],
-          "description": "The locals a renderer may keep between openings, on the device (never on a server): each a top-level `demo_state` key, whose demo value is the default. A renderer without storage keeps nothing.",
+          "description": "Its locals: form state that feeds a call, written only through bind.",
           "items": {
-            "$ref": "#/$defs/BlokPersistInput"
+            "$ref": "#/$defs/BlokLocalInput"
           },
-          "title": "Persist",
+          "title": "Locals",
           "type": "array"
         },
-        "services": {
+        "module": {
           "anyOf": [
             {
-              "items": {
-                "$ref": "#/$defs/BlokServiceInput"
-              },
-              "type": "array"
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "description": "The backend services this Blok reads from (its `query` components name them), each frozen at the version it was written against.",
-          "title": "Services"
+          "description": "The module (an app's own unversioned extras, registered by a UI app such as the Orkestrator) the blok renders against besides its catalogs; the Orkestrator's when absent.",
+          "title": "Module"
+        },
+        "queries": {
+          "default": [],
+          "description": "Its declared reads, as `queries.<key>`.",
+          "items": {
+            "$ref": "#/$defs/BlokQueryInput"
+          },
+          "title": "Queries",
+          "type": "array"
         },
         "source": {
           "anyOf": [
@@ -1182,18 +1342,77 @@
           "default": null,
           "description": "The Blok as BSX, parsed by the server into its component tree: three times fewer bytes than the tree. Exactly one of `components` and `source` is sent.",
           "title": "Source"
+        },
+        "subscriptions": {
+          "default": [],
+          "description": "Its declared streams, as `subscriptions.<key>`.",
+          "items": {
+            "$ref": "#/$defs/BlokSubscriptionInput"
+          },
+          "title": "Subscriptions",
+          "type": "array"
+        },
+        "vocab": {
+          "const": 2,
+          "description": "The blok language version the blok speaks; v2 is the only one.",
+          "title": "Vocab",
+          "type": "integer"
         }
       },
       "required": [
-        "key"
+        "key",
+        "vocab"
       ],
       "title": "BlokImplementationInput",
       "type": "object"
     },
-    "BlokPersistInput": {
+    "BlokLocalInput": {
       "additionalProperties": false,
-      "description": "A local a renderer may keep between openings, on the device: its demo value is the default.",
+      "description": "A local: blok-level form state that feeds a call, written only through ``bind`` on controls.\n\nA local is a port, typed like an action's argument: its ``key`` is the name the tree reads it\nby (``{iterations}``, never a reserved root), its ``kind`` says what the controls bound to it\nmust write and what a task call may pass it to, its ``default`` is the value it starts with.\nA kept value that no longer fits the port is dropped.\n\n``kind`` left out is ``ANY`` and is inferred from the tree (:func:`~arkitekt_spec.declare.blok.infer.resolve_scope`):\nfrom its default, then from the task argument it is passed to whole, then from the control\nbound to it. An ``ANY`` that is *given* is kept: an untyped value, which skips the bind and\nargument kind checks.",
       "properties": {
+        "children": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ArgPortInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The child ports (used for list, dict, union and model ports).",
+          "title": "Children"
+        },
+        "choices": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ChoiceInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The values the port accepts (required for ENUM; optional for INT, FLOAT, STRING). Rendered by CHOICE widgets.",
+          "title": "Choices"
+        },
+        "default": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The default value for the port; must fit the port's kind.",
+          "title": "Default"
+        },
         "description": {
           "anyOf": [
             {
@@ -1204,33 +1423,227 @@
             }
           ],
           "default": null,
-          "description": "What the kept value is, for whoever resets it.",
+          "description": "The description of the port. This is the text that is displayed in the UI when the user hovers over the port",
           "title": "Description"
         },
+        "dimension": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For QUANTITY ports: the pint dimensionality string, e.g. \"[mass] * [length] ** 2 / [time] ** 3 / [current]\". This is the wiring-compatibility key between quantity ports.",
+          "title": "Dimension"
+        },
+        "effects": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/EffectInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The effects of the port",
+          "title": "Effects"
+        },
+        "identifier": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The identifier of the port's type, of the form @package/key. Required for STRUCTURE, MEMORY_STRUCTURE and INTERFACE, where it is the only identity a value has; optional for MODEL and ENUM, where it names the class or enum the port was built from so that agents can map a value back to it.",
+          "title": "Identifier"
+        },
         "key": {
-          "description": "The local: a top-level `demo_state` key that is neither a dependency nor a reserved root.",
-          "minLength": 1,
+          "description": "The key of the port: unique among its siblings, free of '..', not 'value'. LIST/DICT item ports are conventionally keyed '...'.",
           "title": "Key",
           "type": "string"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PortKind"
+            },
+            {
+              "const": "ANY",
+              "type": "string"
+            }
+          ],
+          "default": "ANY",
+          "description": "The port kind of the local, or ANY (an untyped value). Left out, it is inferred from the tree and ANY when nothing tells.",
+          "title": "Kind"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The label of the port. This is the text that is displayed in the UI",
+          "title": "Label"
+        },
+        "nullable": {
+          "default": false,
+          "description": "Whether the port is nullable or not. If the port is nullable, it can be set to null. If the port is not nullable, it cannot be set to null",
+          "title": "Nullable",
+          "type": "boolean"
+        },
+        "persist": {
+          "default": false,
+          "description": "Remember the last input on this device (never on a server).",
+          "title": "Persist",
+          "type": "boolean"
+        },
+        "proposed_units": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For QUANTITY ports: units offered as a dropdown in the UI, e.g. [\"pF\", \"nF\", \"uF\"]. Proposals only \u2014 any unit of the same dimension remains valid input.",
+          "title": "Proposed Units"
+        },
+        "reference_unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For QUANTITY ports: the canonical/reference unit of the physical quantity, e.g. \"volt\" or \"farad\". It is the default selection and the key used to resolve the concrete quantity type; other units of the same dimension are still allowed.",
+          "title": "Reference Unit"
+        },
+        "requires": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/RequiresInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The descriptors for the port. Descriptors are key-value pairs that can be used to add additional metadata to a port. When using rekuest's action search, you can filter actions based on their port descriptors",
+          "title": "Requires"
+        },
+        "validators": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ValidatorInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The validators for the port",
+          "title": "Validators"
+        },
+        "widget": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "CHOICE": "#/$defs/ChoiceAssignWidgetInput",
+                  "CUSTOM": "#/$defs/CustomAssignWidgetInput",
+                  "PROXY": "#/$defs/ProxyAssignWidgetInput",
+                  "SEARCH": "#/$defs/SearchAssignWidgetInput",
+                  "SLIDER": "#/$defs/SliderAssignWidgetInput",
+                  "STATE_CHOICE": "#/$defs/StateChoiceAssignWidgetInput",
+                  "STRING": "#/$defs/StringAssignWidgetInput"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/ChoiceAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/CustomAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/ProxyAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/SearchAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/SliderAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/StateChoiceAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/StringAssignWidgetInput"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The assign widget to use for this port, discriminated by `kind`.",
+          "title": "Widget"
         }
       },
       "required": [
         "key"
       ],
-      "title": "BlokPersistInput",
+      "title": "BlokLocalInput",
       "type": "object"
     },
-    "BlokServiceInput": {
+    "BlokQueryInput": {
       "additionalProperties": false,
-      "description": "A backend service a blok reads from, frozen at the version it was written against.",
+      "description": "A declared read: a GraphQL query on a service, re-run when its variables change.",
       "properties": {
+        "document": {
+          "description": "One GraphQL `query` operation; never a mutation.",
+          "minLength": 1,
+          "title": "Document",
+          "type": "string"
+        },
         "key": {
-          "description": "The service's key, as a `query`'s `schema` names it: 'mikro'.",
+          "description": "Its name: the blok reads it as `queries.<key>` (status, value, error, refetching, fetching_more).",
           "minLength": 1,
           "title": "Key",
           "type": "string"
         },
-        "schema_hash": {
+        "more": {
           "anyOf": [
             {
               "type": "string"
@@ -1240,40 +1653,112 @@
             }
           ],
           "default": null,
-          "description": "'sha256:<hex>' of the canonical GraphQL schema the blok's queries were checked against.",
-          "title": "Schema Hash"
+          "description": "The list field of its result that `queries.<key>.fetch_more(...)` appends new pages to, as a dotted path into the data (`positions`, `images.items`). A query without it cannot fetch more.",
+          "title": "More"
+        },
+        "poll": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Re-run every this many seconds, besides when its variables change.",
+          "title": "Poll"
         },
         "service": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The service type, in reverse-domain form: 'live.arkitekt.mikro'.",
-          "title": "Service"
+          "description": "The service it runs on, by its key ('mikro').",
+          "minLength": 1,
+          "title": "Service",
+          "type": "string"
         },
-        "version": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The server version the blok was written against, as the service declaration names it ('8').",
-          "title": "Version"
+        "variables": {
+          "default": [],
+          "description": "Its variables, each an expression over args, locals and dependencies (as a call argument is stored).",
+          "items": {
+            "$ref": "#/$defs/ActionArgumentInput"
+          },
+          "title": "Variables",
+          "type": "array"
         }
       },
       "required": [
-        "key"
+        "key",
+        "service",
+        "document"
       ],
-      "title": "BlokServiceInput",
+      "title": "BlokQueryInput",
+      "type": "object"
+    },
+    "BlokSubscriptionInput": {
+      "additionalProperties": false,
+      "description": "A declared stream: a GraphQL subscription on a service, re-subscribed when its variables change.",
+      "properties": {
+        "document": {
+          "description": "One GraphQL `subscription` operation.",
+          "minLength": 1,
+          "title": "Document",
+          "type": "string"
+        },
+        "history": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A declared query to replay from while travelling; without it the value at travel start shows, stale.",
+          "title": "History"
+        },
+        "keep": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Keep the last this many payloads as a list; the latest only when absent.",
+          "title": "Keep"
+        },
+        "key": {
+          "description": "Its name: the blok reads it as `subscriptions.<key>` (status, value, error).",
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "service": {
+          "description": "The service it runs on, by its key.",
+          "minLength": 1,
+          "title": "Service",
+          "type": "string"
+        },
+        "variables": {
+          "default": [],
+          "description": "Its variables, as a query's.",
+          "items": {
+            "$ref": "#/$defs/ActionArgumentInput"
+          },
+          "title": "Variables",
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "service",
+        "document"
+      ],
+      "title": "BlokSubscriptionInput",
       "type": "object"
     },
     "ChoiceAssignWidgetInput": {
@@ -1529,7 +2014,7 @@
             }
           ],
           "default": null,
-          "description": "Defines an imperative interactive network action callback loop if this prop should trigger a system utility interaction."
+          "description": "A function the renderer evaluates for the prop's value, or, in a callback prop, the effect it runs (ui.copy, task.answer, query.refetch, query.fetch_more)."
         }
       },
       "required": [

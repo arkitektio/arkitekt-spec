@@ -48,7 +48,8 @@ from arkitekt_spec.declare.actors.types import (
     DeclaredImplementation,
     RegisterConfig,
 )
-from arkitekt_spec.declare.blok.action import ActionBlok, build_action_bloks
+from arkitekt_spec.declare.blok.action import ActionBloks, build_action_bloks
+from arkitekt_spec.declare.blok.validate import blok_context
 from arkitekt_spec.declare.coercible_types import (
     OptimisticCoercible,
 )
@@ -152,7 +153,9 @@ def _logo_of(config: RegisterConfig, interface: str, registry: "AppRegistry") ->
         return {}
     if isinstance(config.logo, ComponentNodeInput):
         name = f"{interface}.logo"
-        registry.register_blok(name, config.logo, context=ComponentContext.ACTION_LOGO)
+        if blok_context(config.logo) != ComponentContext.ACTION_LOGO:
+            raise DefinitionError(f"{interface}: an inline logo is an <ActionLogo>, not <{config.logo.component}>")
+        registry.register_blok(name, config.logo)
         return {"logo": name}
     return {"logo": config.logo}
 
@@ -225,7 +228,15 @@ def register_func(
     if config.bloks:
         # Set only when there are some, so an action without bloks keeps its wire bytes.
         definition = definition.model_copy(
-            update={"bloks": build_action_bloks(config.bloks, frozenset(d.key for d in dependencies), implementation_registry, f"Action {interface!r}")}
+            update={
+                "bloks": build_action_bloks(
+                    config.bloks,
+                    tuple(dependencies),
+                    implementation_registry,
+                    f"Action {interface!r}",
+                    arg_keys=tuple(port.key for port in definition.args or ()),
+                )
+            }
         )
 
     optimistics: list[OptimisticInput] = [
@@ -293,7 +304,7 @@ def declare_implementation(
     effects: Effects | None = None,
     execution: Execution = Execution.PLAIN,
     logo: str | ComponentNodeInput | None = None,
-    bloks: "Sequence[ActionBlok] | None" = None,
+    bloks: "ActionBloks | None" = None,
 ) -> WrappedFunction[P, R]:
     """Register a function directly: ``declare_implementation(fn, implementation_registry=...)``."""
 
@@ -329,7 +340,7 @@ def declare_implementation(
     effects: Effects | None = None,
     execution: Execution = Execution.PLAIN,
     logo: str | ComponentNodeInput | None = None,
-    bloks: "Sequence[ActionBlok] | None" = None,
+    bloks: "ActionBloks | None" = None,
 ) -> Callable[[Callable[P, R]], WrappedFunction[P, R]]:
     """Build a configured decorator: ``declare_implementation(implementation_registry=..., name=...)``."""
 
@@ -364,7 +375,7 @@ def declare_implementation(
     effects: Effects | None = None,
     execution: Execution = Execution.PLAIN,
     logo: str | ComponentNodeInput | None = None,
-    bloks: "Sequence[ActionBlok] | None" = None,
+    bloks: "ActionBloks | None" = None,
 ) -> WrappedFunction[P, R] | Callable[[Callable[P, R]], WrappedFunction[P, R]]:
     """Register a function or actor with an app registry.
 
@@ -427,9 +438,9 @@ def declare_implementation(
             the name of an action logo blok the app declares, or a tree of its
             own (``bsx("<ActionLogo>...</ActionLogo>")``), declared as the
             action logo blok ``<interface>.logo``.
-        bloks (Sequence[ActionBlok] | None): The action's own bloks, one per
-            context (``ActionBlok(bsx("<Overlay>...</Overlay>"), context="overlay")``):
-            how a client shows a run of it. Checked now against the function's
+        bloks (ActionBloks | None): The action's own bloks, one per context, which
+            each one's root names (``"<Overlay>...</Overlay>"``, or an ``ActionBlok``
+            for locals and the like; one needs no list): how a client shows a run of it. Checked now against the function's
             dependency parameters and the bloks' catalogs; sent with the definition
             (never when there are none) and not part of its hash.
 

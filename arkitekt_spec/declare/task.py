@@ -20,14 +20,21 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Generator
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
-from arkitekt_spec.actions import DescriptorOperator
+from arkitekt_spec.actions import (
+    AgentDependencyInput,
+    BlokDemoInput,
+    BlokLocalInput,
+    BlokQueryInput,
+    BlokSubscriptionInput,
+    DescriptorOperator,
+    ReturnPortInput,
+)
 from arkitekt_spec.declare.agents.errors import NoCallerError
 from arkitekt_spec.declare.errors import AgentLost
-from arkitekt_spec.declare.structures.types import JSONSerializable
 from arkitekt_spec.declare.targets import CallTarget, ImplementationTarget
 from arkitekt_spec.scalars import ActionHash
 
@@ -138,32 +145,34 @@ class TaskBlok(BaseModel):
     inform (:meth:`Task.ainform`, shown while the task goes on).
 
     Exactly one of ``key`` (a blok the agent's app declares), ``id`` (any blok of the
-    organization) or ``source`` (BSX the server parses into a blok made for this task
-    alone) names it. A ``source`` blok may call its own agent as ``self``. Its tree
-    answers with ``@utils.blok.answer(values={'key': value, ...})``, keyed by ``returns``, and reads
-    ``@args.<key>``, ``@ask.status`` and, once answered, ``@returns.<key>``.
+    organization) or ``source`` (v2 BSX the server parses into a blok made for this task
+    alone) names it. A ``source`` blok reads the sending task as ``task`` (``task.status``,
+    ``task.ask``, once answered ``task.answer.<key>``), what it is opened on as ``args.<key>``,
+    the sending agent as ``self`` and the task's dependencies as ``deps.<key>``; it answers
+    with ``task.answer(values: {key: value, ...})``, keyed by ``returns``.
     """
 
     key: str | None = Field(default=None, description="A blok the agent's app declares, by its key.")
     id: str | None = Field(default=None, description="Any blok of the organization, by its id.")
-    source: str | None = Field(default=None, description="The blok as BSX, made for this task alone.")
+    source: str | None = Field(default=None, description="The blok as v2 BSX, made for this task alone.")
     name: str | None = Field(default=None, description="A title for whoever sees it; the blok's own name when left out.")
-    args: dict[str, Any] | None = Field(default=None, description="What it is opened on, read under `@args.<key>`.")
-    returns: list[dict[str, Any]] | None = Field(
+    args: dict[str, JsonValue] | None = Field(default=None, description="What it is opened on, read under `args.<key>`.")
+    returns: list[ReturnPortInput] | None = Field(
         default=None,
         description="What an answer holds, as return ports (`{key, kind, identifier?, nullable?, children?}`). A `source` blok declares them here; a named one has its own.",
     )
-    dependencies: list[dict[str, Any]] | None = Field(default=None, description="A `source` blok's agent dependencies besides `self`.")
+    dependencies: list[AgentDependencyInput] | None = Field(default=None, description="A `source` blok's agent dependencies besides `self`.")
     agent_mappings: dict[str, str] | None = Field(
         default=None,
         description="Dependency key to agent id. A dependency left out that the sending agent satisfies is bound to it.",
     )
-    demo_state: dict[str, Any] | None = Field(default=None, description="A `source` blok's initial state.")
-    catalog: str | None = Field(default=None, description="The UI catalog a `source` blok renders against; the server's default when left out.")
-    services: list[dict[str, Any]] | None = Field(
-        default=None,
-        description="The services a `source` blok's `query` components read (`{key, service?, version?, schema_hash?}`).",
-    )
+    vocab: Literal[2] | None = Field(default=None, description="The blok language version a `source` blok is written in; 2, the only one, when left out.")
+    catalogs: list[str] | None = Field(default=None, description="The catalogs a `source` blok needs, as `name@version` (`ui@1`).")
+    locals: list[BlokLocalInput] | None = Field(default=None, description="A `source` blok's locals, each a port (`{key, kind?, default?, ...}`) plus `persist`; a left-out kind is inferred from the tree (ANY when it does not tell).")
+    demo: BlokDemoInput | None = Field(default=None, description="What a preview renders a `source` blok with.")
+    queries: list[BlokQueryInput] | None = Field(default=None, description="A `source` blok's declared reads.")
+    subscriptions: list[BlokSubscriptionInput] | None = Field(default=None, description="A `source` blok's declared streams.")
+    module: str | None = Field(default=None, description="The module a `source` blok renders against besides its catalogs; the server's default when left out.")
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     @model_validator(mode="after")
@@ -177,8 +186,8 @@ class TaskBlok(BaseModel):
 def as_task_blok(
     blok: "TaskBlok | str",
     *,
-    args: dict[str, Any] | None = None,
-    returns: list[dict[str, Any]] | None = None,
+    args: dict[str, JsonValue] | None = None,
+    returns: list[ReturnPortInput] | None = None,
     name: str | None = None,
 ) -> TaskBlok:
     """``blok`` as a :class:`TaskBlok`: a string is BSX source; ``args``, ``returns`` and
@@ -219,8 +228,14 @@ class Task(Protocol):
         ...
 
     @property
+    def assigner(self) -> str:
+        """The user who assigned the task: the human at the root of its tree, the same for
+        every task it delegated to (where :attr:`user` is whoever caused this hop)."""
+        ...
+
+    @property
     def org(self) -> str:
-        """The organization the task runs in."""
+        """The organization the task runs in, ``"<iss>#<org>"``."""
         ...
 
     @property
@@ -358,15 +373,15 @@ class Task(Protocol):
         blok: "TaskBlok | str",
         message: str,
         *,
-        args: dict[str, Any] | None = None,
-        returns: list[dict[str, Any]] | None = None,
+        args: dict[str, JsonValue] | None = None,
+        returns: list[ReturnPortInput] | None = None,
         prompt: AssignPrompt | None = None,
     ) -> Decision:
         """Ask a person through a blok: the task is HELD on ``blok`` (a :class:`TaskBlok`,
         or BSX source) until they answer in it or dismiss it.
 
         Answered, the :class:`Decision` is approved and its ``values`` are what the blok
-        answered (``@utils.blok.answer(values={...})``), checked against its ``returns``. Dismissed,
+        answered (``task.answer(values: {...})``), checked against its ``returns``. Dismissed,
         it is not approved and has none. Auto-mode cannot answer for a person: an ask
         waits in every run. Raises :class:`~arkitekt_spec.declare.errors.BlokRefused` when
         the server cannot make the blok, with why. A resumed workflow gets the answer it
@@ -379,20 +394,20 @@ class Task(Protocol):
         blok: "TaskBlok | str",
         message: str,
         *,
-        args: dict[str, Any] | None = None,
-        returns: list[dict[str, Any]] | None = None,
+        args: dict[str, JsonValue] | None = None,
+        returns: list[ReturnPortInput] | None = None,
         prompt: AssignPrompt | None = None,
     ) -> Decision:
         """:meth:`ask`, awaited."""
         ...
 
-    def inform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, Any] | None = None) -> None:
+    def inform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, JsonValue] | None = None) -> None:
         """Show a person a blok (a :class:`TaskBlok`, or BSX source) while the task goes
         on: a chart of its progress, a result. Nothing waits. A blok the server cannot make
         is logged by the agent, never raised here."""
         ...
 
-    async def ainform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, Any] | None = None) -> None:
+    async def ainform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, JsonValue] | None = None) -> None:
         """:meth:`inform`, awaited."""
         ...
 
@@ -479,7 +494,7 @@ class Task(Protocol):
 
     async def acall_raw(
         self,
-        kwargs: dict[str, JSONSerializable] | None = None,
+        kwargs: dict[str, JsonValue] | None = None,
         *,
         action: CallTarget | None = None,
         implementation: ImplementationTarget | None = None,
@@ -503,7 +518,7 @@ class Task(Protocol):
 
     def aiterate_raw(
         self,
-        kwargs: dict[str, JSONSerializable] | None = None,
+        kwargs: dict[str, JsonValue] | None = None,
         *,
         action: CallTarget | None = None,
         implementation: ImplementationTarget | None = None,
@@ -549,10 +564,11 @@ class LocalTask:
 
     token: str | None = None
 
-    def __init__(self, id: str = "local", user: str = "local", org: str = "local") -> None:
-        """Make a local task, tagged ``id`` in its logs."""
+    def __init__(self, id: str = "local", user: str = "local", org: str = "local", assigner: str | None = None) -> None:
+        """Make a local task, tagged ``id`` in its logs; ``assigner`` is ``user`` unless given."""
         self.id = id
         self.user = user
+        self.assigner = assigner if assigner is not None else user
         self.org = org
         self.hooks: list[AssignmentHook] = []
 
@@ -658,8 +674,8 @@ class LocalTask:
         blok: "TaskBlok | str",
         message: str,
         *,
-        args: dict[str, Any] | None = None,
-        returns: list[dict[str, Any]] | None = None,
+        args: dict[str, JsonValue] | None = None,
+        returns: list[ReturnPortInput] | None = None,
         prompt: AssignPrompt | None = None,
     ) -> Decision:
         """Nobody answers a local task: it logs ``message`` and goes on, not approved and
@@ -673,19 +689,19 @@ class LocalTask:
         blok: "TaskBlok | str",
         message: str,
         *,
-        args: dict[str, Any] | None = None,
-        returns: list[dict[str, Any]] | None = None,
+        args: dict[str, JsonValue] | None = None,
+        returns: list[ReturnPortInput] | None = None,
         prompt: AssignPrompt | None = None,
     ) -> Decision:
         """Nobody answers a local task (see :meth:`ask`)."""
         return self.ask(blok, message, args=args, returns=returns, prompt=prompt)
 
-    def inform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, Any] | None = None) -> None:
+    def inform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, JsonValue] | None = None) -> None:
         """Nobody sees a local task's blok: it logs ``message``."""
         as_task_blok(blok, args=args)
         logger.log(logging.INFO, "inform (nobody sees a local task's blok): %s", message or "")
 
-    async def ainform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, Any] | None = None) -> None:
+    async def ainform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, JsonValue] | None = None) -> None:
         """Nobody sees a local task's blok (see :meth:`inform`)."""
         self.inform(blok, message, args=args)
 
@@ -758,7 +774,7 @@ class LocalTask:
 
     async def acall_raw(
         self,
-        kwargs: dict[str, JSONSerializable] | None = None,
+        kwargs: dict[str, JsonValue] | None = None,
         *,
         action: CallTarget | None = None,
         implementation: ImplementationTarget | None = None,
@@ -779,7 +795,7 @@ class LocalTask:
 
     async def aiterate_raw(
         self,
-        kwargs: dict[str, JSONSerializable] | None = None,
+        kwargs: dict[str, JsonValue] | None = None,
         *,
         action: CallTarget | None = None,
         implementation: ImplementationTarget | None = None,

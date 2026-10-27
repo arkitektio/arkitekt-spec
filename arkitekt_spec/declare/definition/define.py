@@ -13,6 +13,7 @@ from typing import (
     Literal,
     Optional,
     TypeAlias,
+    TypeGuard,
     Union,
     cast,
     get_args,
@@ -38,7 +39,7 @@ from arkitekt_spec.actions import (
     TestTargetInput,
     ValidatorInput,
 )
-from arkitekt_spec.declare.annotations import PortAnnotations, extract_annotations
+from arkitekt_spec.declare.annotations import Key, PortAnnotations, extract_annotations
 from arkitekt_spec.declare.definition.errors import DefinitionError, NonSufficientDocumentation
 from arkitekt_spec.declare.structures.convert import is_literal
 from arkitekt_spec.declare.structures.errors import StructureRegistryError
@@ -73,6 +74,57 @@ def is_annotated(obj: TypeAnnotation) -> bool:
         bool: _description_
     """
     return get_origin(obj) is Annotated
+
+
+def key_of(cls: TypeAnnotation) -> str | None:
+    """The key a :class:`Key` marker gives an annotation, or ``None`` when it names none.
+
+    Read off a top-level ``Annotated[T, Key("count")]``, or off the one variant of an
+    ``Optional[...]`` around it. More than one ``Key`` on a port is refused.
+    """
+    if is_annotated(cls):
+        keys = [marker.value for marker in get_args(cls)[1:] if isinstance(marker, Key)]
+        if len(keys) > 1:
+            raise DefinitionError(f"Multiple Keys found: {', '.join(map(repr, keys))}")
+        return keys[0] if keys else None
+    if is_nullable(cls):
+        variants = [arg for arg in get_args(cls) if arg is not type(None)]
+        if len(variants) == 1:
+            return key_of(variants[0])
+    return None
+
+
+def is_named_tuple(cls: TypeAnnotation) -> TypeGuard[type[tuple[object, ...]]]:
+    """Whether a return annotation is a ``NamedTuple`` class: one return per field."""
+    return isinstance(cls, type) and issubclass(cls, tuple) and hasattr(cls, "_fields")
+
+
+def return_items(annotation: TypeAnnotation) -> list[tuple[str, TypeAnnotation]]:
+    """The returns a (non-generator) return annotation declares, as ``(key, annotation)``.
+
+    - ``None`` or no annotation: no return.
+    - A ``NamedTuple``: one return per field, keyed by the field's name.
+    - A ``tuple[...]``: one return per element, ``return<N>`` unless ``Key`` names it.
+    - Anything else: one return, ``return0`` unless ``Key`` names it.
+    """
+    if annotation is None or is_none_type(annotation):
+        return []
+    if is_named_tuple(annotation):
+        hints = get_type_hints(annotation, include_extras=True)
+        fields = cast("tuple[str, ...]", getattr(annotation, "_fields"))
+        items: list[tuple[str, TypeAnnotation]] = []
+        for field in fields:
+            if field not in hints:
+                raise DefinitionError(f"The NamedTuple {annotation.__name__} gives its field {field!r} no type hint.")
+            if key_of(hints[field]) is not None:
+                raise DefinitionError(
+                    f"The NamedTuple {annotation.__name__} puts a Key on its field {field!r}: a NamedTuple's returns are keyed by its field names."
+                )
+            items.append((field, hints[field]))
+        return items
+    if is_tuple(annotation):
+        return [(key_of(cls) or f"return{index}", cls) for index, cls in enumerate(get_args(annotation))]
+    return [(key_of(annotation) or "return0", annotation)]
 
 
 def is_union_type(cls: TypeAnnotation) -> bool:
@@ -681,6 +733,11 @@ def prepare_definition(
         if is_local_var(cls, structure_registry):
             continue
 
+        if key_of(cls) is not None:
+            raise DefinitionError(
+                f"The argument {key!r} of {function_name} carries a Key: an argument is keyed by its parameter name. Key names a return."
+            )
+
         try:
             args.append(
                 convert_object_to_argport(
@@ -711,75 +768,36 @@ def prepare_definition(
     is_generator = is_generator or is_generator_type(function_outs_annotation)
 
     if return_annotations:
-        for index, cls in enumerate(return_annotations):
-            key = f"return{index}"
-            return_widget = return_widgets.pop(key, None)
-            assign_widget = widgets.pop(key, None)
-            its_effects = effects.pop(key, [])
-
-            returns.append(
-                convert_object_to_returnport(
-                    cls,
-                    key,
-                    structure_registry,
-                    return_widget=return_widget,
-                    effects=its_effects,
-                    description=doc_param_description_map.pop(key, None),
-                    label=doc_param_label_map.pop(key, None),
-                    assign_widget=assign_widget,
-                )
-            )
-
+        items = [(key_of(cls) or f"return{index}", cls) for index, cls in enumerate(return_annotations)]
     else:
-        # We are dealing with a non tuple return
-        if function_outs_annotation is None or is_none_type(function_outs_annotation):
-            pass
+        if is_generator_type(function_outs_annotation):
+            function_outs_annotation = get_args(function_outs_annotation)[0]
 
-        else:
-            if is_generator_type(function_outs_annotation):
-                function_outs_annotation = get_args(function_outs_annotation)[0]
+        if function_outs_annotation is not None and is_dependency_type(function_outs_annotation, structure_registry):
+            raise DefinitionError(
+                f"Function {function_name} has a return type that is a dependency. This is not allowed. Please change the return type."
+            )
+        items = return_items(function_outs_annotation)
 
-            if is_dependency_type(function_outs_annotation, structure_registry):
-                raise DefinitionError(
-                    f"Function {function_name} has a return type that is a dependency. This is not allowed. Please change the return type."
-                )
-
-            if is_tuple(function_outs_annotation):
-                for index, cls in enumerate(get_args(function_outs_annotation)):
-                    key = f"return{index}"
-                    return_widget = return_widgets.pop(key, None)
-                    assign_widget = widgets.pop(key, None)
-                    its_effects = effects.pop(key, [])
-
-                    returns.append(
-                        convert_object_to_returnport(
-                            cls,
-                            key,
-                            structure_registry,
-                            return_widget=return_widget,
-                            effects=its_effects,
-                            description=doc_param_description_map.pop(key, None),
-                            label=doc_param_label_map.pop(key, None),
-                            assign_widget=assign_widget,
-                        )
-                    )
-            else:
-                key = "return0"
-                return_widget = return_widgets.pop(key, None)
-                assign_widget = widgets.pop(key, None)
-                its_effects = effects.pop(key, [])
-                returns.append(
-                    convert_object_to_returnport(
-                        function_outs_annotation,
-                        "return0",
-                        structure_registry,
-                        assign_widget=assign_widget,
-                        effects=its_effects,
-                        description=doc_param_description_map.pop(key, None),
-                        label=doc_param_label_map.pop(key, None),
-                        return_widget=return_widget,
-                    )
-                )
+    seen: set[str] = set()
+    for index, (key, cls) in enumerate(items):
+        if key in seen:
+            raise DefinitionError(f"Function {function_name} names two returns {key!r}. Each return needs a key of its own.")
+        seen.add(key)
+        # The docstring describes the returns in order: its names stay labels, never keys.
+        doc_key = f"return{index}"
+        returns.append(
+            convert_object_to_returnport(
+                cls,
+                key,
+                structure_registry,
+                return_widget=return_widgets.pop(key, None),
+                assign_widget=widgets.pop(key, None),
+                effects=effects.pop(key, []),
+                description=doc_param_description_map.pop(doc_key, None),
+                label=doc_param_label_map.pop(doc_key, None),
+            )
+        )
 
     # The registered name is NEVER inferred from the docstring. Using the
     # docstring summary line as the action name was being misused, so the name

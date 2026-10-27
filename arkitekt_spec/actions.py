@@ -18,6 +18,7 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from arkitekt_spec.rules import (
+    ActionBlokRules,
     AgentRules,
     BlokRules,
     DefinitionRules,
@@ -693,13 +694,11 @@ class AgentProbeInput(ActionModel):
     )
 
 
-class ArgPortInput(PortRules, ActionModel):
-    """A Port is a single input or output of an action, identified by its `key` and typed by its `kind`.
+class ArgPortFields(PortRules, ActionModel):
+    """What an arg port and a blok local share: every field of a port but its ``kind``.
 
-    STRUCTURE, MEMORY_STRUCTURE and INTERFACE ports carry an `identifier` of the form `@package/key`
-    (e.g. `@mikro/image`); ports with the same identifier are compatible. LIST and DICT ports have one
-    child (the item type), UNION ports two or more (the variants), MODEL ports one per field. ENUM ports
-    declare `choices`. See docs/design/ports.md for the full table.
+    :class:`ArgPortInput` adds a :class:`PortKind`; :class:`BlokLocalInput` adds a
+    :data:`LocalKind`, which also takes ``ANY``.
     """
 
     key: str = Field(
@@ -708,9 +707,6 @@ class ArgPortInput(PortRules, ActionModel):
     label: str | None = Field(
         default=None,
         description="The label of the port. This is the text that is displayed in the UI",
-    )
-    kind: PortKind = Field(
-        description="The kind of the port. This is the type of the port. Can be either int, string, structure, list, bool, dict, float, date, union or model"
     )
     description: str | None = Field(
         default=None,
@@ -769,6 +765,20 @@ class ArgPortInput(PortRules, ActionModel):
     )
 
 
+class ArgPortInput(ArgPortFields):
+    """A Port is a single input or output of an action, identified by its `key` and typed by its `kind`.
+
+    STRUCTURE, MEMORY_STRUCTURE and INTERFACE ports carry an `identifier` of the form `@package/key`
+    (e.g. `@mikro/image`); ports with the same identifier are compatible. LIST and DICT ports have one
+    child (the item type), UNION ports two or more (the variants), MODEL ports one per field. ENUM ports
+    declare `choices`. See docs/design/ports.md for the full table.
+    """
+
+    kind: PortKind = Field(
+        description="The kind of the port. This is the type of the port. Can be either int, string, structure, list, bool, dict, float, date, union or model"
+    )
+
+
 AssignWidgetInput = Annotated[
     ChoiceAssignWidgetInput
     | CustomAssignWidgetInput
@@ -781,26 +791,73 @@ AssignWidgetInput = Annotated[
 ]
 
 
-class BlokServiceInput(ActionModel):
-    """A backend service a blok reads from, frozen at the version it was written against."""
+LOCAL_ANY: Literal["ANY"] = "ANY"
+"""The kind of a local nothing types: an untyped value, checked against nothing."""
 
-    key: str = Field(min_length=1, description="The service's key, as a `query`'s `schema` names it: 'mikro'.")
-    service: str | None = Field(default=None, description="The service type, in reverse-domain form: 'live.arkitekt.mikro'.")
-    version: str | None = Field(default=None, description="The server version the blok was written against, as the service declaration names it ('8').")
-    schema_hash: str | None = Field(
-        validation_alias=AliasChoices("schema_hash", "schemaHash"),
-        serialization_alias="schemaHash",
+LocalKind = PortKind | Literal["ANY"]
+"""A local's kind: a port kind, or ``ANY`` (no action port is ever ``ANY``)."""
+
+
+class BlokLocalInput(ArgPortFields):
+    """A local: blok-level form state that feeds a call, written only through ``bind`` on controls.
+
+    A local is a port, typed like an action's argument: its ``key`` is the name the tree reads it
+    by (``{iterations}``, never a reserved root), its ``kind`` says what the controls bound to it
+    must write and what a task call may pass it to, its ``default`` is the value it starts with.
+    A kept value that no longer fits the port is dropped.
+
+    ``kind`` left out is ``ANY`` and is inferred from the tree (:func:`~arkitekt_spec.declare.blok.infer.resolve_scope`):
+    from its default, then from the task argument it is passed to whole, then from the control
+    bound to it. An ``ANY`` that is *given* is kept: an untyped value, which skips the bind and
+    argument kind checks.
+    """
+
+    kind: LocalKind = Field(
+        default=LOCAL_ANY,
+        description="The port kind of the local, or ANY (an untyped value). Left out, it is inferred from the tree and ANY when nothing tells.",
+    )
+    persist: bool = Field(default=False, description="Remember the last input on this device (never on a server).")
+
+
+class BlokQueryInput(ActionModel):
+    """A declared read: a GraphQL query on a service, re-run when its variables change."""
+
+    key: str = Field(min_length=1, description="Its name: the blok reads it as `queries.<key>` (status, value, error, refetching, fetching_more).")
+    service: str = Field(min_length=1, description="The service it runs on, by its key ('mikro').")
+    document: str = Field(min_length=1, description="One GraphQL `query` operation; never a mutation.")
+    variables: tuple[ActionArgumentInput, ...] = Field(
+        default=(), description="Its variables, each an expression over args, locals and dependencies (as a call argument is stored)."
+    )
+    poll: float | None = Field(default=None, gt=0, description="Re-run every this many seconds, besides when its variables change.")
+    more: str | None = Field(
         default=None,
-        description="'sha256:<hex>' of the canonical GraphQL schema the blok's queries were checked against.",
+        description="The list field of its result that `queries.<key>.fetch_more(...)` appends new pages to, as a dotted path into the data (`positions`, `images.items`). A query without it cannot fetch more.",
     )
     model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
 
 
-class BlokPersistInput(ActionModel):
-    """A local a renderer may keep between openings, on the device: its demo value is the default."""
+class BlokSubscriptionInput(ActionModel):
+    """A declared stream: a GraphQL subscription on a service, re-subscribed when its variables change."""
 
-    key: str = Field(min_length=1, description="The local: a top-level `demo_state` key that is neither a dependency nor a reserved root.")
-    description: str | None = Field(default=None, description="What the kept value is, for whoever resets it.")
+    key: str = Field(min_length=1, description="Its name: the blok reads it as `subscriptions.<key>` (status, value, error).")
+    service: str = Field(min_length=1, description="The service it runs on, by its key.")
+    document: str = Field(min_length=1, description="One GraphQL `subscription` operation.")
+    variables: tuple[ActionArgumentInput, ...] = Field(default=(), description="Its variables, as a query's.")
+    keep: int | None = Field(default=None, ge=1, description="Keep the last this many payloads as a list; the latest only when absent.")
+    history: str | None = Field(
+        default=None, description="A declared query to replay from while travelling; without it the value at travel start shows, stale."
+    )
+    model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
+
+
+class BlokDemoInput(ActionModel):
+    """What a preview renders the blok with, mirroring the roots it reads. Never what it shows live."""
+
+    deps: JSONSerializable | None = Field(default=None, description="Per dependency key (`self` included), its states and tasks: `{self: {arm: {joints: [...]}}}`.")
+    args: JSONSerializable | None = Field(default=None, description="What it is opened on.")
+    task: JSONSerializable | None = Field(default=None, description="The task record it is about (task and action bloks, action logos).")
+    queries: JSONSerializable | None = Field(default=None, description="Per declared query, the value it answers.")
+    subscriptions: JSONSerializable | None = Field(default=None, description="Per declared subscription, its value.")
     model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
 
 
@@ -820,19 +877,13 @@ class BlokImplementationInput(BlokRules, ActionModel):
         default=None,
         description="The Blok as BSX, parsed by the server into its component tree: three times fewer bytes than the tree. Exactly one of `components` and `source` is sent.",
     )
-    catalog: str | None = Field(
+    module: str | None = Field(
         default=None,
-        description="The optional catalog name if this Blok should be registered inside a specific namespace in your Electron app's UI component registry.",
+        description="The module (an app's own unversioned extras, registered by a UI app such as the Orkestrator) the blok renders against besides its catalogs; the Orkestrator's when absent.",
     )
     description: str | None = Field(
         default=None,
         description="A human-readable description about this Blok's purpose and functionality.",
-    )
-    demo_state: JSONSerializable | None = Field(
-        validation_alias=AliasChoices("demo_state", "demoState"),
-        serialization_alias="demoState",
-        default=None,
-        description="An optional JSON-serializable object providing demo state values for this Blok's internal reactive data model, useful for testing and development purposes.",
     )
     context: Annotated[ComponentContext, GraphQLDefault("HTML")] = Field(
         default=ComponentContext.HTML,
@@ -856,23 +907,14 @@ class BlokImplementationInput(BlokRules, ActionModel):
     )
     args: tuple["ArgPortInput", ...] | None = Field(
         default=None,
-        description="The items this Blok is opened for, declared like an action's args and read under `@args.<key>`. A UI offers the Blok on any item its args accept. HTML bloks only.",
+        description="The items this Blok is opened for, declared like an action's args and read under `args.<key>`. A UI offers the Blok on any item its args accept. HTML bloks only.",
     )
-    "The items this Blok is opened for, read under `@args.<key>`. None when there are none, so a blok without args sends, and the agent hashes (`exclude_none`), what it always did."
-    services: tuple[BlokServiceInput, ...] | None = Field(
-        default=None,
-        description="The backend services this Blok reads from (its `query` components name them), each frozen at the version it was written against.",
-    )
-    "None when there are none, like `args`, so a blok without queries sends and hashes what it always did."
-    persist: tuple[BlokPersistInput, ...] = Field(
-        default=(),
-        # Never written when empty, like a definition's `protocols`: a blok that keeps nothing
-        # is the bytes it was before bloks could keep locals, which an older takt or kabinet
-        # (strict readers) still accepts, and its template hash does not move.
-        exclude_if=lambda persist: not persist,
-        description="The locals a renderer may keep between openings, on the device (never on a server): each a top-level `demo_state` key, whose demo value is the default. A renderer without storage keeps nothing.",
-    )
-    "The locals a renderer may keep between openings, on the device. Never dumped when empty."
+    vocab: Literal[2] = Field(description="The blok language version the blok speaks; v2 is the only one.")
+    catalogs: tuple[str, ...] = Field(default=(), description="The catalogs it needs, as name@version ('ui@1', 'scene@1').")
+    locals: tuple[BlokLocalInput, ...] = Field(default=(), description="Its locals: form state that feeds a call, written only through bind.")
+    demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
+    queries: tuple[BlokQueryInput, ...] = Field(default=(), description="Its declared reads, as `queries.<key>`.")
+    subscriptions: tuple[BlokSubscriptionInput, ...] = Field(default=(), description="Its declared streams, as `subscriptions.<key>`.")
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )
@@ -962,22 +1004,18 @@ class ComponentPropInput(ActionModel):
         validation_alias=AliasChoices("util_call", "utilCall"),
         serialization_alias="utilCall",
         default=None,
-        description="Defines an imperative interactive network action callback loop if this prop should trigger a system utility interaction.",
+        description="A function the renderer evaluates for the prop's value, or, in a callback prop, the effect it runs (ui.copy, task.answer, query.refetch, query.fetch_more).",
     )
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )
 
 
-#: The roots the renderer fills for an action's blok: the run (``@task``), its args, the agent
-#: running the action (``@self``) and the value that triggered a handler.
-ACTION_BLOK_FILLED_ROOTS = frozenset({"task", "args", "self", "$event"})
-
 #: The contexts an action has a blok for, one each.
 ACTION_BLOK_CONTEXTS = frozenset({ComponentContext.HTML.value, ComponentContext.SCENE.value, ComponentContext.OVERLAY.value})
 
 
-class ActionBlokInput(ActionModel):
+class ActionBlokInput(ActionBlokRules, ActionModel):
     """An action's own blok: how a client shows a run of it in one context. It has no name, is never
     listed on its own, and names devices only by the action's dependency keys."""
 
@@ -993,51 +1031,19 @@ class ActionBlokInput(ActionModel):
         default=None,
         description="The blok as BSX, parsed by the server into its component tree. Exactly one of `components` and `source` is sent.",
     )
-    catalog: str | None = Field(
-        default=None, description="The UI catalog the blok renders against; the Orkestrator's when absent."
+    module: str | None = Field(
+        default=None, description="The module the blok renders against besides its catalogs; the Orkestrator's when absent."
     )
     description: str | None = Field(default=None, description="What the blok shows of a run.")
-    demo_state: JSONSerializable | None = Field(
-        validation_alias=AliasChoices("demo_state", "demoState"),
-        serialization_alias="demoState",
-        default=None,
-        description="The blok's own locals and their initial values: path roots beside the action's dependency keys, `self`, `task` and `args`.",
-    )
-    persist: tuple[BlokPersistInput, ...] = Field(
-        default=(),
-        # Never written when empty, like a definition's `protocols`.
-        exclude_if=lambda persist: not persist,
-        description="The locals a renderer may keep between openings, on the device (never on a server): each a top-level `demo_state` key, whose demo value is the default.",
-    )
+    vocab: Literal[2] = Field(description="The blok language version the blok speaks; v2 is the only one.")
+    catalogs: tuple[str, ...] = Field(default=(), description="The catalogs it needs, as name@version.")
+    locals: tuple[BlokLocalInput, ...] = Field(default=(), description="Its locals: form state that feeds a call, written only through bind.")
+    demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
+    queries: tuple[BlokQueryInput, ...] = Field(default=(), description="Its declared reads.")
+    subscriptions: tuple[BlokSubscriptionInput, ...] = Field(default=(), description="Its declared streams.")
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )
-
-    @model_validator(mode="after")
-    def _an_action_blok(self) -> Self:
-        """The server's ``ActionBlokInputModel``: sent one way, in a context an action has a blok
-        for, its locals none of the roots the renderer fills, and only those persisted."""
-        if self.components is not None and self.source is not None:
-            raise ValueError("a blok is sent as its components or as its BSX source, not both")
-        if self.components is None and self.source is None:
-            raise ValueError("a blok is sent as its components or as its BSX source")
-        context = ComponentContext(self.context).value
-        if context not in ACTION_BLOK_CONTEXTS:
-            raise ValueError(f"Blok manifest: an action's blok is html, scene or overlay, not {context.lower()}")
-        state = self.demo_state if isinstance(self.demo_state, dict) else {}
-        filled = sorted(ACTION_BLOK_FILLED_ROOTS & set(state))
-        if filled:
-            raise ValueError(f"Blok manifest: demo_state names {filled[0]!r}, which the renderer fills for an action's blok")
-        keys = [local.key for local in self.persist]
-        twice = next((key for key in keys if keys.count(key) > 1), None)
-        if twice is not None:
-            raise ValueError(f"Blok manifest persist: duplicate key {twice!r}")
-        unknown = next((key for key in keys if key not in state), None)
-        if unknown is not None:
-            raise ValueError(
-                f"Blok manifest: persist names {unknown!r}, which is not a demo_state key: a persisted local takes its demo value as its default"
-            )
-        return self
 
 
 class DefinitionInput(DefinitionRules, ActionModel):
@@ -1850,7 +1856,9 @@ class WindowInput(ActionModel):
 ActionArgumentInput.model_rebuild()
 ActionDemandInput.model_rebuild()
 AgentDependencyInput.model_rebuild()
+ArgPortFields.model_rebuild()
 ArgPortInput.model_rebuild()
+BlokLocalInput.model_rebuild()
 BlokImplementationInput.model_rebuild()
 ComponentNodeInput.model_rebuild()
 ComponentPropInput.model_rebuild()

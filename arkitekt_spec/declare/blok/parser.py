@@ -4,17 +4,13 @@ import io
 import keyword
 import re
 import tokenize
-import xml.etree.ElementTree as ET
 
 from arkitekt_spec.actions import (
     ActionArgumentInput,
-    AgentProbeInput,
     ComponentNodeInput,
-    ComponentPropInput,
-    DynamicValueInput,
     UtilCallInput,
 )
-from arkitekt_spec.declare.blok.walk import FOREACH_COMPONENT, FOREACH_LET_PROP
+from arkitekt_spec.blok.bsx import parse_bsx
 from arkitekt_spec.declare.traits.calls import resolve_base_arguments
 
 # ``@dep.op(...).into(name)`` binds the call's task to ``name``.
@@ -31,393 +27,7 @@ EVENT_SCOPE_KEY = "$event"
 """The path root the renderer publishes that value under."""
 
 
-class BlokParser:
-    """Parses XML/BSX string representations enforcing strict namespace paths and collections."""
-
-    @classmethod
-    def parse(cls, bsx_string: str) -> ComponentNodeInput:
-        try:
-            root_element = ET.fromstring(bsx_string)
-        except ET.ParseError as e:
-            raise ValueError(cls._format_xml_parse_error(bsx_string, e)) from e
-        return cls._parse_element(root_element, root_element.tag)
-
-    @staticmethod
-    def _format_xml_parse_error(bsx_string: str, error: ET.ParseError) -> str:
-        reason = str(error)
-        line: int | None = None
-        column: int | None = None
-
-        if getattr(error, "position", None) is not None:
-            line, column = error.position
-
-        if line is None or column is None:
-            return f"Failed to parse BSX/XML: {reason}"
-
-        if ": line " in reason:
-            reason = reason.split(": line ", 1)[0]
-
-        headline_reason = reason
-        if reason == "no element found":
-            headline_reason = (
-                "unexpected end of input (no element found). "
-                "Check for a missing closing tag before this point"
-            )
-
-        source_lines = bsx_string.splitlines()
-        if bsx_string.endswith(("\n", "\r")):
-            source_lines.append("")
-
-        snippet = ""
-
-        if 1 <= line <= len(source_lines):
-            context_before = 2
-            context_after = 1
-            context_start = max(1, line - context_before)
-            context_end = min(len(source_lines), line + context_after)
-            context_lines: list[str] = []
-            gutter_width = len(str(context_end))
-
-            for snippet_line in range(context_start, context_end + 1):
-                source_line = source_lines[snippet_line - 1]
-                rendered_line = source_line
-
-                if snippet_line == line and reason == "no element found":
-                    if not source_line.strip():
-                        rendered_line = f"{' ' * column}<end of input>"
-
-                context_lines.append(
-                    f"{snippet_line:>{gutter_width}} | {rendered_line}"
-                )
-
-            context_lines.append(f"{' ' * gutter_width} | {' ' * column}^")
-            snippet = "\n" + "\n".join(context_lines)
-
-        return (
-            f"Failed to parse BSX/XML at line {line}, column {column + 1}: {headline_reason}"
-            f"{snippet}"
-        )
-
-    @classmethod
-    def _parse_element(cls, elem: ET.Element, path: str) -> ComponentNodeInput:
-        # Copy rather than pop from elem.attrib: mutating the ElementTree would
-        # make a second parse of the same tree behave differently.
-        attributes = dict(elem.attrib)
-        node_id = attributes.pop("id", None) or path
-
-        cls._reject_element_text(elem, node_id)
-
-        props = [cls._parse_prop(elem.tag, key, value) for key, value in attributes.items()]
-
-        children: list[ComponentNodeInput] = []
-        seen_tags: dict[str, int] = {}
-        for child in elem:
-            index = seen_tags.get(child.tag, 0)
-            seen_tags[child.tag] = index + 1
-            children.append(cls._parse_element(child, f"{node_id}/{child.tag}[{index}]"))
-
-        return ComponentNodeInput(
-            id=node_id,
-            component=elem.tag,
-            props=props if props else None,
-            children=children if children else None,
-        )
-
-    @staticmethod
-    def _reject_element_text(elem: ET.Element, node_id: str) -> None:
-        """Reject inner text, which the renderer never sees.
-
-        Components take their content as a prop (``text="..."``). Silently
-        dropping ``<Badge>hello</Badge>`` loses the message with no diagnostic,
-        so refuse it instead.
-        """
-
-        def fail(text: str) -> None:
-            raise ValueError(
-                f"Text content is not rendered in <{elem.tag}> ({node_id}): "
-                f"{text.strip()!r}. Pass it as a prop instead, e.g. "
-                f'<{elem.tag} text="{text.strip()}" />'
-            )
-
-        if elem.text and elem.text.strip():
-            fail(elem.text)
-
-        for child in elem:
-            if child.tail and child.tail.strip():
-                fail(child.tail)
-
-    @classmethod
-    def _parse_prop(cls, component: str, key: str, value: str) -> ComponentPropInput:
-        value = value.strip()
-
-        # 1. Top-Level Dynamic Value Binding ($)
-        if value.startswith("$"):
-            path = value[1:]
-            path_parts = path.split(".")
-            if len(path_parts) < 3 or path_parts[0] != "state":
-                raise ValueError(
-                    f"Invalid state namespace for dynamic value prop '{key}': '{path}'. "
-                    f"Expected format: state.dependency_key.nested_path"
-                )
-            # ``$state.dep.path`` and ``@dep.path`` are two spellings of one path. The
-            # servers check a path's first segment against the dependency keys, so the
-            # ``state`` namespace must not reach the wire.
-            return ComponentPropInput(
-                key=key, dynamic_value=DynamicValueInput(path=".".join(path_parts[1:]))
-            )
-
-        # 2. A structure identifier (@package/key) names a kind of object, not a
-        #    path: it was never a valid expression, so it is the string it reads as.
-        elif _STRUCTURE_IDENTIFIER.fullmatch(value):
-            return ComponentPropInput(key=key, static_value=value)
-
-        # 3. Agent/Util Action Callback using AST (@)
-        elif value.startswith("@"):
-            python_expr = value[1:]
-            try:
-                tree = ast.parse(python_expr, mode="eval")
-                if isinstance(tree.body, (ast.Name, ast.Attribute)):
-                    return ComponentPropInput(
-                        key=key,
-                        dynamic_value=DynamicValueInput(
-                            path=cls._extract_path(tree.body)
-                        ),
-                    )
-
-                if not isinstance(tree.body, ast.Call):
-                    raise ValueError(
-                        f"Dynamic expression must be a path or function call. Got: {python_expr}"
-                    )
-
-                bound = cls._bound_call(tree.body, python_expr)
-                if bound is not None:
-                    call, name = bound
-                    return ComponentPropInput(key=key, agent_call=call, declares_value=name)
-
-                parsed_call = cls._parse_ast_call(tree.body)
-
-                if isinstance(parsed_call, AgentProbeInput):
-                    return ComponentPropInput(key=key, agent_call=parsed_call)
-                else:
-                    return ComponentPropInput(key=key, util_call=parsed_call)
-
-            except SyntaxError as e:
-                raise ValueError(f"Failed to parse action syntax '{python_expr}': {e}")
-
-        # 4. A foreach loop variable declaration (#name)
-        elif cls._is_foreach_let(component, key):
-            return cls._parse_foreach_let(component, key, value)
-
-        # 4. Static Value
-        else:
-            return ComponentPropInput(key=key, static_value=value)
-
-    @classmethod
-    def _bound_call(cls, node: ast.Call, source: str) -> tuple[AgentProbeInput, str] | None:
-        """``dep.op(...).into(name)``: the call, and the name its task is bound to.
-
-        ``into`` is a step only on a *call*. An action that happens to be called
-        ``into`` is ``dep.into(...)``, an attribute of a name, and is left alone.
-        """
-        func = node.func
-        if not (
-            isinstance(func, ast.Attribute)
-            and func.attr == BOUND_CALL_STEP
-            and isinstance(func.value, ast.Call)
-        ):
-            return None
-
-        if node.keywords or len(node.args) != 1 or not isinstance(node.args[0], ast.Name):
-            raise ValueError(
-                f"'.{BOUND_CALL_STEP}(...)' takes one bare name, the value the call's task is "
-                f"bound to, e.g. '.{BOUND_CALL_STEP}(run)'. Got: {source}"
-            )
-
-        call = cls._parse_ast_call(func.value)
-        if not isinstance(call, AgentProbeInput):
-            raise ValueError(
-                f"Only a call to an agent runs as a task that can be bound with "
-                f"'.{BOUND_CALL_STEP}(...)'; a utils call returns at once. Got: {source}"
-            )
-        return call, node.args[0].id
-
-    @staticmethod
-    def _is_foreach_let(component: str, key: str) -> bool:
-        """Whether this prop is the loop variable of a ``foreach``.
-
-        ``#name`` declares a local *only here*. Honouring it on every prop made
-        ordinary values such as ``color="#fff"`` silently lose their leading
-        ``#`` and declare a phantom local named ``fff``.
-        """
-        return component.lower() == FOREACH_COMPONENT and key == FOREACH_LET_PROP
-
-    @staticmethod
-    def _parse_foreach_let(component: str, key: str, value: str) -> ComponentPropInput:
-        declared_value = value[1:] if value.startswith("#") else ""
-        if not declared_value or not declared_value.isidentifier():
-            raise ValueError(
-                f"<{component}> prop '{key}' must declare a loop variable as "
-                f"'#name', where name is a valid identifier. Got: {value!r}"
-            )
-        return ComponentPropInput(
-            key=key,
-            static_value=declared_value,
-            declares_value=declared_value,
-        )
-
-    @classmethod
-    def _parse_ast_call(cls, node: ast.Call) -> AgentProbeInput | UtilCallInput:
-        full_path = cls._extract_path(node.func)
-        path_parts = full_path.split(".")
-
-        # --- Process Arguments First ---
-        arguments = cls._parse_call_arguments(node)
-
-        # --- Enforce Namespaces and Route to Correct Model ---
-        if path_parts[0] == "utils":
-            if len(path_parts) < 2:
-                raise ValueError(f"Invalid utils namespace: '{full_path}'.")
-
-            operation = ".".join(path_parts[1:])
-            arguments = resolve_base_arguments(operation, arguments, f"utils.{operation}")
-            return UtilCallInput(
-                operation=operation,
-                arguments=tuple(arguments) if arguments else None,
-            )
-
-        if path_parts[0] == "actions":
-            if len(path_parts) < 3:
-                raise ValueError(
-                    f"Invalid action namespace: '{full_path}'. Expected: actions.dependency.operation"
-                )
-
-            return AgentProbeInput(
-                dependency=path_parts[1],
-                operation=".".join(path_parts[2:]),
-                arguments=arguments if arguments else None,
-            )
-
-        if len(path_parts) < 2:
-            raise ValueError(
-                f"Action calls must begin with a dependency key or 'utils.'. Got: '{full_path}'"
-            )
-
-        return AgentProbeInput(
-            dependency=path_parts[0],
-            operation=".".join(path_parts[1:]),
-            arguments=arguments if arguments else None,
-        )
-
-    @classmethod
-    def _parse_call_arguments(cls, node: ast.Call) -> list[ActionArgumentInput]:
-        """Parse a call's arguments into keyed entries.
-
-        Call arguments are a map on the wire: positional arguments are keyed by
-        their index (``"0"``, ``"1"``, ...; the UI maps them onto the operation's
-        parameters in order) and keyword arguments by name.
-        """
-        arguments = [
-            cls._parse_ast_argument_value(arg_node, key=str(index))
-            for index, arg_node in enumerate(node.args)
-        ]
-        for kw in node.keywords:
-            if kw.arg is None:
-                raise ValueError("Call arguments cannot be unpacked with '**'")
-            arguments.append(cls._parse_ast_argument_value(kw.value, key=kw.arg))
-        return arguments
-
-    @classmethod
-    def _parse_ast_argument_value(
-        cls, node: ast.AST, key: str | None = None
-    ) -> ActionArgumentInput:
-        """Recursively parses AST nodes into ActionArgumentInput models."""
-
-        # Literal Values (Strings, Ints, Floats, Bools)
-        if isinstance(node, ast.Constant):
-            if node.value is None:
-                raise ValueError(
-                    f"Argument '{key or 'item'}' cannot be None: a missing literal is "
-                    "indistinguishable from no value. Omit the argument instead."
-                )
-            return ActionArgumentInput(key=key, value_literal=node.value)
-
-        # Signed numeric literals (-1, +2.5)
-        elif (
-            isinstance(node, ast.UnaryOp)
-            and isinstance(node.op, (ast.USub, ast.UAdd))
-            and isinstance(node.operand, ast.Constant)
-            and isinstance(node.operand.value, (int, float))
-            and not isinstance(node.operand.value, bool)
-        ):
-            value = node.operand.value
-            if isinstance(node.op, ast.USub):
-                value = -value
-            return ActionArgumentInput(key=key, value_literal=value)
-
-        # State Paths
-        elif isinstance(node, (ast.Name, ast.Attribute)):
-            path = cls._argument_path(node)
-            return ActionArgumentInput(key=key, value_path=path)
-
-        # Nested Action or Util Calls
-        elif isinstance(node, ast.Call):
-            parsed_call = cls._parse_ast_call(node)
-            if isinstance(parsed_call, AgentProbeInput):
-                return ActionArgumentInput(key=key, agent_call=parsed_call)
-            else:
-                return ActionArgumentInput(key=key, util_call=parsed_call)
-
-        # Lists and Tuples
-        elif isinstance(node, (ast.List, ast.Tuple)):
-            parsed_elements = [
-                cls._parse_ast_argument_value(elt, key=None) for elt in node.elts
-            ]
-            return ActionArgumentInput(key=key, value_list=parsed_elements)
-
-        # Dictionaries -> GraphQL Key/Value Arrays
-        elif isinstance(node, ast.Dict):
-            parsed_dict_list = []
-            for k_node, v_node in zip(node.keys, node.values):
-                if (
-                    not isinstance(k_node, ast.Constant)
-                    or not isinstance(k_node.value, str)
-                    or not k_node.value
-                ):
-                    raise ValueError("Dictionary keys must be non-empty literal strings.")
-                parsed_dict_list.append(
-                    cls._parse_ast_argument_value(v_node, key=k_node.value)
-                )
-            return ActionArgumentInput(key=key, value_dict=parsed_dict_list)
-
-        else:
-            raise ValueError(
-                f"Unsupported AST node type for argument '{key or 'item'}': {type(node).__name__}"
-            )
-
-    @classmethod
-    def _extract_path(cls, node: ast.AST) -> str:
-        if isinstance(node, ast.Name):
-            return node.id
-        elif isinstance(node, ast.Attribute):
-            return f"{cls._extract_path(node.value)}.{node.attr}"
-        raise ValueError(f"Cannot extract path from node type: {type(node).__name__}")
-
-    @classmethod
-    def _argument_path(cls, node: ast.AST) -> str:
-        """Render a ``Name``/``Attribute`` argument as a ``value_path``.
-
-        Blok props keep dotted state paths; subclasses may choose another form.
-        ``event`` names what triggered the handler (``event.value``): the renderer
-        publishes it under ``$event`` for the duration of the call.
-        """
-        path = cls._extract_path(node)
-        root, _, rest = path.partition(".")
-        if root == EVENT_ROOT:
-            return f"{EVENT_SCOPE_KEY}.{rest}" if rest else EVENT_SCOPE_KEY
-        return path
-
-
-class PortCallParser(BlokParser):
+class PortCallParser:
     """Parses a pure port-call expression such as ``value > 3`` or ``gt(value, other.min)``.
 
     Port validators and effects carry a :class:`UtilCallInput` that the UI evaluates
@@ -621,7 +231,7 @@ class PortCallParser(BlokParser):
             return ActionArgumentInput(key=key, util_call=cls._desugar(node))
         if isinstance(node, ast.Subscript):
             return ActionArgumentInput(key=key, value_path=cls._subscript_path(node))
-        return super()._parse_ast_argument_value(node, key)
+        return cls._parse_plain_argument(node, key)
 
     @classmethod
     def _subscript_path(cls, node: ast.AST) -> str:
@@ -689,6 +299,96 @@ class PortCallParser(BlokParser):
     def _argument_path(cls, node: ast.AST) -> str:
         return cls._subscript_path(node)
 
+    @classmethod
+    def _parse_call_arguments(cls, node: ast.Call) -> list[ActionArgumentInput]:
+        """Parse a call's arguments into keyed entries.
+
+        Call arguments are a map on the wire: positional arguments are keyed by
+        their index (``"0"``, ``"1"``, ...; the UI maps them onto the operation's
+        parameters in order) and keyword arguments by name.
+        """
+        arguments = [
+            cls._parse_ast_argument_value(arg_node, key=str(index))
+            for index, arg_node in enumerate(node.args)
+        ]
+        for kw in node.keywords:
+            if kw.arg is None:
+                raise ValueError("Call arguments cannot be unpacked with '**'")
+            arguments.append(cls._parse_ast_argument_value(kw.value, key=kw.arg))
+        return arguments
+
+    @classmethod
+    def _parse_plain_argument(
+        cls, node: ast.AST, key: str | None = None
+    ) -> ActionArgumentInput:
+        """Recursively parses AST nodes into ActionArgumentInput models."""
+
+        # Literal Values (Strings, Ints, Floats, Bools)
+        if isinstance(node, ast.Constant):
+            if node.value is None:
+                raise ValueError(
+                    f"Argument '{key or 'item'}' cannot be None: a missing literal is "
+                    "indistinguishable from no value. Omit the argument instead."
+                )
+            return ActionArgumentInput(key=key, value_literal=node.value)  # pyright: ignore[reportArgumentType] -- ast constants
+
+        # Signed numeric literals (-1, +2.5)
+        elif (
+            isinstance(node, ast.UnaryOp)
+            and isinstance(node.op, (ast.USub, ast.UAdd))
+            and isinstance(node.operand, ast.Constant)
+            and isinstance(node.operand.value, (int, float))
+            and not isinstance(node.operand.value, bool)
+        ):
+            value = node.operand.value
+            if isinstance(node.op, ast.USub):
+                value = -value
+            return ActionArgumentInput(key=key, value_literal=value)
+
+        # State Paths
+        elif isinstance(node, (ast.Name, ast.Attribute)):
+            path = cls._argument_path(node)
+            return ActionArgumentInput(key=key, value_path=path)
+
+        # Nested calls
+        elif isinstance(node, ast.Call):
+            return ActionArgumentInput(key=key, util_call=cls._parse_ast_call(node))
+
+        # Lists and Tuples
+        elif isinstance(node, (ast.List, ast.Tuple)):
+            parsed_elements = [
+                cls._parse_ast_argument_value(elt, key=None) for elt in node.elts
+            ]
+            return ActionArgumentInput(key=key, value_list=tuple(parsed_elements))
+
+        # Dictionaries -> GraphQL Key/Value Arrays
+        elif isinstance(node, ast.Dict):
+            parsed_dict_list = []
+            for k_node, v_node in zip(node.keys, node.values):
+                if (
+                    not isinstance(k_node, ast.Constant)
+                    or not isinstance(k_node.value, str)
+                    or not k_node.value
+                ):
+                    raise ValueError("Dictionary keys must be non-empty literal strings.")
+                parsed_dict_list.append(
+                    cls._parse_ast_argument_value(v_node, key=k_node.value)
+                )
+            return ActionArgumentInput(key=key, value_dict=tuple(parsed_dict_list))
+
+        else:
+            raise ValueError(
+                f"Unsupported AST node type for argument '{key or 'item'}': {type(node).__name__}"
+            )
+
+    @classmethod
+    def _extract_path(cls, node: ast.AST) -> str:
+        if isinstance(node, ast.Name):
+            return node.id
+        elif isinstance(node, ast.Attribute):
+            return f"{cls._extract_path(node.value)}.{node.attr}"
+        raise ValueError(f"Cannot extract path from node type: {type(node).__name__}")
+
 
 def parse_util_call(expression: str) -> UtilCallInput:
     """Parse a pure port-call expression into a :class:`UtilCallInput`.
@@ -719,32 +419,13 @@ def coerce_util_call(call: "str | UtilCallInput") -> UtilCallInput:
 
 
 
-def bsx(string: str) -> ComponentNodeInput:
-    """Parse a BSX/XML blok string into a component tree.
-
-    The helper delegates to :class:`BlokParser` and raises a formatted
-    :class:`ValueError` when XML parsing fails. Error messages include line and
-    column information plus nearby source context.
-
-    Node ids are structural (``Card/CardContent[0]/Button[1]``) unless the
-    element carries an explicit ``id``, so parsing the same source twice yields
-    an identical tree.
-
-    Args:
-        string: BSX-like XML source describing a blok component tree.
-
-    Returns:
-        Parsed component tree as a :class:`ComponentNodeInput`.
+def bsx(source: str) -> ComponentNodeInput:
+    """Parse a v2 BSX source into the tree a blok stores (see :func:`arkitekt_spec.blok.bsx.parse_bsx`).
 
     Raises:
-        ValueError: If the XML cannot be parsed or validated.
-
-    Examples:
-        Parse a minimal blok layout::
-
-            component = bsx('<Page><Label text="Ready" /></Page>')
+        BlokError: A ``ValueError`` with the diagnostic code of what is wrong and where.
     """
-    return BlokParser.parse(string)
+    return parse_bsx(source)
 
 
 def normalize_expression(expression: str) -> str:
