@@ -5,7 +5,7 @@
  "components": [
   {
    "name": "Anchor",
-   "description": "Anchors its children at the agent the run got for a dependency, where it stands in the hosting space; Glow, Popout and OnClick inside it bind to that device's model as its scene blok loaded it. A key bound to several agents anchors at each; an agent the space does not place shows in a side tray. Was At.",
+   "description": "Anchors its children at the agent the run got for a dependency, where it stands in the hosting space; Glow, Popout and OnClick inside it bind to that device's model as its scene blok loaded it. A key bound to several agents anchors at each; an agent the space does not place shows in a side tray.",
    "context": "SCENE",
    "children_context": null,
    "inherits_context": false,
@@ -20,7 +20,7 @@
      "key": "dep",
      "kind": "STRING",
      "required": true,
-     "description": "The dependency key of the action whose agent this anchors at (was `dependency`)."
+     "description": "The dependency key of the action whose agent this anchors at."
     }
    ]
   },
@@ -72,7 +72,7 @@
   },
   {
    "name": "Attach",
-   "description": "While `when` holds, carries a node with another node, keeping its place in the world at the moment of attaching. For picked-up objects.",
+   "description": "While `on` holds, carries a node with another node, keeping its place in the world at the moment of attaching. For picked-up objects.",
    "context": "SCENE",
    "children_context": null,
    "inherits_context": false,
@@ -170,9 +170,9 @@
    "inherits_context": false,
    "accepts_children": false,
    "downstream_of": [
-    "Anchor",
     "Model",
-    "Robot"
+    "Robot",
+    "Anchor"
    ],
    "not_downstream_of": [],
    "text_prop": null,
@@ -193,7 +193,7 @@
      "key": "node",
      "kind": "STRING",
      "required": false,
-     "description": "The name of the node in the enclosing model that this binds. Required under a Model or Robot; under an Anchor the anchored agent's model is meant."
+     "description": "The name of the node in the enclosing model that glows; the whole model when unset."
     },
     {
      "key": "on",
@@ -326,9 +326,9 @@
    "inherits_context": false,
    "accepts_children": false,
    "downstream_of": [
-    "Anchor",
     "Model",
-    "Robot"
+    "Robot",
+    "Anchor"
    ],
    "not_downstream_of": [],
    "text_prop": null,
@@ -353,7 +353,7 @@
      "key": "node",
      "kind": "STRING",
      "required": false,
-     "description": "The name of the node in the enclosing model. Required under a Model or Robot; under an Anchor the anchored agent's model is meant."
+     "description": "The name of the node in the enclosing model; the whole model when unset."
     },
     {
      "key": "onClick",
@@ -396,8 +396,8 @@
    "accepts_children": true,
    "downstream_of": [],
    "not_downstream_of": [
-    "Overlay",
-    "Scene"
+    "Scene",
+    "Overlay"
    ],
    "text_prop": null,
    "props": []
@@ -410,9 +410,9 @@
    "inherits_context": false,
    "accepts_children": true,
    "downstream_of": [
-    "Anchor",
     "Model",
-    "Robot"
+    "Robot",
+    "Anchor"
    ],
    "not_downstream_of": [],
    "text_prop": null,
@@ -427,7 +427,7 @@
      "key": "node",
      "kind": "STRING",
      "required": false,
-     "description": "The name of the node in the enclosing model. Required under a Model or Robot; under an Anchor the anchored agent's model is meant."
+     "description": "The name of the node in the enclosing model; the whole model when unset."
     },
     {
      "key": "open",
@@ -638,9 +638,9 @@
     },
     {
      "key": "through",
-     "kind": "LIST",
+     "kind": "ANY",
      "required": true,
-     "description": "The dependency keys the line runs through, in order (`through={[\"robot\", \"frame\"]}`)."
+     "description": "The dependency keys the line runs through, in order: `through={[\"robot\", \"frame\", \"robot\"]}`."
     }
    ]
   },
@@ -685,7 +685,7 @@
      "key": "persist",
      "kind": "BOOL",
      "required": false,
-     "description": "Keep the camera on this device between openings, by the Scene's explicit id."
+     "description": "Keep where the viewer leaves the camera (and the grid) on this device, by the scene's explicit id."
     }
    ]
   },
@@ -719,7 +719,7 @@
   },
   {
    "name": "Transform",
-   "description": "Places its children by an affine matrix. A gizmo moves them; with `persist` (and an explicit id) the pose stays on this device between openings, bound to a local (`bind`) a call can read it.",
+   "description": "Places its children by an affine matrix. Bound (`bind={pose}`) or persisted (`id=\"arm-pose\" persist`), a gizmo moves them and keeps the matrix.",
    "context": "SCENE",
    "children_context": null,
    "inherits_context": false,
@@ -735,13 +735,13 @@
      "key": "bind",
      "kind": "ANY",
      "required": false,
-     "description": "The local (or a path below one) the gizmo writes the matrix to: bind={pose}."
+     "description": "The local holding the matrix (`bind={pose}`): read in place of `matrix`, and written by the gizmo."
     },
     {
      "key": "gizmo",
      "kind": "BOOL",
      "required": false,
-     "description": "Whether a gizmo moves the children. Defaults to true; never shown while viewing the past."
+     "description": "Whether a gizmo moves the children. Defaults to true when bound or persisted; never shown while viewing the past."
     },
     {
      "key": "matrix",
@@ -764,7 +764,7 @@
      "key": "persist",
      "kind": "BOOL",
      "required": false,
-     "description": "Keep the pose on this device between openings, by the Transform's explicit id."
+     "description": "Keep where the gizmo left the children on this device, by the explicit id (unbound: the pose is the component's own)."
     },
     {
      "key": "size",
@@ -776,7 +776,7 @@
   },
   {
    "name": "Visible",
-   "description": "Shows or hides a node of its parent model. Hiding a node hides everything beneath it. Was Show.",
+   "description": "Shows or hides a node and its whole subtree.",
    "context": "SCENE",
    "children_context": null,
    "inherits_context": false,
@@ -798,7 +798,7 @@
      "key": "on",
      "kind": "BOOL",
      "required": false,
-     "description": "Whether the node is visible."
+     "description": "Whether the node is visible. Hiding a node hides everything beneath it."
     }
    ]
   }

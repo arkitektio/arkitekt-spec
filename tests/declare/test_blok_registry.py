@@ -319,8 +319,8 @@ def test_a_state_cannot_take_a_segment_of_an_agent() -> None:
 
 
 def test_a_module_is_named_not_declared_among_the_catalogs(registry: AppRegistry) -> None:
-    """Only the versioned standard catalogs are declared; the Orkestrator's module and an app's
-    own are what ``module`` names."""
+    """Only the versioned global catalogs are declared (``Resizable`` is ``shadcn@1``'s); an
+    app's own catalog is what ``module`` names."""
     from arkitekt_spec.declare.catalogs import ComponentSpec
 
     registry.declare_ui_catalog("mine", components=[ComponentSpec(name="Gauge")])
@@ -329,7 +329,7 @@ def test_a_module_is_named_not_declared_among_the_catalogs(registry: AppRegistry
     with warnings.catch_warnings():
         warnings.simplefilter("error", CatalogWarning)
         declared = registry.get_declared_bloks()
-    assert (declared["extras"].catalogs, declared["extras"].module) == (("ui@1",), None)
+    assert (declared["extras"].catalogs, declared["extras"].module) == (("shadcn@1", "ui@1"), None)
     assert (declared["mine"].catalogs, declared["mine"].module) == (("ui@1",), "mine")
 
 

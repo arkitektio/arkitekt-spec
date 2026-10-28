@@ -1,19 +1,18 @@
-"""The catalogs a v2 blok renders with, owned by the spec, and the Orkestrator's module.
+"""The catalogs a v2 blok renders with, and the Orkestrator's module.
 
-A *catalog* is a spec-owned, versioned set; a blok declares the ones it needs
-(``catalogs=["ui@1", "scene@1"]``). A *module* is an app's own unversioned extras, registered
-by the app (the server's ``Module``); a blok names at most one, as its ``module``.
+A *catalog* is a versioned set; a blok declares the ones it needs (``catalogs=["ui@1",
+"scene@1"]``). A *module* is a UI's own unversioned catalog, registered by that UI (the server's
+``Module``); a blok names at most one, as its ``module``.
 
 - ``catalogs/base@2.json``: the language every renderer implements (``if``, ``else``,
-  ``foreach``, ``match``, ``suspense``, ``ask``, ...). Its functions are the vocabulary's.
-- The standard catalogs, versioned and opt-in per renderer: ``ui@1``, ``scene@1``, ``logo@1``,
-  ``structure@1`` and ``html@1`` (only ``div``, ``p`` and ``span``).
-- ``modules/orkestrator.json``: the ``orkestrator`` module, what only the Orkestrator draws
-  (the shadcn families beyond ``ui``, ``Chart``, ...). The spec writes it, Orkestrator
-  registers it.
-
-The spec is the source: Orkestrator implements these, and ``scripts/sync_standard_catalog.py``
-writes them from here, never the other way round.
+  ``foreach``, ``match``, ``suspense``, ``ask``, ...). Its functions are the vocabulary's. The
+  spec owns it.
+- The global catalogs, versioned and opt-in per renderer: ``ui@1``, ``scene@1``, ``logo@1``,
+  ``structure@1``, ``html@1`` (only ``div``, ``p`` and ``span``) and ``shadcn@1`` (the shadcn
+  families beyond ``ui``, ``Chart``, ``RawInspector``). The UI defines them: they are the
+  contracts of ``@arkitektio/bsx``, and ``scripts/sync_standard_catalog.py`` copies their JSON in.
+- ``modules/orkestrator.json``: the ``orkestrator`` module, what only the Orkestrator draws (the
+  ``MikroScene`` parts).
 """
 
 import functools
@@ -30,7 +29,7 @@ ORKESTRATOR_MODULE = "orkestrator"
 """The module of what only the Orkestrator draws, beside the standard catalogs."""
 ORKESTRATOR_MODULE_FILE = "modules/orkestrator.json"
 """Where the Orkestrator's module ships, relative to ``arkitekt_spec/blok``."""
-STANDARD_CATALOGS = ("ui", "scene", "logo", "structure", "html")
+STANDARD_CATALOGS = ("ui", "scene", "logo", "structure", "html", "shadcn")
 
 
 def _text(file: str) -> str:

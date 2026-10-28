@@ -17,7 +17,7 @@ def test_the_corpus_says_what_it_was_parsed_with() -> None:
     corpus = build_v2()
 
     assert corpus["vocab"] == 2
-    assert corpus["catalogs"] == {"base": 2, "ui": 1, "scene": 1, "logo": 1, "structure": 1, "html": 1}
+    assert corpus["catalogs"] == {"base": 2, "ui": 1, "scene": 1, "logo": 1, "structure": 1, "html": 1, "shadcn": 1}
     assert corpus["text_table"]["Button"]["catalog"] == "ui@1"  # type: ignore[index, call-overload]
     assert corpus["text_table"]["Button"]["text_prop"] == "label"  # type: ignore[index, call-overload]
 

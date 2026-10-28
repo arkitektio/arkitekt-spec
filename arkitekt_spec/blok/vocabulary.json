@@ -306,7 +306,7 @@
  "catalogs": {
   "description": "Catalogs are the spec-owned, versioned sets a blok renders with: base (every renderer) and the standard catalogs (opt-in). A blok declares the catalogs it needs (catalogs: [\"ui@1\", \"scene@1\"]); a renderer lacking one renders its children or a placeholder, and reports it. A module is an app's own unversioned extras (the server's Module, registered by an app such as the Orkestrator with the catalogs it implements in full); a blok names at most one, as its module.",
   "base": 2,
-  "standard": {"ui": 1, "scene": 1, "logo": 1, "structure": 1, "html": 1}
+  "standard": {"ui": 1, "scene": 1, "logo": 1, "structure": 1, "html": 1, "shadcn": 1}
  },
  "diagnostics": {
   "description": "One table of stable codes, the same in Python, Rust and TypeScript. level: error refuses the blok, warning is reported; runtime: true marks a code no checker raises, the renderer's error code of a record (deps.unbound). Messages are str.format templates; parity compares codes, never text.",

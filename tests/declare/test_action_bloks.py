@@ -184,7 +184,7 @@ def test_the_wire_model_checks_as_the_server_does() -> None:
         )
 
 
-def test_a_component_of_the_orkestrator_module_needs_no_catalog() -> None:
+def test_a_component_of_shadcn_declares_shadcn() -> None:
     import warnings
 
     from arkitekt_spec.declare.catalogs import CatalogWarning
@@ -192,7 +192,7 @@ def test_a_component_of_the_orkestrator_module_needs_no_catalog() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error", CatalogWarning)
         (blok,) = registered("<Html><Sheet><SheetContent><ask /></SheetContent></Sheet></Html>").bloks
-    assert (blok.catalogs, blok.module) == ((), None)
+    assert (blok.catalogs, blok.module) == (("shadcn@1",), None)
 
 
 def test_an_action_blok_names_its_module_and_catalogs() -> None:

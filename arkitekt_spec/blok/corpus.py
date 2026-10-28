@@ -361,9 +361,10 @@ CHECKS: Sequence[Check] = (
 
 
 def text_table() -> dict[str, JSON]:
-    """Per component of the default view: what the parser needs to place text."""
+    """Per component of base and the global catalogs: what the parser needs to place text. A UI's
+    own module (the ``orkestrator`` one) is that UI's to ship, not every parser's."""
     table: dict[str, JSON] = {}
-    for name, spec in sorted(default_view().components.items()):
+    for name, spec in sorted(blok_view([]).components.items()):
         table[name] = {
             "text_prop": spec.text_prop,
             "context": spec.context,

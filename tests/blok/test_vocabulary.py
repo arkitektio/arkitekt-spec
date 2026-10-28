@@ -33,7 +33,7 @@ def test_then_replaces_now_in_every_kind_but_the_action_logo() -> None:
 def test_catalogs_are_versioned_and_kinds_compatible() -> None:
     vocabulary = load_vocabulary()
 
-    assert vocabulary.catalogs == {"ui": 1, "scene": 1, "logo": 1, "structure": 1, "html": 1}
+    assert vocabulary.catalogs == {"ui": 1, "scene": 1, "logo": 1, "structure": 1, "html": 1, "shadcn": 1}
     assert vocabulary.base_version == 2
     assert vocabulary.bind_kinds["FLOAT"] >= {"FLOAT", "INT"} and vocabulary.bind_kinds["BOOL"] == {"BOOL"}
     assert "ANY" not in vocabulary.bind_kinds, "an ANY control writes any local"

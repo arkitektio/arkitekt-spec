@@ -28,7 +28,7 @@ def test_the_catalogs_are_versioned_the_module_not_and_their_names_unique() -> N
             assert component.name not in seen, f"{component.name} in {seen.get(component.name)} and {component.catalog}"
             seen[component.name] = str(component.catalog)
     assert seen["Button"] == "ui@1" and seen["Scene"] == "scene@1" and seen["AgentLogo"] == seen["ActionLogo"] == "logo@1" and seen["div"] == "html@1"
-    assert seen["Chart"] == "orkestrator"
+    assert seen["Chart"] == "shadcn@1" and seen["MikroScene"] == "orkestrator"
 
 
 def test_html_keeps_only_containers_that_translate_to_native() -> None:
@@ -118,7 +118,7 @@ def test_the_default_view_shadows_nothing() -> None:
 def test_every_file_ships() -> None:
     assert catalog_files() == (
         "catalogs/base@2.json", "catalogs/ui@1.json", "catalogs/scene@1.json", "catalogs/logo@1.json",
-        "catalogs/structure@1.json", "catalogs/html@1.json", "modules/orkestrator.json",
+        "catalogs/structure@1.json", "catalogs/html@1.json", "catalogs/shadcn@1.json", "modules/orkestrator.json",
     )
 
 
@@ -136,11 +136,11 @@ def test_descriptions_speak_v2() -> None:
             assert "$event" not in text and '"@self' not in text, f"{name}.{prop.key}: {text}"
 
 
-def test_the_orkestrator_module_holds_the_bento_grid() -> None:
+def test_shadcn_holds_the_bento_grid() -> None:
     grid = default_view().component("BentoGrid")
     item = default_view().component("BentoItem")
     assert grid is not None and item is not None
-    assert grid.catalog == item.catalog == "orkestrator"
+    assert grid.catalog == item.catalog == "shadcn@1"
     assert item.downstream_of == ("BentoGrid",)
     assert {"columns", "rowHeight"} <= {prop.key for prop in grid.props}
     assert {"cols", "rows", "priority", "show"} <= {prop.key for prop in item.props}
