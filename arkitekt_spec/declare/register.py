@@ -235,6 +235,7 @@ def register_func(
                     implementation_registry,
                     f"Action {interface!r}",
                     arg_keys=tuple(port.key for port in definition.args or ()),
+                    interface=interface,
                 )
             }
         )

@@ -12,6 +12,7 @@ registration.
 
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
+from dataclasses import replace as dataclass_replace
 from typing import TYPE_CHECKING
 
 from arkitekt_spec.actions import (
@@ -19,10 +20,11 @@ from arkitekt_spec.actions import (
     ActionBlokInput,
     AgentDependencyInput,
     BlokDemoInput,
+    ComponentContext,
     ComponentNodeInput,
 )
 from arkitekt_spec.blok.bsx import parse_bsx
-from arkitekt_spec.blok.vocabulary import BlokError, Finding, load_vocabulary
+from arkitekt_spec.blok.vocabulary import BlokError, load_vocabulary
 from arkitekt_spec.declare.blok.declarations import (
     Local,
     Query,
@@ -117,6 +119,11 @@ def anchored_keys(component: ComponentNodeInput) -> list[tuple[str, str]]:
     return named
 
 
+def action_blok_id(interface: str, context: ComponentContext | str) -> str:
+    """What names one of an action's bloks: its interface and context, ``crop:overlay``."""
+    return f"{interface}:{ComponentContext(context).value.lower()}"
+
+
 def build_action_bloks(
     bloks: ActionBloks,
     dependencies: Sequence[AgentDependencyInput],
@@ -124,8 +131,12 @@ def build_action_bloks(
     owner: str,
     mode: BlokCheckMode = "warning",
     arg_keys: Sequence[str] | None = None,
+    interface: str | None = None,
 ) -> tuple[ActionBlokInput, ...]:
     """The wire bloks of an action, checked against its dependencies, its args and their catalogs.
+
+    A warning names the blok :func:`action_blok_id` (``interface`` and the blok's context), so a
+    reader can tell an action's html blok from its overlay.
 
     Raises:
         ValueError: If two bloks share a context, a root is not ``<Html>``, ``<Scene>`` or
@@ -174,17 +185,19 @@ def build_action_bloks(
         )
         scope = resolve_scope(component, scope, view)
         reported: set[str] = set()
+        blok_id = action_blok_id(interface, context) if interface is not None else None
         for finding in check_unknown_module(blok.module, registry):
             if mode == "strict":
                 raise BlokError.from_finding(finding)
-            warn_at(f"{owner} ({context.value.lower()} blok): {finding.message} [{finding.code}]", at)
+            warn_at(f"{owner} ({context.value.lower()} blok): {finding.message} [{finding.code}]", at, finding=finding, blok=blok_id)
         for finding in check_blok_tree(component, scope, view):
             if finding.level == "error" or mode == "strict":
                 where = f", {finding.path}" if finding.path else ""
-                raise BlokError.from_finding(Finding(code=finding.code, level=finding.level, message=f"{owner} ({context.value.lower()} blok{where}): {finding.message}"))
+                message = f"{owner} ({context.value.lower()} blok{where}): {finding.message}"
+                raise BlokError.from_finding(dataclass_replace(finding, path=None, message=message), node=finding.path)
             if finding_key(finding) not in reported:
                 reported.add(finding_key(finding))
-                warn_at(f"{owner} ({context.value.lower()} blok): {finding.message} [{finding.code}]", at)
+                warn_at(f"{owner} ({context.value.lower()} blok): {finding.message} [{finding.code}]", at, finding=finding, blok=blok_id)
         fields: dict[str, object] = {"context": context, "vocab": load_vocabulary().vocab}
         optional: dict[str, object] = {
             "components": None if source is not None else (component,),
@@ -207,6 +220,7 @@ __all__ = [
     "ActionBlok",
     "ActionBloks",
     "action_blok_components_in",
+    "action_blok_id",
     "anchored_keys",
     "as_action_bloks",
     "build_action_bloks",

@@ -24,6 +24,9 @@ class DeclaredAt:
 
     filename: str
     lineno: int
+    """The line of the frame that declared it: for ``app.blok(...)`` the line the call starts on
+    (CPython 3.11+ places a call there), which a BSX string spread over the lines below follows.
+    A reader that wants the string finds it by its text, not by this line."""
     module: str
 
 
@@ -44,12 +47,17 @@ def finding_key(finding: Finding) -> str:
     return f"{finding.code}\x00{finding.path or ''}\x00{finding.message}"
 
 
-def warn_at(message: str, at: DeclaredAt | None) -> None:
-    """Warn ``message`` (a :class:`CatalogWarning`) at the app's line that declared the blok."""
+def warn_at(message: str, at: DeclaredAt | None, *, finding: Finding | None = None, blok: str | None = None) -> None:
+    """Warn ``message`` (a :class:`CatalogWarning`) at the app's line that declared the blok.
+
+    The warning carries ``finding`` and ``blok``, so a reader that places it in the source
+    (``arkitekt check --json-out``) need not parse the message back apart.
+    """
+    warning = CatalogWarning(message, finding=finding, blok=blok)
     if at is None:
-        warnings.warn(message, CatalogWarning, stacklevel=2)
+        warnings.warn(warning, stacklevel=2)
         return
-    warnings.warn_explicit(message, CatalogWarning, at.filename, at.lineno, module=at.module)
+    warnings.warn_explicit(warning, CatalogWarning, at.filename, at.lineno, module=at.module)
 
 
 __all__ = ["LIBRARIES", "DeclaredAt", "declared_at", "finding_key", "warn_at"]

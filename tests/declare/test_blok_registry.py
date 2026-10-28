@@ -378,3 +378,24 @@ def test_a_parse_error_names_the_blok() -> None:
     with pytest.raises(BlokError, match=r"^Blok 'broken': line 1, column \d+: .*\[bsx\.unclosed\]$") as refused:
         AppRegistry().register_blok("broken", "<Html><Card>")
     assert (refused.value.code, refused.value.line) == ("bsx.unclosed", 1)
+
+
+def test_a_catalog_warning_carries_its_finding_and_blok(registry: AppRegistry) -> None:
+    """What ``arkitekt check --json-out`` places in the source: no parsing of the message."""
+    with pytest.warns(CatalogWarning) as caught:
+        registry.register_blok("panel", "<Html><Frobnicator /></Html>")
+
+    (warning,) = [record.message for record in caught if isinstance(record.message, CatalogWarning)]
+    assert warning.blok == "panel"
+    assert warning.finding is not None and warning.finding.code == "catalog.unknown_component"
+    assert warning.finding.path is not None and "Frobnicator" in warning.finding.path
+    assert "[catalog.unknown_component]" in str(warning), "the told message is unchanged"
+
+
+def test_a_refused_blok_names_the_node_it_refuses(registry: AppRegistry) -> None:
+    with pytest.raises(BlokError) as raised:
+        registry.register_blok("strict", "<Html><Frobnicator /></Html>", mode="strict")
+
+    assert raised.value.code == "catalog.unknown_component"
+    assert raised.value.node is not None and "Frobnicator" in raised.value.node
+    assert raised.value.within("Blok 'strict'").node == raised.value.node

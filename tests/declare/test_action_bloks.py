@@ -224,3 +224,23 @@ def test_an_action_blok_local_takes_the_kind_of_the_control_bound_to_it() -> Non
     assert blok.source is not None
     (resolved,) = resolve_scope(parse_bsx(blok.source), BlokScope(kind="action", locals=tuple(blok.locals)), default_view()).locals
     assert resolved.kind == "FLOAT"
+
+
+def test_a_refused_action_blok_keeps_its_code_node_and_hint() -> None:
+    with pytest.raises(BlokError) as raised:
+        registered("<Html><Card><Text text={deps.nowhere.x} /></Card></Html>")
+
+    assert raised.value.code == "deps.unknown"
+    assert raised.value.node is not None and "Text" in raised.value.node
+    assert "Action 'process' (html blok" in str(raised.value)
+
+
+def test_an_action_blok_warning_names_the_action_and_context() -> None:
+    from arkitekt_spec.declare.catalogs import CatalogWarning
+
+    with pytest.warns(CatalogWarning) as caught:
+        registered("<Html><Card><Frobnicator /><ask /></Card></Html>")
+
+    warnings = [record.message for record in caught if isinstance(record.message, CatalogWarning)]
+    assert {warning.blok for warning in warnings} == {"process:html"}
+    assert {warning.finding.code for warning in warnings if warning.finding is not None} == {"catalog.unknown_component"}

@@ -34,7 +34,10 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
 from importlib import resources
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from arkitekt_spec.blok.vocabulary import Finding
 
 BASE_CATALOG_NAME = "base"
 BASE_CATALOG_VERSION = 1
@@ -562,7 +565,18 @@ class CatalogWarning(UserWarning):
     """A finding that does not block registration; the server stores it as a diagnostic.
 
     Escalate the whole soft tier with ``warnings.simplefilter("error", CatalogWarning)``.
+
+    Args:
+        message: What is told, the blok named in front.
+        finding: The finding it tells, with its code, node path and place in the source, for a
+            reader that places it (``arkitekt check --json-out``) rather than prints it.
+        blok: The key of the blok it is about (``monitor``, or an action's interface).
     """
+
+    def __init__(self, message: str, *, finding: "Finding | None" = None, blok: str | None = None) -> None:
+        super().__init__(message)
+        self.finding = finding
+        self.blok = blok
 
 
 # --------------------------------------------------------------------------- resolution

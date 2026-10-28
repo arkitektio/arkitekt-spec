@@ -169,13 +169,20 @@ def self_arg_ports(app_registry: "AppRegistry") -> ArgPorts:
     return {SELF_KEY: {interface: implementation.definition.args or () for interface, implementation in app_registry.implementations.items()}}
 
 
-def _report(owner: str, finding: Finding, mode: BlokCheckMode, at: DeclaredAt | None = None, reported: frozenset[str] = frozenset()) -> None:
+def _report(
+    owner: str,
+    finding: Finding,
+    mode: BlokCheckMode,
+    at: DeclaredAt | None = None,
+    reported: frozenset[str] = frozenset(),
+    blok: str | None = None,
+) -> None:
     """Raise an error (any finding, in strict mode); warn the rest once, at the declaring line."""
     if finding.level == "error" or mode == "strict":
         where = f" ({finding.path})" if finding.path else ""
-        raise BlokError.from_finding(dataclass_replace(finding, path=None, message=f"{owner}{where}: {finding.message}"))
+        raise BlokError.from_finding(dataclass_replace(finding, path=None, message=f"{owner}{where}: {finding.message}"), node=finding.path)
     if finding_key(finding) not in reported:
-        warn_at(f"{owner}: {finding.message} [{finding.code}]", at)
+        warn_at(f"{owner}: {finding.message} [{finding.code}]", at, finding=finding, blok=blok)
 
 
 def type_queries(
@@ -185,6 +192,7 @@ def type_queries(
     app_registry: "AppRegistry",
     mode: BlokCheckMode,
     at: DeclaredAt | None = None,
+    blok: str | None = None,
 ) -> dict[str, PortMatchInput]:
     """Check each declared query and subscription against its service's schema, where this app
     knows it, and return each query's value as the schema answers it.
@@ -198,30 +206,30 @@ def type_queries(
         service = app_registry.services.get(declared.service)
         sdl = service.get_graphql_schema() if service is not None else None
         if sdl is None:
-            _report(owner, Finding.of("query.schema", f"{kind} {declared.key}", kind=kind, name=declared.key, problem=f"this app knows no schema for the {declared.service!r} service, so it is not checked; register the service with its schema to check it"), mode, at)
+            _report(owner, Finding.of("query.schema", f"{kind} {declared.key}", kind=kind, name=declared.key, problem=f"this app knows no schema for the {declared.service!r} service, so it is not checked; register the service with its schema to check it"), mode, at, blok=blok)
             continue
         if not checkable:
-            _report(owner, Finding.of("query.schema", f"{kind} {declared.key}", kind=kind, name=declared.key, problem="install graphql-core to check it"), mode, at)
+            _report(owner, Finding.of("query.schema", f"{kind} {declared.key}", kind=kind, name=declared.key, problem="install graphql-core to check it"), mode, at, blok=blok)
             continue
         shape = check_query(sdl, declared.document, kind)
         for error in shape.errors:
             code = "query.read_only" if "mutation" in error or "operation" in error else "query.schema"
-            _report(owner, Finding.of(code, f"{kind} {declared.key}", kind=kind, name=declared.key, problem=error), mode, at)
+            _report(owner, Finding.of(code, f"{kind} {declared.key}", kind=kind, name=declared.key, problem=error), mode, at, blok=blok)
         names = {variable.name for variable in shape.variables}
         for variable in declared.variables:
             if variable.key is not None and variable.key not in names:
-                _report(owner, Finding.of("query.variable", f"{kind} {declared.key}", kind=kind, name=declared.key, variable=variable.key, problem="is not a variable of its document"), mode, at)
+                _report(owner, Finding.of("query.variable", f"{kind} {declared.key}", kind=kind, name=declared.key, variable=variable.key, problem="is not a variable of its document"), mode, at, blok=blok)
         if isinstance(declared, BlokQueryInput):
             given = {variable.key for variable in declared.variables}
             for variable in shape.variables:
                 if variable.required and variable.name not in given:
-                    _report(owner, Finding.of("query.variable", f"{kind} {declared.key}", kind=kind, name=declared.key, variable=variable.name, problem="is required and the blok sets nothing for it"), mode, at)
+                    _report(owner, Finding.of("query.variable", f"{kind} {declared.key}", kind=kind, name=declared.key, variable=variable.name, problem="is required and the blok sets nothing for it"), mode, at, blok=blok)
             if shape.data is not None:
                 values[declared.key] = shape.data.model_copy(update={"key": "value"})
                 if declared.more is not None:
                     problem = _more_problem(shape.data, declared.more)
                     if problem is not None:
-                        _report(owner, Finding.of("query.more", f"{kind} {declared.key}", name=declared.key, more=declared.more, problem=problem), mode, at)
+                        _report(owner, Finding.of("query.more", f"{kind} {declared.key}", name=declared.key, more=declared.more, problem=problem), mode, at, blok=blok)
     return values
 
 
@@ -264,7 +272,9 @@ def build_declared_bloks(app_registry: "AppRegistry") -> dict[str, BlokImplement
         if kind == "agent":
             dependency = self_dependency(self_reads(declaration.component, declaration.queries, declaration.subscriptions), app_registry)
         dependencies = (dependency,) if dependency is not None else ()
-        query_values = type_queries(owner, declaration.queries, declaration.subscriptions, app_registry, declaration.mode, declaration.declared_at)
+        query_values = type_queries(
+            owner, declaration.queries, declaration.subscriptions, app_registry, declaration.mode, declaration.declared_at, blok=key
+        )
         view = app_registry.blok_view(declaration.module)
         demo = declaration.demo if declaration.demo is not None else _demo(dependency, app_registry)
         catalogs = declaration.catalogs or catalogs_of(declaration.component, view)
@@ -284,7 +294,7 @@ def build_declared_bloks(app_registry: "AppRegistry") -> dict[str, BlokImplement
         scope = resolve_scope(declaration.component, scope, view, arg_ports=self_arg_ports(app_registry))
         # What the declaration already told (registering it) is not told again.
         for finding in check_blok_tree(declaration.component, scope, view):
-            _report(owner, finding, declaration.mode, declaration.declared_at, declaration.reported)
+            _report(owner, finding, declaration.mode, declaration.declared_at, declaration.reported, blok=key)
         # Empty declarations stay unset, so a dump with ``exclude_unset`` (what an agent sends)
         # carries only what the blok declares; ``vocab`` is always there.
         fields: dict[str, object] = {

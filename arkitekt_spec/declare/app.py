@@ -860,11 +860,11 @@ class AppRegistry(BaseModel):
         for finding in (*check_unknown_module(module, self), *check_blok_tree(component, scope, view)):
             if finding.level == "error" or mode == "strict":
                 where = f" ({finding.path})" if finding.path else ""
-                raise BlokError.from_finding(dataclass_replace(finding, path=None, message=f"Blok {name!r}{where}: {finding.message}"))
+                raise BlokError.from_finding(dataclass_replace(finding, path=None, message=f"Blok {name!r}{where}: {finding.message}"), node=finding.path)
             key = finding_key(finding)
             if key not in reported:
                 reported.add(key)
-                warn_at(f"Blok {name!r}: {finding.message} [{finding.code}]", at)
+                warn_at(f"Blok {name!r}: {finding.message} [{finding.code}]", at, finding=finding, blok=name)
         declaration = declaration.model_copy(update={"reported": frozenset(reported)})
         replaced = [
             other
