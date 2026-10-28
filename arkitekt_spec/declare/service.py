@@ -244,6 +244,7 @@ def _read_injections(
     return returns, injections
 
 
+
 class Service(Generic[C]):
     """A declared service: what it requires, what it returns, and how to build it.
 
@@ -273,13 +274,11 @@ class Service(Generic[C]):
         schema: str | Path | None,
         turms: str | Path | None,
         image: str | None = None,
-        scopes: Sequence[str] = (),
     ) -> None:
         self._function = function
         self._injections = list(injections)
         self._schema = schema
         self._turms = turms
-        self._scopes = tuple(scopes)
         self.image = image
         self.name = name
         self.returns: type[C] = returns
@@ -311,14 +310,21 @@ class Service(Generic[C]):
     def get_scopes(self) -> list[str]:
         """Say what an app using this service has to be allowed to do there.
 
-        What its client's operations need, as its generated code gathers them
-        (turms' ``ScopesPlugin``): the scopes that go into every manifest of an
-        app using it, beside the ones the app asks for itself.
+        What its client's operations need, as the client class says it: its
+        generated part carries ``__scopes__`` (turms' ``client_fields``, read off
+        the server's schema). The scopes go into every manifest of an app using
+        the service, beside the ones the app asks for itself.
 
         Returns:
-            The scopes, as the service names them (``mikro_write``).
+            The scopes, as the service names them (``mikro_write``); none for a
+            client that does not say.
         """
-        return list(self._scopes)
+        # An attribute a client class may or may not carry: a protocol of one class variable
+        # cannot be checked with issubclass.
+        scopes = getattr(self.returns, "__scopes__", ())
+        if not isinstance(scopes, (tuple, list, frozenset)) or not all(isinstance(scope, str) for scope in scopes):
+            raise ServiceDefinitionError(f"{self.name}: {self.returns.__name__}.__scopes__ is not a collection of scope names")
+        return sorted(scopes)
 
     @property
     def needs_fakts(self) -> bool:
@@ -409,7 +415,6 @@ def declare_service(
     schema: str | Path | None = None,
     turms: str | Path | None = None,
     image: str | None = None,
-    scopes: Sequence[str] = (),
 ) -> Service[C]:
     """Read a service off ``function``, declared on ``registry``.
 
@@ -423,7 +428,6 @@ def declare_service(
         schema: Path to the service's GraphQL schema, for code generation.
         turms: Path to the turms project that generates its client.
         image: The image that hosts the server this client talks to.
-        scopes: What its client's operations need there (see :meth:`Service.get_scopes`).
 
     Returns:
         The :class:`Service`.
@@ -445,5 +449,4 @@ def declare_service(
         schema=schema,
         turms=turms,
         image=image,
-        scopes=scopes,
     )
