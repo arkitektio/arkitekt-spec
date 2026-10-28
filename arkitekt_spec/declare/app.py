@@ -356,6 +356,7 @@ class AppRegistry(BaseModel):
         schema: str | Path | None = None,
         turms: str | Path | None = None,
         image: str | None = None,
+        scopes: Sequence[str] = (),
     ) -> Callable[[Callable[..., T]], Service[T]]:
         """Declare a service here: ``@registry.service()`` on its builder.
 
@@ -371,6 +372,9 @@ class AppRegistry(BaseModel):
             image: The image that hosts the server this client talks to, e.g.
                 ``"jhnnsrs/mikro:7"``: what a deployment made for this app's
                 tests runs. Not part of the manifest.
+            scopes: What the client's operations need at the service, as its
+                generated code gathers them (``from .api.schema import SCOPES``):
+                every app using the service asks for them in its manifest.
 
         Returns:
             A decorator returning the :class:`~rekuest.service.Service`.
@@ -381,7 +385,7 @@ class AppRegistry(BaseModel):
         """
 
         def declare(function: Callable[..., T]) -> Service[T]:
-            declared = declare_service(self, function, schema=schema, turms=turms, image=image)
+            declared = declare_service(self, function, schema=schema, turms=turms, image=image, scopes=scopes)
             self._take_service(declared)
             return declared
 

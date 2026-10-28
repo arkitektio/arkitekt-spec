@@ -273,11 +273,13 @@ class Service(Generic[C]):
         schema: str | Path | None,
         turms: str | Path | None,
         image: str | None = None,
+        scopes: Sequence[str] = (),
     ) -> None:
         self._function = function
         self._injections = list(injections)
         self._schema = schema
         self._turms = turms
+        self._scopes = tuple(scopes)
         self.image = image
         self.name = name
         self.returns: type[C] = returns
@@ -305,6 +307,18 @@ class Service(Generic[C]):
             for injection in self._injections
             if injection.kind == _ALIAS and injection.require is not None
         ]
+
+    def get_scopes(self) -> list[str]:
+        """Say what an app using this service has to be allowed to do there.
+
+        What its client's operations need, as its generated code gathers them
+        (turms' ``ScopesPlugin``): the scopes that go into every manifest of an
+        app using it, beside the ones the app asks for itself.
+
+        Returns:
+            The scopes, as the service names them (``mikro_write``).
+        """
+        return list(self._scopes)
 
     @property
     def needs_fakts(self) -> bool:
@@ -395,6 +409,7 @@ def declare_service(
     schema: str | Path | None = None,
     turms: str | Path | None = None,
     image: str | None = None,
+    scopes: Sequence[str] = (),
 ) -> Service[C]:
     """Read a service off ``function``, declared on ``registry``.
 
@@ -408,6 +423,7 @@ def declare_service(
         schema: Path to the service's GraphQL schema, for code generation.
         turms: Path to the turms project that generates its client.
         image: The image that hosts the server this client talks to.
+        scopes: What its client's operations need there (see :meth:`Service.get_scopes`).
 
     Returns:
         The :class:`Service`.
@@ -429,4 +445,5 @@ def declare_service(
         schema=schema,
         turms=turms,
         image=image,
+        scopes=scopes,
     )
