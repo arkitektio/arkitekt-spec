@@ -9,7 +9,10 @@ from typing import Any
 from arkitekt_spec.actions import DefinitionInput
 from arkitekt_spec.declare.actors.types import ImplementationDetails, RegisterConfig
 from arkitekt_spec.declare.agents.context import prepare_context_variables
-from arkitekt_spec.declare.agents.dependency import prepare_dependency_variables, prepare_interaction_variables
+from arkitekt_spec.declare.agents.dependency import (
+    prepare_dependency_variables,
+    prepare_interaction_variables,
+)
 from arkitekt_spec.declare.definition.define import prepare_definition
 from arkitekt_spec.declare.protocol.types import AnyFunction
 from arkitekt_spec.declare.state.utils import (

@@ -3,7 +3,7 @@
 import hashlib
 import inspect
 import warnings
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -24,7 +24,6 @@ from arkitekt_spec.actions import (
     ActionDependencyInput,
     AgentDependencyInput,
     AskBlokInput,
-    InformBlokInput,
     AssignWidgetInput,
     ComponentContext,
     ComponentNodeInput,
@@ -33,6 +32,7 @@ from arkitekt_spec.actions import (
     Effects,
     Execution,
     ImplementationInput,
+    InformBlokInput,
     OptimisticInput,
     PortGroupInput,
     TestTargetInput,

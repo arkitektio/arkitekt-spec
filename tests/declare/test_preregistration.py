@@ -15,11 +15,11 @@ from typing import Literal
 
 import pytest
 
+from arkitekt_spec.declare.structures.convert import AppNamespace
 from arkitekt_spec.declare.structures.errors import (
     StructureDefinitionError,
     StructureRegistryError,
 )
-from arkitekt_spec.declare.structures.convert import AppNamespace
 from arkitekt_spec.declare.structures.registry import StructureRegistry
 from arkitekt_spec.declare.structures.types import (
     FullFilledEnum,

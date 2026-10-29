@@ -7,7 +7,6 @@ and :class:`RegisterConfig` holds every option the registration was given. A run
 builds the function's actor from these; building one is not declaration.
 """
 
-from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
@@ -22,8 +21,8 @@ from arkitekt_spec.actions import (
     ValidatorInput,
 )
 from arkitekt_spec.declare.actors.policy import KEEP, DisconnectPolicy
-from arkitekt_spec.declare.blok.action import ActionBloks
 from arkitekt_spec.declare.agents.context import PreparedContextReturns, PreparedContextVariables
+from arkitekt_spec.declare.blok.action import ActionBloks
 from arkitekt_spec.declare.coercible_types import OptimisticCoercible
 from arkitekt_spec.declare.definition.define import (
     AssignWidgetMap,

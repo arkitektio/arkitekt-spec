@@ -7,11 +7,11 @@ from typing import Annotated
 import pytest
 
 from arkitekt_spec.blok.vocabulary import BlokError
+from arkitekt_spec.declare.annotations.markers import Description
 from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.blok.declarations import Local
 from arkitekt_spec.declare.blok.registry import resolved_locals
 from arkitekt_spec.declare.catalogs import CatalogWarning
-from arkitekt_spec.declare.annotations.markers import Description
 from arkitekt_spec.declare.register import WrappedFunction
 
 

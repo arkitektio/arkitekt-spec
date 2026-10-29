@@ -3,12 +3,15 @@
 import inspect
 from typing import TYPE_CHECKING, Any, get_type_hints
 
-from arkitekt_spec.declare.actors.types import PreparedInteractionVariables, PreparedDependencyVariables
+from arkitekt_spec.declare.actors.types import (
+    PreparedDependencyVariables,
+    PreparedInteractionVariables,
+)
 from arkitekt_spec.declare.declare import DeclaredAgentProtocol
 from arkitekt_spec.declare.definition.define import (
     get_non_null_variants,
-    is_interactions_type,
     is_dependency_type,
+    is_interactions_type,
     is_tuple,
 )
 from arkitekt_spec.declare.protocol.types import AnyFunction

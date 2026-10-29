@@ -18,8 +18,8 @@ from arkitekt_spec.blok.vocabulary import BlokError
 from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.blok.action import ActionBlok, ActionBloks
 from arkitekt_spec.declare.blok.declarations import Local
-from arkitekt_spec.declare.blok.parser import bsx
 from arkitekt_spec.declare.blok.infer import resolve_scope
+from arkitekt_spec.declare.blok.parser import bsx
 from arkitekt_spec.declare.blok.validate import BlokScope
 from arkitekt_spec.declare.definition.errors import DefinitionError
 

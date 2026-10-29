@@ -12,7 +12,7 @@ from arkitekt_spec.blok.catalogs import default_view
 from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.blok.infer import resolve_scope
 from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree, dependency_hint
-from arkitekt_spec.declare.catalogs import CatalogWarning, PropSpec, ComponentSpec
+from arkitekt_spec.declare.catalogs import CatalogWarning, ComponentSpec, PropSpec
 from arkitekt_spec.declare.traits.blok import CreateBlokInputTrait
 
 

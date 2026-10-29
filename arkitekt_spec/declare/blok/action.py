@@ -34,9 +34,9 @@ from arkitekt_spec.declare.blok.declarations import (
     query_inputs,
     subscription_inputs,
 )
+from arkitekt_spec.declare.blok.infer import resolve_scope
 from arkitekt_spec.declare.blok.origin import declared_at, finding_key, warn_at
 from arkitekt_spec.declare.blok.registry import catalogs_of, check_unknown_module
-from arkitekt_spec.declare.blok.infer import resolve_scope
 from arkitekt_spec.declare.blok.validate import BlokScope, blok_context, check_blok_tree
 from arkitekt_spec.declare.catalogs import BlokCheckMode
 from arkitekt_spec.scalars import JSONSerializable

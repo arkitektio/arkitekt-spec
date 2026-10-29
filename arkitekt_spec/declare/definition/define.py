@@ -111,7 +111,7 @@ def return_items(annotation: TypeAnnotation) -> list[tuple[str, TypeAnnotation]]
         return []
     if is_named_tuple(annotation):
         hints = get_type_hints(annotation, include_extras=True)
-        fields = cast("tuple[str, ...]", getattr(annotation, "_fields"))
+        fields = cast("tuple[str, ...]", getattr(annotation, "_fields"))  # noqa: B009 -- a NamedTuple's field names, unknown to the checker on its type
         items: list[tuple[str, TypeAnnotation]] = []
         for field in fields:
             if field not in hints:

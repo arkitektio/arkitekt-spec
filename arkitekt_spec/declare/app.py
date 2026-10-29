@@ -60,7 +60,6 @@ from arkitekt_spec.blok.vocabulary import VOCAB, BlokError, load_vocabulary
 from arkitekt_spec.declare.actors.policy import KEEP, DisconnectPolicy
 from arkitekt_spec.declare.actors.types import Actifier, DeclaredImplementation
 from arkitekt_spec.declare.agents.hooks.registry import HooksRegistry
-from arkitekt_spec.declare.interactions import DeclaredInteractions
 from arkitekt_spec.declare.blok.action import ActionBloks, action_blok_components_in
 from arkitekt_spec.declare.blok.declarations import (
     Local,
@@ -90,6 +89,7 @@ from arkitekt_spec.declare.catalogs import (
 from arkitekt_spec.declare.coercible_types import OptimisticCoercible
 from arkitekt_spec.declare.definition.define import convert_object_to_argport
 from arkitekt_spec.declare.errors import AppContextError, RegistryFrozenError
+from arkitekt_spec.declare.interactions import DeclaredInteractions
 from arkitekt_spec.declare.protocol.types import AnyState
 from arkitekt_spec.declare.provider import Provider, declare_provider
 from arkitekt_spec.declare.service import Service, declare_service
