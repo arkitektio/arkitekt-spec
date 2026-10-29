@@ -1,12 +1,13 @@
 """Context management for Rekuest."""
 
 import inspect
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, get_type_hints
 
-from arkitekt_spec.declare.actors.types import PreparedDependencyVariables
+from arkitekt_spec.declare.actors.types import PreparedInteractionVariables, PreparedDependencyVariables
 from arkitekt_spec.declare.declare import DeclaredAgentProtocol
 from arkitekt_spec.declare.definition.define import (
     get_non_null_variants,
+    is_interactions_type,
     is_dependency_type,
     is_tuple,
 )
@@ -60,6 +61,24 @@ def prepare_dependency_variables(
                     "Dependency variables cannot be returned as single values."
                 )
     return PreparedDependencyVariables(dependency_variables=depedency_variables)
+
+
+def prepare_interaction_variables(
+    function: AnyFunction, structure_registry: "StructureRegistry | None" = None
+) -> PreparedInteractionVariables:
+    """Find the parameters of ``function`` annotated with a declared interactions protocol (``@app.interactions``).
+
+    Read off the resolved hints, so a module with ``from __future__ import annotations`` is
+    seen as the definition sees it.
+    """
+    hints = get_type_hints(function, include_extras=True)
+    return PreparedInteractionVariables(
+        interaction_variables={
+            key: hints[key]
+            for key in inspect.signature(function).parameters
+            if key in hints and is_interactions_type(hints[key], structure_registry)
+        }
+    )
 
 
 def dependency_to_protocol(

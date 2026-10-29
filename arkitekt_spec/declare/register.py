@@ -23,6 +23,8 @@ import logging
 from arkitekt_spec.actions import (
     ActionDependencyInput,
     AgentDependencyInput,
+    AskBlokInput,
+    InformBlokInput,
     AssignWidgetInput,
     ComponentContext,
     ComponentNodeInput,
@@ -160,6 +162,24 @@ def _logo_of(config: RegisterConfig, interface: str, registry: "AppRegistry") ->
     return {"logo": config.logo}
 
 
+def _declared_interactions(
+    asks: list[AskBlokInput], informs: list[InformBlokInput], config: RegisterConfig
+) -> dict[str, Any]:
+    """The ``asks``, ``informs`` and ``dynamic_*`` fields of an implementation, each only when set."""
+    fields: dict[str, Any] = {}
+    if asks:
+        fields["asks"] = tuple(asks)
+    if informs:
+        fields["informs"] = tuple(informs)
+    if config.dynamic_asks:
+        fields["dynamic_asks"] = True
+    if config.dynamic_calls:
+        fields["dynamic_calls"] = True
+    if config.dynamic_informs:
+        fields["dynamic_informs"] = True
+    return fields
+
+
 def register_func(
     function_or_actor: AnyFunction,
     structure_registry: StructureRegistry,
@@ -225,6 +245,19 @@ def register_func(
                 "A protocol with only state attributes is fine on a plain action."
             )
 
+    if config.dynamic_calls and config.execution != Execution.WORKFLOW:
+        raise DefinitionError(
+            f"{interface} declares dynamic_calls, but only a workflow calls other actions: "
+            "register it with @app.workflow."
+        )
+
+    asks: list[AskBlokInput] = []
+    informs: list[InformBlokInput] = []
+    for key, cls in implementation_details.interaction_variables.interaction_variables.items():
+        declared = structure_registry.interactions_for(cls)
+        asks.extend(declared.to_ask_inputs(key))
+        informs.extend(declared.to_inform_inputs(key))
+
     if config.bloks:
         # Set only when there are some, so an action without bloks keeps its wire bytes.
         definition = definition.model_copy(
@@ -265,6 +298,8 @@ def register_func(
             code_hash=code_hash_of(function_or_actor),
             # Set only when there is one, so an action without a logo keeps its wire bytes.
             **_logo_of(config, interface, implementation_registry),
+            # The same for interactions and the dynamic flags: an action declaring none keeps its hash.
+            **_declared_interactions(asks, informs, config),
         )),
         DeclaredImplementation(function_or_actor, config, actifier),
     )
@@ -306,6 +341,9 @@ def declare_implementation(
     execution: Execution = Execution.PLAIN,
     logo: str | ComponentNodeInput | None = None,
     bloks: "ActionBloks | None" = None,
+    dynamic_asks: bool = False,
+    dynamic_calls: bool = False,
+    dynamic_informs: bool = False,
 ) -> WrappedFunction[P, R]:
     """Register a function directly: ``declare_implementation(fn, implementation_registry=...)``."""
 
@@ -342,6 +380,9 @@ def declare_implementation(
     execution: Execution = Execution.PLAIN,
     logo: str | ComponentNodeInput | None = None,
     bloks: "ActionBloks | None" = None,
+    dynamic_asks: bool = False,
+    dynamic_calls: bool = False,
+    dynamic_informs: bool = False,
 ) -> Callable[[Callable[P, R]], WrappedFunction[P, R]]:
     """Build a configured decorator: ``declare_implementation(implementation_registry=..., name=...)``."""
 
@@ -377,6 +418,9 @@ def declare_implementation(
     execution: Execution = Execution.PLAIN,
     logo: str | ComponentNodeInput | None = None,
     bloks: "ActionBloks | None" = None,
+    dynamic_asks: bool = False,
+    dynamic_calls: bool = False,
+    dynamic_informs: bool = False,
 ) -> WrappedFunction[P, R] | Callable[[Callable[P, R]], WrappedFunction[P, R]]:
     """Register a function or actor with an app registry.
 
@@ -445,6 +489,15 @@ def declare_implementation(
             dependency parameters and the bloks' catalogs; sent with the definition
             (never when there are none) and not part of its hash.
 
+        dynamic_asks (bool): Whether a task may also ask through a blok made at ask
+            time (``task.dynamic_ask``). The server refuses it otherwise, and without
+            the ``rekuest_dynamic_ask`` scope the app asks for when any action sets it.
+        dynamic_calls (bool): Whether a task may also call actions it found at run
+            time (``task.call``), not only its dependencies. A workflow only; the
+            server refuses it otherwise, and without the ``rekuest_dynamic_call`` scope.
+        dynamic_informs (bool): Whether a task may show a blok made at inform time
+            (``task.inform`` by source or id). The server refuses it otherwise, and
+            without the ``rekuest_dynamic_inform`` scope.
     Returns:
         The wrapped function, or a decorator producing it.
     """
@@ -476,6 +529,9 @@ def declare_implementation(
         execution=execution,
         logo=logo,
         bloks=bloks,
+        dynamic_asks=dynamic_asks,
+        dynamic_calls=dynamic_calls,
+        dynamic_informs=dynamic_informs,
     )
 
     def offer(function_or_actor: Callable[P, R]) -> WrappedFunction[P, R]:

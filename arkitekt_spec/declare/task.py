@@ -34,7 +34,7 @@ from arkitekt_spec.actions import (
     ReturnPortInput,
 )
 from arkitekt_spec.declare.agents.errors import NoCallerError
-from arkitekt_spec.declare.errors import AgentLost
+from arkitekt_spec.declare.errors import AgentLost, DismissedError
 from arkitekt_spec.declare.targets import CallTarget, ImplementationTarget
 from arkitekt_spec.scalars import ActionHash
 
@@ -124,7 +124,7 @@ class StateRequirement(BaseModel):
 
 
 class Decision(BaseModel):
-    """What came back from a hold (:meth:`Task.ahold`) or an ask (:meth:`Task.aask`).
+    """What came back from a hold (:meth:`Task.ahold`), or an ask before it is unpacked.
 
     ``approved`` is False when the person said no; the task goes on and decides what
     that means. ``auto`` is True when nobody was asked: the run is in auto-mode (or
@@ -141,18 +141,23 @@ class Decision(BaseModel):
 
 
 class TaskBlok(BaseModel):
-    """A blok a task shows a person: to ask (:meth:`Task.aask`, answered through it) or to
-    inform (:meth:`Task.ainform`, shown while the task goes on).
+    """A blok a task shows a person: to ask (answered through it) or to inform (shown
+    while the task goes on).
 
-    Exactly one of ``key`` (a blok the agent's app declares), ``id`` (any blok of the
-    organization) or ``source`` (v2 BSX the server parses into a blok made for this task
-    alone) names it. A ``source`` blok reads the sending task as ``task`` (``task.status``,
+    Exactly one of ``key``, ``id`` (any blok of the organization) or ``source`` (v2 BSX the
+    server parses into a blok made for this task alone) names it. ``key`` names one of the
+    asks or informs the running action declared (``<parameter>.<method>``: what an
+    interactions protocol's proxy sends). One by ``id`` or ``source`` is dynamic
+    (:meth:`Task.adynamic_ask`, :meth:`Task.adynamic_inform`). A ``source`` blok reads the sending task as ``task`` (``task.status``,
     ``task.ask``, once answered ``task.answer.<key>``), what it is opened on as ``args.<key>``,
     the sending agent as ``self`` and the task's dependencies as ``deps.<key>``; it answers
     with ``task.answer(values: {key: value, ...})``, keyed by ``returns``.
     """
 
-    key: str | None = Field(default=None, description="A blok the agent's app declares, by its key.")
+    key: str | None = Field(
+        default=None,
+        description="One of the asks or informs the running action declared (`<parameter>.<method>`).",
+    )
     id: str | None = Field(default=None, description="Any blok of the organization, by its id.")
     source: str | None = Field(default=None, description="The blok as v2 BSX, made for this task alone.")
     name: str | None = Field(default=None, description="A title for whoever sees it; the blok's own name when left out.")
@@ -368,47 +373,49 @@ class Task(Protocol):
         """:meth:`hold`, awaited."""
         ...
 
-    def ask(
+    def dynamic_ask(
         self,
         blok: "TaskBlok | str",
-        message: str,
         *,
         args: dict[str, JsonValue] | None = None,
         returns: list[ReturnPortInput] | None = None,
-        prompt: AssignPrompt | None = None,
-    ) -> Decision:
-        """Ask a person through a blok: the task is HELD on ``blok`` (a :class:`TaskBlok`,
-        or BSX source) until they answer in it or dismiss it.
+    ) -> dict[str, Any]:
+        """Ask a person through a blok made now: the task is HELD on ``blok`` (a
+        :class:`TaskBlok`, or BSX source) until they answer in it.
 
-        Answered, the :class:`Decision` is approved and its ``values`` are what the blok
-        answered (``task.answer(values: {...})``), checked against its ``returns``. Dismissed,
-        it is not approved and has none. Auto-mode cannot answer for a person: an ask
-        waits in every run. Raises :class:`~arkitekt_spec.declare.errors.BlokRefused` when
-        the server cannot make the blok, with why. A resumed workflow gets the answer it
-        already had back, without asking again.
+        Only an action declaring ``dynamic_asks`` may; one asking what it knows up front
+        declares an interactions protocol instead (:mod:`arkitekt_spec.declare.interactions`), typed. The
+        blok is the prompt: its ``name`` is what the ask is listed as. Returns what the blok
+        answered (``task.answer(values: {...})``), checked by the server against its
+        ``returns``; a structure comes as ``{"__identifier", "object"}``. Raises
+        :class:`~arkitekt_spec.declare.errors.DismissedError` when it is dismissed, and
+        :class:`~arkitekt_spec.declare.errors.BlokRefused` when the server cannot make the
+        blok or refuses the ask. A resumed workflow gets the answer it already had back.
         """
         ...
 
-    async def aask(
+    async def adynamic_ask(
         self,
         blok: "TaskBlok | str",
-        message: str,
         *,
         args: dict[str, JsonValue] | None = None,
         returns: list[ReturnPortInput] | None = None,
-        prompt: AssignPrompt | None = None,
-    ) -> Decision:
-        """:meth:`ask`, awaited."""
+    ) -> dict[str, Any]:
+        """:meth:`dynamic_ask`, awaited."""
         ...
 
-    def inform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, JsonValue] | None = None) -> None:
-        """Show a person a blok (a :class:`TaskBlok`, or BSX source) while the task goes
-        on: a chart of its progress, a result. Nothing waits. A blok the server cannot make
-        is logged by the agent, never raised here."""
+    def dynamic_inform(self, blok: "TaskBlok | str", *, args: dict[str, JsonValue] | None = None) -> None:
+        """Show a person a blok made now (a :class:`TaskBlok`, or BSX source) while the task
+        goes on: a chart of its progress, a result. Nothing waits.
+
+        Only an action declaring ``dynamic_informs`` may; one showing what it knows up front
+        declares an interactions protocol instead (:mod:`arkitekt_spec.declare.interactions`),
+        typed. The blok's ``name`` is what the inform is listed as. A blok the server cannot
+        make is logged by the agent, never raised here."""
         ...
 
-    async def ainform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, JsonValue] | None = None) -> None:
-        """:meth:`inform`, awaited."""
+    async def adynamic_inform(self, blok: "TaskBlok | str", *, args: dict[str, JsonValue] | None = None) -> None:
+        """:meth:`dynamic_inform`, awaited."""
         ...
 
     # -- calling ---------------------------------------------------------- #
@@ -669,41 +676,37 @@ class LocalTask:
         """Nobody decides for a local task: it logs ``message`` and carries on, approved."""
         return self.hold(message, prompt=prompt, lost=lost)
 
-    def ask(
+    def dynamic_ask(
         self,
         blok: "TaskBlok | str",
-        message: str,
         *,
         args: dict[str, JsonValue] | None = None,
         returns: list[ReturnPortInput] | None = None,
-        prompt: AssignPrompt | None = None,
-    ) -> Decision:
-        """Nobody answers a local task: it logs ``message`` and goes on, not approved and
-        without values (an ask has no answer to make up)."""
-        as_task_blok(blok, args=args, returns=returns)
-        logger.log(logging.WARNING, "ask (nobody answers a local task): %s", message)
-        return Decision(approved=False, auto=True)
+    ) -> dict[str, Any]:
+        """Nobody answers a local task: it logs the ask and raises
+        :class:`~arkitekt_spec.declare.errors.DismissedError` (an ask has no answer to make up)."""
+        task_blok = as_task_blok(blok, args=args, returns=returns)
+        logger.log(logging.WARNING, "ask (nobody answers a local task): %s", task_blok.name or "a blok")
+        raise DismissedError("nobody answers a local task")
 
-    async def aask(
+    async def adynamic_ask(
         self,
         blok: "TaskBlok | str",
-        message: str,
         *,
         args: dict[str, JsonValue] | None = None,
         returns: list[ReturnPortInput] | None = None,
-        prompt: AssignPrompt | None = None,
-    ) -> Decision:
-        """Nobody answers a local task (see :meth:`ask`)."""
-        return self.ask(blok, message, args=args, returns=returns, prompt=prompt)
+    ) -> dict[str, Any]:
+        """Nobody answers a local task (see :meth:`dynamic_ask`)."""
+        return self.dynamic_ask(blok, args=args, returns=returns)
 
-    def inform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, JsonValue] | None = None) -> None:
-        """Nobody sees a local task's blok: it logs ``message``."""
-        as_task_blok(blok, args=args)
-        logger.log(logging.INFO, "inform (nobody sees a local task's blok): %s", message or "")
+    def dynamic_inform(self, blok: "TaskBlok | str", *, args: dict[str, JsonValue] | None = None) -> None:
+        """Nobody sees a local task's blok: it logs its name."""
+        task_blok = as_task_blok(blok, args=args)
+        logger.log(logging.INFO, "inform (nobody sees a local task's blok): %s", task_blok.name or "a blok")
 
-    async def ainform(self, blok: "TaskBlok | str", message: str | None = None, *, args: dict[str, JsonValue] | None = None) -> None:
-        """Nobody sees a local task's blok (see :meth:`inform`)."""
-        self.inform(blok, message, args=args)
+    async def adynamic_inform(self, blok: "TaskBlok | str", *, args: dict[str, JsonValue] | None = None) -> None:
+        """Nobody sees a local task's blok (see :meth:`dynamic_inform`)."""
+        self.dynamic_inform(blok, args=args)
 
     def call(
         self,

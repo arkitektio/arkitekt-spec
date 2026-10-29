@@ -486,6 +486,35 @@ class ActionBlokRules(BaseModel):
         return self
 
 
+class AskBlokRules(BaseModel):
+    """An action's declared ask: an html task blok, its args and returns each keyed once."""
+
+    @model_validator(mode="after")
+    def _manifest(self) -> Self:
+        blok: Any = self
+        check_blok_declarations(blok, "task")
+        for what, ports in (("args", blok.args), ("returns", blok.returns)):
+            keys = [port.key for port in ports]
+            twice = next((key for key in keys if keys.count(key) > 1), None)
+            if twice is not None:
+                raise ValueError(f"Ask {blok.key!r}: duplicate {what} key {twice!r}")
+        return self
+
+
+class InformBlokRules(BaseModel):
+    """An action's declared inform: an html task blok, its args each keyed once."""
+
+    @model_validator(mode="after")
+    def _manifest(self) -> Self:
+        blok: Any = self
+        check_blok_declarations(blok, "task")
+        keys = [port.key for port in blok.args]
+        twice = next((key for key in keys if keys.count(key) > 1), None)
+        if twice is not None:
+            raise ValueError(f"Inform {blok.key!r}: duplicate args key {twice!r}")
+        return self
+
+
 def _check_blok_args(rules: BaseModel) -> None:
     """The server's ``check_blok_args``: an html blok's args, keyed once, owning the ``args`` root."""
     blok: Any = rules

@@ -55,6 +55,29 @@ class DeniedError(RekuestError):
 
 
 
+class DismissedError(RekuestError):
+    """A person dismissed an ask instead of answering it. Nothing was answered: raised at the
+    ask, which decides what that means (uncaught, it fails the task like any error).
+
+    Attributes:
+        answer: What the person said, if anything.
+        task: The id of the task that asked.
+    """
+
+    def __init__(self, answer: str | None = None, *, task: str | None = None) -> None:
+        super().__init__(f"The ask was dismissed: {answer}" if answer else "The ask was dismissed.")
+        self.answer = answer
+        self.task = task
+
+
+
+class NotDeclaredError(RekuestError):
+    """A task asked or informed through a blok made at run time, or called an action found
+    at run time, but its action does not declare it may (``dynamic_asks``/``dynamic_informs``/
+    ``dynamic_calls``)."""
+
+
+
 class BlokRefused(RekuestError):
     """The server could not make the blok a task asked or informed with: its BSX does not
     parse, or its args, bindings or services do not fit. (What the UI catalog lacks is no

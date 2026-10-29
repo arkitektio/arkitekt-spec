@@ -377,6 +377,8 @@ class StructureRegistry(BaseModel):
     # Typed loosely: pydantic would need the protocol class at import to build
     # the field, and `rekuest.declare` imports this module.
     protocols: dict[type[Any], Any] = Field(default_factory=dict, exclude=True)
+    interactions: dict[type[Any], Any] = Field(default_factory=dict, exclude=True)
+    """The interactions protocols this app declared (``@app.interactions``), each a ``DeclaredInteractions``."""
     states: dict[type[Any], StateDeclaration] = Field(
         default_factory=dict, exclude=True
     )
@@ -804,6 +806,8 @@ class StructureRegistry(BaseModel):
             self.fullfill_registration(enum)
         for cls, protocol in other.protocols.items():
             self._take_protocol(cls, protocol)
+        for cls, interactions in other.interactions.items():
+            self.interactions.setdefault(cls, interactions)
         for cls, declaration in other.states.items():
             self.states.setdefault(cls, declaration)
         for cls, context in other.contexts.items():
@@ -917,6 +921,28 @@ class StructureRegistry(BaseModel):
         """Whether ``annotation`` is a class this app declared a protocol for."""
         try:
             return annotation in self.protocols
+        except TypeError:  # unhashable annotation
+            return False
+
+    def interactions_for(self, cls: Any) -> Any:
+        """The interactions protocol (a ``DeclaredInteractions``) kept under ``cls``.
+
+        Raises:
+            KeyError: If ``cls`` was not declared on this app.
+        """
+        try:
+            return self.interactions[cls]
+        except (KeyError, TypeError):
+            shown = _display_name(cls)
+            raise KeyError(
+                f"{shown} is not an interactions protocol this app declared. Declare it with "
+                f"`@app.interactions` before naming it."
+            ) from None
+
+    def is_interactions(self, annotation: Any) -> bool:
+        """Whether ``annotation`` is a class this app declared an interactions protocol for."""
+        try:
+            return annotation in self.interactions
         except TypeError:  # unhashable annotation
             return False
 
@@ -1245,6 +1271,7 @@ class StructureRegistry(BaseModel):
             cls_fullfilled_type_map=dict(self.cls_fullfilled_type_map),
             clients=dict(self.clients),
             protocols=dict(self.protocols),
+            interactions=dict(self.interactions),
             states=dict(self.states),
             contexts=dict(self.contexts),
             app_contexts=dict(self.app_contexts),

@@ -97,6 +97,12 @@ class PreparedDependencyVariables:
 
 
 @dataclass
+class PreparedInteractionVariables:
+    interaction_variables: dict[str, Any] = field(default_factory=dict[str, Any])
+    """Parameter name to the interactions protocol (``@app.interactions``) it is annotated with."""
+
+
+@dataclass
 class PreparedStateReturns:
     state_returns: dict[int, str]
 
@@ -130,6 +136,7 @@ class ImplementationDetails:
     injected_variables: PreparedInjectedVariables = field(
         default_factory=PreparedInjectedVariables
     )
+    interaction_variables: PreparedInteractionVariables = field(default_factory=PreparedInteractionVariables)
 
     def actor_kwargs(self) -> dict[str, Any]:
         """Everything derived from the function that its actor is built with.
@@ -145,6 +152,7 @@ class ImplementationDetails:
             "context_returns": self.context_returns,
             "dependency_variables": self.dependency_variables,
             "injected_variables": self.injected_variables,
+            "interaction_variables": self.interaction_variables,
             "locks": self.locks,
         }
 
@@ -210,6 +218,12 @@ class RegisterConfig:
     """The action logo blok that draws the action: a declared action logo blok's name, or a tree (``bsx(...)``)."""
     bloks: ActionBloks | None = None
     """The action's own bloks, one per context, which each one's root names (``"<Overlay>...</Overlay>"``): how a client shows a run of it."""
+    dynamic_asks: bool = False
+    """Whether a task may ask through a blok made at ask time (``task.dynamic_ask``), not only the asks it declares."""
+    dynamic_calls: bool = False
+    """Whether a task may call actions it found at run time (``task.call``), not only its dependencies. A WORKFLOW only."""
+    dynamic_informs: bool = False
+    """Whether a task may show a blok made at inform time (``task.inform`` by source or id), not only the app's own bloks."""
 
 
 @runtime_checkable

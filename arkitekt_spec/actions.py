@@ -20,6 +20,8 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 from arkitekt_spec.rules import (
     ActionBlokRules,
     AgentRules,
+    AskBlokRules,
+    InformBlokRules,
     BlokRules,
     DefinitionRules,
     EffectRules,
@@ -1046,6 +1048,79 @@ class ActionBlokInput(ActionBlokRules, ActionModel):
     )
 
 
+class AskBlokInput(AskBlokRules, ActionModel):
+    """A blok an action asks a person through (an ``@ask`` method of an interactions
+    protocol): declared with the action, made once at registration, and the only kind of ask a
+    task may hold on unless its action declares ``dynamic_asks``. It reads the run as ``task``,
+    what it is opened on as ``args.<key>`` and the agent as ``self``, and answers with
+    ``task.answer(values: {...})``, keyed by its ``returns``."""
+
+    key: str = Field(description="What a task names it by: `<parameter>.<method>` of the action's interactions protocol.")
+    description: str | None = Field(default=None, description="What it asks, in a sentence: the hold's message wherever the ask is listed.")
+    components: tuple["ComponentNodeInput", ...] | None = Field(
+        default=None,
+        description="The UI component tree, unless the blok is sent as its `source`.",
+    )
+    source: str | None = Field(
+        default=None,
+        description="The blok as BSX, parsed by the server into its component tree. Exactly one of `components` and `source` is sent.",
+    )
+    module: str | None = Field(
+        default=None, description="The module the blok renders against besides its catalogs; the Orkestrator's when absent."
+    )
+    args: tuple["ArgPortInput", ...] = Field(default=(), description="What it is opened on, read under `args.<key>`: the method's parameters.")
+    returns: tuple["ReturnPortInput", ...] = Field(default=(), description="What an answer holds: the method's return.")
+    dependencies: tuple[AgentDependencyInput, ...] = Field(
+        default=(),
+        description="The agents it reads or calls besides `self`, as `deps.<key>`: bound when it is shown, to the task's own when they satisfy it.",
+    )
+    vocab: Literal[2] = Field(description="The blok language version the blok speaks; v2 is the only one.")
+    catalogs: tuple[str, ...] = Field(default=(), description="The catalogs it needs, as name@version.")
+    locals: tuple[BlokLocalInput, ...] = Field(default=(), description="Its locals: form state that feeds a call, written only through bind.")
+    demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
+    queries: tuple[BlokQueryInput, ...] = Field(default=(), description="Its declared reads.")
+    subscriptions: tuple[BlokSubscriptionInput, ...] = Field(default=(), description="Its declared streams.")
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
+    )
+
+
+class InformBlokInput(InformBlokRules, ActionModel):
+    """A blok an action shows a person while its task goes on (an ``@inform`` method of an
+    interactions protocol): declared with the action, made once at registration, and the only
+    kind of inform a task may show unless its action declares ``dynamic_informs``. It reads the
+    run as ``task``, what it is opened on as ``args.<key>`` and the agent as ``self``; nothing
+    waits on it, so it answers nothing."""
+
+    key: str = Field(description="What a task names it by: `<parameter>.<method>` of the action's interactions protocol.")
+    description: str | None = Field(default=None, description="What it shows, in a sentence: the inform's message wherever it is listed.")
+    components: tuple["ComponentNodeInput", ...] | None = Field(
+        default=None,
+        description="The UI component tree, unless the blok is sent as its `source`.",
+    )
+    source: str | None = Field(
+        default=None,
+        description="The blok as BSX, parsed by the server into its component tree. Exactly one of `components` and `source` is sent.",
+    )
+    module: str | None = Field(
+        default=None, description="The module the blok renders against besides its catalogs; the Orkestrator's when absent."
+    )
+    args: tuple["ArgPortInput", ...] = Field(default=(), description="What it is opened on, read under `args.<key>`: the method's parameters.")
+    dependencies: tuple[AgentDependencyInput, ...] = Field(
+        default=(),
+        description="The agents it reads or calls besides `self`, as `deps.<key>`: bound when it is shown, to the task's own when they satisfy it.",
+    )
+    vocab: Literal[2] = Field(description="The blok language version the blok speaks; v2 is the only one.")
+    catalogs: tuple[str, ...] = Field(default=(), description="The catalogs it needs, as name@version.")
+    locals: tuple[BlokLocalInput, ...] = Field(default=(), description="Its locals: form state that feeds a call, written only through bind.")
+    demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
+    queries: tuple[BlokQueryInput, ...] = Field(default=(), description="Its declared reads.")
+    subscriptions: tuple[BlokSubscriptionInput, ...] = Field(default=(), description="Its declared streams.")
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
+    )
+
+
 class DefinitionInput(DefinitionRules, ActionModel):
     """A definition
 
@@ -1410,6 +1485,32 @@ class ImplementationInput(ActionModel):
     logo: str | None = Field(
         default=None,
         description="The key of the agent's action logo blok (context ACTION_LOGO) that draws this action.",
+    )
+    asks: tuple[AskBlokInput, ...] | None = Field(
+        default=None,
+        description="The bloks this implementation asks a person through, declared up front: a task names one by its key.",
+    )
+    informs: tuple[InformBlokInput, ...] | None = Field(
+        default=None,
+        description="The bloks this implementation shows a person while a task goes on, declared up front: a task names one by its key.",
+    )
+    dynamic_asks: bool | None = Field(
+        validation_alias=AliasChoices("dynamic_asks", "dynamicAsks"),
+        serialization_alias="dynamicAsks",
+        default=None,
+        description="Whether a task may also ask through a blok made at ask time, or any blok of the organization. The server refuses it otherwise, and without the `rekuest_dynamic_ask` scope.",
+    )
+    dynamic_informs: bool | None = Field(
+        validation_alias=AliasChoices("dynamic_informs", "dynamicInforms"),
+        serialization_alias="dynamicInforms",
+        default=None,
+        description="Whether a task may show a blok made at inform time, or any blok of the organization, while it goes on. The server refuses it otherwise, and without the `rekuest_dynamic_inform` scope.",
+    )
+    dynamic_calls: bool | None = Field(
+        validation_alias=AliasChoices("dynamic_calls", "dynamicCalls"),
+        serialization_alias="dynamicCalls",
+        default=None,
+        description="Whether a task may also call actions it found at run time, not only its declared dependencies. A WORKFLOW only; the server refuses it otherwise, and without the `rekuest_dynamic_call` scope.",
     )
 
     model_config = ConfigDict(

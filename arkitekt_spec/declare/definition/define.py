@@ -216,6 +216,13 @@ def is_dependency_type(
     return structure_registry is not None and structure_registry.is_protocol(cls)
 
 
+def is_interactions_type(
+    cls: TypeAnnotation, structure_registry: "StructureRegistry | None"
+) -> bool:
+    """Whether ``cls`` is an interactions protocol the app declared (``@app.interactions``)."""
+    return structure_registry is not None and structure_registry.is_interactions(cls)
+
+
 def dependency_to_dependency_input(
     key: str, cls: Any, structure_registry: "StructureRegistry"
 ) -> AgentDependencyInput:
@@ -727,7 +734,7 @@ def prepare_definition(
                 f"Could not find type hint for {key} in {function_name}. Please provide a type hint (or default) for this argument."
             )
 
-        if is_dependency_type(cls, structure_registry):
+        if is_dependency_type(cls, structure_registry) or is_interactions_type(cls, structure_registry):
             continue
 
         if is_local_var(cls, structure_registry):

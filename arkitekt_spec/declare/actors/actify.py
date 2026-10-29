@@ -9,7 +9,7 @@ from typing import Any
 from arkitekt_spec.actions import DefinitionInput
 from arkitekt_spec.declare.actors.types import ImplementationDetails, RegisterConfig
 from arkitekt_spec.declare.agents.context import prepare_context_variables
-from arkitekt_spec.declare.agents.dependency import prepare_dependency_variables
+from arkitekt_spec.declare.agents.dependency import prepare_dependency_variables, prepare_interaction_variables
 from arkitekt_spec.declare.definition.define import prepare_definition
 from arkitekt_spec.declare.protocol.types import AnyFunction
 from arkitekt_spec.declare.state.utils import (
@@ -34,6 +34,7 @@ def derive_implementation_details(
     state_variables, state_returns = prepare_state_variables(function, structure_registry)
     context_variables, context_returns = prepare_context_variables(function, structure_registry)
     dependency_variables = prepare_dependency_variables(function, structure_registry)
+    interaction_variables = prepare_interaction_variables(function, structure_registry)
     injected_variables = prepare_injected_variables(function, structure_registry)
 
     locks = config.locks
@@ -61,6 +62,7 @@ def derive_implementation_details(
         tracks=config.tracks,
         manipulates=manipulates,
         injected_variables=injected_variables,
+        interaction_variables=interaction_variables,
     )
 
 

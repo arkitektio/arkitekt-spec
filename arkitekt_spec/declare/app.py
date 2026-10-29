@@ -60,6 +60,7 @@ from arkitekt_spec.blok.vocabulary import VOCAB, BlokError, load_vocabulary
 from arkitekt_spec.declare.actors.policy import KEEP, DisconnectPolicy
 from arkitekt_spec.declare.actors.types import Actifier, DeclaredImplementation
 from arkitekt_spec.declare.agents.hooks.registry import HooksRegistry
+from arkitekt_spec.declare.interactions import DeclaredInteractions
 from arkitekt_spec.declare.blok.action import ActionBloks, action_blok_components_in
 from arkitekt_spec.declare.blok.declarations import (
     Local,
@@ -271,6 +272,16 @@ def _owner_among(
     return owner
 
 
+DYNAMIC_ASK_SCOPE = "rekuest_dynamic_ask"
+"""The scope a task's agent needs to ask through a blok made at ask time (``dynamic_asks``)."""
+DYNAMIC_CALL_SCOPE = "rekuest_dynamic_call"
+"""The scope a task's agent needs to call an action found at run time (``dynamic_calls``)."""
+DYNAMIC_INFORM_SCOPE = "rekuest_dynamic_inform"
+"""The scope a task's agent needs to show a blok made at inform time (``dynamic_informs``)."""
+DEPENDENCY_CALL_SCOPE = "rekuest_dependency_call"
+"""The scope a task's agent needs to call an action through a dependency its action declares."""
+
+
 class AppRegistry(BaseModel):
     """The single registry that consolidates all agent registration data.
 
@@ -426,6 +437,27 @@ class AppRegistry(BaseModel):
             return declare(cls)
 
         return decorate
+
+    def interactions(self, cls: type[T]) -> type[T]:
+        """Declare an interactions protocol: ``@app.interactions`` on a class of ``@ask`` and
+        ``@inform`` methods.
+
+        Every method's ports are built and its blok checked now, against this app's structures
+        and catalogs, and the class is returned unchanged. An action parameter annotated with
+        it is handed a proxy whose methods ask a person or show them a blok, and the action
+        registers each as one of its asks or informs (see :mod:`arkitekt_spec.declare.interactions`).
+        """
+        self.register_interactions(cls)
+        return cls
+
+    def register_interactions(self, cls: type[Any]) -> None:
+        """Declare the interactions protocol ``cls`` here (the twin of :meth:`interactions`).
+
+        Raises:
+            DefinitionError: If a method is neither an ask nor an inform, or its blok breaks a rule.
+        """
+        self._refuse_if_frozen(f"the interactions protocol {cls.__qualname__}")
+        self.structure_registry.interactions[cls] = DeclaredInteractions(cls, self)
 
     def provider(self) -> Callable[[Callable[..., T]], Provider[T]]:
         """Declare a provider here: ``@registry.provider()`` on its builder.
@@ -618,6 +650,25 @@ class AppRegistry(BaseModel):
     def get_implementations(self) -> list[ImplementationInput]:
         """Get all implementations in the registry."""
         return list(self.implementations.values())
+
+    def get_scopes(self) -> list[str]:
+        """The scopes what is declared here needs beyond an agent's own:
+        ``rekuest_dependency_call`` when an action calls through a dependency it declares,
+        ``rekuest_dynamic_call`` when one calls actions found at run time,
+        ``rekuest_dynamic_ask`` when one asks through bloks made at ask time and
+        ``rekuest_dynamic_inform`` when one shows bloks made at inform time. The server
+        refuses each without it."""
+        scopes: set[str] = set()
+        for implementation in self.implementations.values():
+            if any(dependency.action_dependencies for dependency in implementation.dependencies or ()):
+                scopes.add(DEPENDENCY_CALL_SCOPE)
+            if implementation.dynamic_asks:
+                scopes.add(DYNAMIC_ASK_SCOPE)
+            if implementation.dynamic_calls:
+                scopes.add(DYNAMIC_CALL_SCOPE)
+            if implementation.dynamic_informs:
+                scopes.add(DYNAMIC_INFORM_SCOPE)
+        return sorted(scopes)
 
     def get_declared_implementation(self, interface: str) -> DeclaredImplementation:
         """What the runtime builds the actor at ``interface`` from."""
@@ -1734,6 +1785,9 @@ class AppRegistry(BaseModel):
         execution: Execution = Execution.PLAIN,
         logo: "str | ComponentNodeInput | None" = None,
         bloks: "ActionBloks | None" = None,
+        dynamic_asks: bool = False,
+        dynamic_calls: bool = False,
+        dynamic_informs: bool = False,
     ) -> "WrappedFunction[P, R]":
         """Register a function as an action, as a plain call rather than a decorator.
 
@@ -1786,6 +1840,12 @@ class AppRegistry(BaseModel):
                 (``"<Overlay>...</Overlay>"``, or an ``ActionBlok`` for locals and the like;
                 one needs no list): how a client shows a run of it. They name devices only by the function's
                 dependency parameters, are checked now, and are not part of the hash.
+            dynamic_asks: Whether a task may also ask through a blok made at ask time
+                (``task.dynamic_ask``), not only the interactions protocols it is handed.
+            dynamic_calls: Whether a task may also call actions it found at run time
+                (``task.call``), not only its dependencies. A workflow only.
+            dynamic_informs: Whether a task may show a blok made at inform time
+                (``task.inform`` by source or id), not only the app's own bloks.
 
         Returns:
             The function, still callable as itself.
@@ -1821,6 +1881,9 @@ class AppRegistry(BaseModel):
             execution=execution,
             logo=logo,
             bloks=bloks,
+            dynamic_asks=dynamic_asks,
+            dynamic_calls=dynamic_calls,
+            dynamic_informs=dynamic_informs,
         )
 
     def register_workflow(
@@ -1861,4 +1924,4 @@ class AppRegistry(BaseModel):
         )
 
 
-__all__ = ["AppRegistry"]
+__all__ = ["DEPENDENCY_CALL_SCOPE", "DYNAMIC_ASK_SCOPE", "DYNAMIC_CALL_SCOPE", "DYNAMIC_INFORM_SCOPE", "AppRegistry"]
