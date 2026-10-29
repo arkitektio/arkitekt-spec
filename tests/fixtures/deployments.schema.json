@@ -1127,6 +1127,159 @@
       "title": "ArgPortInput",
       "type": "object"
     },
+    "AskBlokInput": {
+      "additionalProperties": false,
+      "description": "A blok an action asks a person through (an ``@ask`` method of an interactions\nprotocol): declared with the action, made once at registration, and the only kind of ask a\ntask may hold on unless its action declares ``dynamic_asks``. It reads the run as ``task``,\nwhat it is opened on as ``args.<key>`` and the agent as ``self``, and answers with\n``task.answer(values: {...})``, keyed by its ``returns``.",
+      "properties": {
+        "args": {
+          "default": [],
+          "description": "What it is opened on, read under `args.<key>`: the method's parameters.",
+          "items": {
+            "$ref": "#/$defs/ArgPortInput"
+          },
+          "title": "Args",
+          "type": "array"
+        },
+        "catalogs": {
+          "default": [],
+          "description": "The catalogs it needs, as name@version.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Catalogs",
+          "type": "array"
+        },
+        "components": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ComponentNodeInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The UI component tree, unless the blok is sent as its `source`.",
+          "title": "Components"
+        },
+        "demo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlokDemoInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What a preview renders it with."
+        },
+        "dependencies": {
+          "default": [],
+          "description": "The agents it reads or calls besides `self`, as `deps.<key>`: bound when it is shown, to the task's own when they satisfy it.",
+          "items": {
+            "$ref": "#/$defs/AgentDependencyInput"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What it asks, in a sentence: the hold's message wherever the ask is listed.",
+          "title": "Description"
+        },
+        "key": {
+          "description": "What a task names it by: `<parameter>.<method>` of the action's interactions protocol.",
+          "title": "Key",
+          "type": "string"
+        },
+        "locals": {
+          "default": [],
+          "description": "Its locals: form state that feeds a call, written only through bind.",
+          "items": {
+            "$ref": "#/$defs/BlokLocalInput"
+          },
+          "title": "Locals",
+          "type": "array"
+        },
+        "module": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The module the blok renders against besides its catalogs; the Orkestrator's when absent.",
+          "title": "Module"
+        },
+        "queries": {
+          "default": [],
+          "description": "Its declared reads.",
+          "items": {
+            "$ref": "#/$defs/BlokQueryInput"
+          },
+          "title": "Queries",
+          "type": "array"
+        },
+        "returns": {
+          "default": [],
+          "description": "What an answer holds: the method's return.",
+          "items": {
+            "$ref": "#/$defs/ReturnPortInput"
+          },
+          "title": "Returns",
+          "type": "array"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The blok as BSX, parsed by the server into its component tree. Exactly one of `components` and `source` is sent.",
+          "title": "Source"
+        },
+        "subscriptions": {
+          "default": [],
+          "description": "Its declared streams.",
+          "items": {
+            "$ref": "#/$defs/BlokSubscriptionInput"
+          },
+          "title": "Subscriptions",
+          "type": "array"
+        },
+        "vocab": {
+          "const": 2,
+          "description": "The blok language version the blok speaks; v2 is the only one.",
+          "title": "Vocab",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "vocab"
+      ],
+      "title": "AskBlokInput",
+      "type": "object"
+    },
     "AssetKind": {
       "description": "What a file an app registers as an asset is.",
       "enum": [
@@ -2988,6 +3141,22 @@
       "additionalProperties": false,
       "description": "A implementation is a blueprint for a action. It is composed of a definition, a list of dependencies, and a list of params.",
       "properties": {
+        "asks": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/AskBlokInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The bloks this implementation asks a person through, declared up front: a task names one by its key.",
+          "title": "Asks"
+        },
         "code_hash": {
           "anyOf": [
             {
@@ -3014,6 +3183,45 @@
           "title": "Dependencies",
           "type": "array"
         },
+        "dynamic_asks": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether a task may also ask through a blok made at ask time, or any blok of the organization. The server refuses it otherwise, and without the `rekuest_dynamic_ask` scope.",
+          "title": "Dynamic Asks"
+        },
+        "dynamic_calls": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether a task may also call actions it found at run time, not only its declared dependencies. A WORKFLOW only; the server refuses it otherwise, and without the `rekuest_dynamic_call` scope.",
+          "title": "Dynamic Calls"
+        },
+        "dynamic_informs": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether a task may show a blok made at inform time, or any blok of the organization, while it goes on. The server refuses it otherwise, and without the `rekuest_dynamic_inform` scope.",
+          "title": "Dynamic Informs"
+        },
         "effects": {
           "$ref": "#/$defs/Effects",
           "default": "UNKNOWN",
@@ -3023,6 +3231,22 @@
           "$ref": "#/$defs/Execution",
           "default": "PLAIN",
           "description": "How this implementation runs: a WORKFLOW may call other actions and is resumed when its agent dies; a PLAIN one may not call other actions."
+        },
+        "informs": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/InformBlokInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The bloks this implementation shows a person while a task goes on, declared up front: a task names one by its key.",
+          "title": "Informs"
         },
         "instance_id": {
           "anyOf": [
@@ -3165,6 +3389,150 @@
         "definition"
       ],
       "title": "ImplementationInput",
+      "type": "object"
+    },
+    "InformBlokInput": {
+      "additionalProperties": false,
+      "description": "A blok an action shows a person while its task goes on (an ``@inform`` method of an\ninteractions protocol): declared with the action, made once at registration, and the only\nkind of inform a task may show unless its action declares ``dynamic_informs``. It reads the\nrun as ``task``, what it is opened on as ``args.<key>`` and the agent as ``self``; nothing\nwaits on it, so it answers nothing.",
+      "properties": {
+        "args": {
+          "default": [],
+          "description": "What it is opened on, read under `args.<key>`: the method's parameters.",
+          "items": {
+            "$ref": "#/$defs/ArgPortInput"
+          },
+          "title": "Args",
+          "type": "array"
+        },
+        "catalogs": {
+          "default": [],
+          "description": "The catalogs it needs, as name@version.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Catalogs",
+          "type": "array"
+        },
+        "components": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ComponentNodeInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The UI component tree, unless the blok is sent as its `source`.",
+          "title": "Components"
+        },
+        "demo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BlokDemoInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What a preview renders it with."
+        },
+        "dependencies": {
+          "default": [],
+          "description": "The agents it reads or calls besides `self`, as `deps.<key>`: bound when it is shown, to the task's own when they satisfy it.",
+          "items": {
+            "$ref": "#/$defs/AgentDependencyInput"
+          },
+          "title": "Dependencies",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What it shows, in a sentence: the inform's message wherever it is listed.",
+          "title": "Description"
+        },
+        "key": {
+          "description": "What a task names it by: `<parameter>.<method>` of the action's interactions protocol.",
+          "title": "Key",
+          "type": "string"
+        },
+        "locals": {
+          "default": [],
+          "description": "Its locals: form state that feeds a call, written only through bind.",
+          "items": {
+            "$ref": "#/$defs/BlokLocalInput"
+          },
+          "title": "Locals",
+          "type": "array"
+        },
+        "module": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The module the blok renders against besides its catalogs; the Orkestrator's when absent.",
+          "title": "Module"
+        },
+        "queries": {
+          "default": [],
+          "description": "Its declared reads.",
+          "items": {
+            "$ref": "#/$defs/BlokQueryInput"
+          },
+          "title": "Queries",
+          "type": "array"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The blok as BSX, parsed by the server into its component tree. Exactly one of `components` and `source` is sent.",
+          "title": "Source"
+        },
+        "subscriptions": {
+          "default": [],
+          "description": "Its declared streams.",
+          "items": {
+            "$ref": "#/$defs/BlokSubscriptionInput"
+          },
+          "title": "Subscriptions",
+          "type": "array"
+        },
+        "vocab": {
+          "const": 2,
+          "description": "The blok language version the blok speaks; v2 is the only one.",
+          "title": "Vocab",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "vocab"
+      ],
+      "title": "InformBlokInput",
       "type": "object"
     },
     "InspectedAsset": {

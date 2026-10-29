@@ -38,7 +38,17 @@ import inspect
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from dataclasses import replace as dataclass_replace
-from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Generic, Literal, ParamSpec, TypeVar, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Concatenate,
+    Generic,
+    Literal,
+    ParamSpec,
+    TypeVar,
+    overload,
+)
 
 from pydantic import BaseModel
 

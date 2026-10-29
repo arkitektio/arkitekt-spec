@@ -15,8 +15,8 @@ from arkitekt_spec.declare.app import (
     DYNAMIC_INFORM_SCOPE,
     AppRegistry,
 )
-from arkitekt_spec.declare.interactions import ask, inform
 from arkitekt_spec.declare.definition.errors import DefinitionError
+from arkitekt_spec.declare.interactions import ask, inform
 
 PICK = """<Html><Card><CardTitle text={args.question} />
   <Button label="Go" onClick={task.answer(values: {name: args.question, count: 2})} />
