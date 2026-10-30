@@ -10,6 +10,7 @@ import importlib
 import runpy
 import sys
 from collections.abc import Iterator
+from concurrent.futures import Future
 from enum import Enum
 from pathlib import Path
 
@@ -157,4 +158,6 @@ def test_a_model_and_a_memory_structure_follow_the_same_rule(tmp_path: Path) -> 
     assert registry.register_as_memory_structure(Blob).identifier == "@myapp/blob"
     # A library class: pathlib is not under the app's directory.
     assert registry.register_as_memory_structure(Path).identifier == "@pathlib/path"
+    # And any other library keeps the identifier, and with it the hash, its module has always given it.
+    assert registry.register_as_memory_structure(Future).identifier == "@concurrent.futures._base/future"
     assert registry.copy_maps().namespace == registry.namespace

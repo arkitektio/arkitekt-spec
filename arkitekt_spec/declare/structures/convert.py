@@ -129,6 +129,10 @@ class AppNamespace(BaseModel):
         return self.identifier if self.defines(cls) else None
 
 
+MOVED_BY_PYTHON = {"pathlib._local": "pathlib"}
+"""Where Python moved a class between versions, so an app keeps its identifier and hash across them."""
+
+
 def cls_to_identifier(cls: type[Any], namespace: str | None = None) -> Identifier:
     """Derive an identifier for an enum or a memory structure: ``@<namespace>/<classname>``.
 
@@ -141,7 +145,7 @@ def cls_to_identifier(cls: type[Any], namespace: str | None = None) -> Identifie
     so the namespace goes in the package slot and the class name in the key slot.
     """
     try:
-        package = package_slot(namespace) if namespace is not None else cls.__module__.lower()
+        package = package_slot(namespace) if namespace is not None else MOVED_BY_PYTHON.get(cls.__module__, cls.__module__).lower()
         return validate_identifier(f"@{package}/{cls.__name__.lower()}")
     except AttributeError as e:
         raise StructureDefinitionError(

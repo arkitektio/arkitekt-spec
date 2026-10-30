@@ -341,7 +341,7 @@ class Service(Generic[C]):
         Returns:
             The schema as SDL, or ``None`` if the service has none.
         """
-        return Path(self._schema).read_text() if self._schema else None
+        return Path(self._schema).read_text(encoding="utf-8") if self._schema else None
 
     def get_turms_project(self) -> dict[str, Any] | None:
         """Give the turms project that generates this service's client.
@@ -349,7 +349,7 @@ class Service(Generic[C]):
         Returns:
             The turms project configuration, or ``None``.
         """
-        return json.loads(Path(self._turms).read_text()) if self._turms else None
+        return json.loads(Path(self._turms).read_text(encoding="utf-8")) if self._turms else None
 
     # ------------------------------------------------------------------ #
     # Building                                                           #

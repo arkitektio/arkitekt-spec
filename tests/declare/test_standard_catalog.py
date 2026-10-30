@@ -57,7 +57,7 @@ def test_every_prop_is_of_a_kind_there_is() -> None:
 
 def test_it_only_extends_the_base_catalog() -> None:
     """The published file lists the base operations too; the catalog read from it does not."""
-    published = {operation["name"] for operation in json.loads(VENDORED.read_text())["operations"]}
+    published = {operation["name"] for operation in json.loads(VENDORED.read_text(encoding="utf-8"))["operations"]}
     extends = {operation.name for operation in load_standard_catalog().operations}
 
     assert published & set(base_operations()), "the published file no longer repeats the base: drop this test"
@@ -71,14 +71,14 @@ def test_the_vendored_file_is_the_one_the_app_exports() -> None:
     """Against a checkout of the app that has exported its catalog: a diff is a file to sync."""
     if not APP_EXPORT.is_file():
         pytest.skip("no exported catalog in a checkout of the app next to the packages")
-    assert json.loads(VENDORED.read_text()) == json.loads(APP_EXPORT.read_text()), (
+    assert json.loads(VENDORED.read_text(encoding="utf-8")) == json.loads(APP_EXPORT.read_text(encoding="utf-8")), (
         "the app's catalog moved: release it, then run scripts/sync_standard_catalog.py"
     )
 
 
 def test_an_exported_catalog_reads_as_the_vendored_one_does() -> None:
     """``ui_catalog_view`` of the vendored file is the standard view: one reading, two sources."""
-    view = ui_catalog_view(json.loads(VENDORED.read_text()))
+    view = ui_catalog_view(json.loads(VENDORED.read_text(encoding="utf-8")))
     standard = standard_view()
 
     assert dict(view.components or {}) == dict(standard.components or {})
