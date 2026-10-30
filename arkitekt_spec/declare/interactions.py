@@ -325,9 +325,10 @@ class DeclaredInteraction:
             for key, cls in (options.dependencies or {}).items()
         )
         view = registry.blok_view(options.module)
-        source = options.component if isinstance(options.component, str) else None
+        declared = options.component
+        source = declared if isinstance(declared, str) else None
         try:
-            component = parse_bsx(options.component, view=view) if source is not None else options.component
+            component = parse_bsx(declared, view=view) if isinstance(declared, str) else declared
             context = blok_context(component)
         except BlokError as error:
             raise error.within(f"{where} ({role})") from None
