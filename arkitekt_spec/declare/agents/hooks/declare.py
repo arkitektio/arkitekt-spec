@@ -7,9 +7,10 @@ app's :class:`~arkitekt_spec.declare.agents.hooks.registry.HooksRegistry`. Runni
 rekuest wraps each declaration in a runner when its agent starts.
 """
 
+import collections.abc
 import inspect
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, TypeVar, get_type_hints, overload
+from typing import TYPE_CHECKING, Any, TypeVar, get_args, get_origin, get_type_hints, overload
 
 from arkitekt_spec.declare.agents.hooks.registry import HooksRegistry
 from arkitekt_spec.declare.agents.hooks.variables import WithVariables
@@ -80,6 +81,56 @@ class StartupWithVariables(WithVariables):
             )
 
 
+def _yields_as_returns(func: AnyFunction) -> AnyFunction:
+    """A stand-in for an async generator, whose return annotation is what it yields.
+
+    What a lifecycle hook yields sets up the same states and contexts a startup hook's
+    return does, so the same analysis reads it.
+    """
+    try:
+        hints = get_type_hints(func, include_extras=True)
+    except Exception as e:
+        raise ValueError(
+            f"Lifecycle function {func.__name__} has annotations that cannot be resolved "
+            f"({e}). What it takes and yields is read from them: they must name classes "
+            "visible from its module, not local ones under `from __future__ import annotations`."
+        ) from e
+
+    yields: Any = inspect.Signature.empty
+    if "return" in hints:
+        returns = hints.pop("return")
+        if get_origin(returns) not in (
+            collections.abc.AsyncIterator,
+            collections.abc.AsyncGenerator,
+            collections.abc.AsyncIterable,
+        ):
+            raise ValueError(
+                f"Lifecycle function {func.__name__} is annotated {returns}. Annotate what it "
+                "yields as AsyncIterator[SomeContext], or AsyncIterator[tuple[SomeContext, SomeState]]."
+            )
+        yields = get_args(returns)[0]
+
+    def stand_in() -> None: ...
+
+    stand_in.__name__ = func.__name__
+    stand_in.__signature__ = inspect.signature(func).replace(return_annotation=yields)  # type: ignore[attr-defined]
+    stand_in.__annotations__ = hints if yields is inspect.Signature.empty else {**hints, "return": yields}
+    return stand_in
+
+
+class LifecycleWithVariables(StartupWithVariables):
+    """A startup hook and its shutdown in one async generator: what it yields sets up the
+    app's states and contexts, and what follows the yield runs when the app tears down."""
+
+    hook_kind = "Lifecycle"
+
+    def __init__(
+        self, func: AnyFunction, structure_registry: "StructureRegistry | None" = None
+    ) -> None:
+        super().__init__(_yields_as_returns(func), structure_registry)
+        self.func = func
+
+
 class BackgroundWithVariables(WithVariables):
     hook_kind = "Background"
 
@@ -130,6 +181,17 @@ class StartupHookDeclaration(_Declared, StartupWithVariables):
         self.structure_registry = structure_registry
 
 
+class LifecycleHookDeclaration(_Declared, LifecycleWithVariables):
+    """A declared lifecycle hook."""
+
+    def __init__(
+        self, func: AnyFunction, structure_registry: "StructureRegistry | None" = None
+    ) -> None:
+        """Analyse ``func`` as a lifecycle hook."""
+        super().__init__(func, structure_registry)
+        self.structure_registry = structure_registry
+
+
 class BackgroundDeclaration(_Declared, BackgroundWithVariables):
     """A declared background worker."""
 
@@ -153,6 +215,7 @@ class ShutdownHookDeclaration(_Declared, ShutdownWithVariables):
 
 
 TStartup = TypeVar("TStartup", bound=StartupFunction | ContextLessStartupFunction)
+TLifecycle = TypeVar("TLifecycle", bound=AnyFunction)
 TBackground = TypeVar("TBackground", bound=BackgroundFunction)
 TShutdown = TypeVar("TShutdown", bound=ShutdownFunction)
 
@@ -205,6 +268,58 @@ def declare_startup(
         _require_function(function)
         registry.register_startup(
             name or function.__name__, StartupHookDeclaration(function, structure_registry)
+        )
+        return function
+
+    return decorator(func) if func is not None else decorator
+
+
+@overload
+def declare_lifecycle(
+    func: TLifecycle,
+    /,
+    *,
+    name: str | None = None,
+    registry: HooksRegistry,
+    structure_registry: "StructureRegistry | None" = None,
+) -> TLifecycle: ...
+
+
+@overload
+def declare_lifecycle(
+    func: None = None,
+    /,
+    *,
+    name: str | None = None,
+    registry: HooksRegistry,
+    structure_registry: "StructureRegistry | None" = None,
+) -> Callable[[TLifecycle], TLifecycle]: ...
+
+
+def declare_lifecycle(
+    func: TLifecycle | None = None,
+    /,
+    *,
+    name: str | None = None,
+    registry: HooksRegistry,
+    structure_registry: "StructureRegistry | None" = None,
+) -> TLifecycle | Callable[[TLifecycle], TLifecycle]:
+    """Declare a lifecycle hook: an async generator that yields once.
+
+    It runs up to its yield among the startup hooks, in the order they were declared,
+    and after it once the shutdown hooks have run, the last one entered first.
+
+    Reached through ``AppRegistry.lifecycle``; call it directly only with ``registry=``.
+    """
+
+    def decorator(function: TLifecycle) -> TLifecycle:
+        if not inspect.isasyncgenfunction(function):
+            raise TypeError(
+                f"A lifecycle hook must be an async generator, and {function.__name__} is not: "
+                "`async def` with one `yield`."
+            )
+        registry.register_startup(
+            name or function.__name__, LifecycleHookDeclaration(function, structure_registry)
         )
         return function
 

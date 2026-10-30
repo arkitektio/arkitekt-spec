@@ -1230,6 +1230,10 @@ class AppRegistry(BaseModel):
         uses that service merges it. Nothing is process-wide -- a registry reaches
         only the apps that ask for its service by name.
 
+        It takes what ``other`` holds now: what is declared on ``other`` afterwards
+        does not follow. What reaches this registry twice, through two registries that
+        both took a third, counts once; it is the same declaration, not a clash.
+
         Args:
             other: The registry to take. It is not changed.
             service: The service ``other`` belongs to, stamped on every structure
@@ -1249,6 +1253,8 @@ class AppRegistry(BaseModel):
                 contract.
         """
         self._refuse_if_frozen("a merged registry")
+        if other is self:
+            return self
 
         # Services first: what they return is what the structures below inject.
         for declared in other.services.values():
@@ -1258,6 +1264,8 @@ class AppRegistry(BaseModel):
 
         for interface, implementation in other.implementations.items():
             if interface in self.implementations:
+                if self.implementations[interface] is implementation:
+                    continue
                 raise ValueError(
                     f"Two services both implement '{interface}'. An interface is "
                     "what a caller assigns to, so it can only mean one thing."
@@ -1272,6 +1280,8 @@ class AppRegistry(BaseModel):
         # this is a method and not four updates at the call site.
         for interface, state in other.states.items():
             if interface in self.states:
+                if self.states[interface] is state:
+                    continue
                 raise ValueError(f"Two services both declare the state '{interface}'.")
             self.states[interface] = state
             if interface in other.state_registry_schemas:
@@ -1285,6 +1295,8 @@ class AppRegistry(BaseModel):
 
         for name, blok in other.registered_bloks.items():
             if name in self.registered_bloks:
+                if self.registered_bloks[name] is blok:
+                    continue
                 raise ValueError(f"Two services both declare the blok '{name}'.")
             self.registered_bloks[name] = blok
 
@@ -1313,7 +1325,12 @@ class AppRegistry(BaseModel):
         ):
             for key, hook in source.items():
                 if key in target:
-                    raise ValueError(f"Two services both declare the hook '{key}'.")
+                    if target[key] is hook:
+                        continue
+                    raise ValueError(
+                        f"Two services both declare the hook '{key}'. A hook is kept under "
+                        "its name: give one its own, with name=."
+                    )
                 target[key] = hook
 
         self.structure_registry.merge(
@@ -1528,6 +1545,23 @@ class AppRegistry(BaseModel):
         from arkitekt_spec.declare.agents.hooks.declare import declare_startup
 
         return declare_startup(  # type: ignore[return-value]
+            func,  # type: ignore[arg-type]
+            name=name,
+            registry=self.hooks_registry,
+            structure_registry=self.structure_registry,
+        )
+
+    def lifecycle(
+        self,
+        func: T | None = None,
+        /,
+        *,
+        name: str | None = None,
+    ) -> T | Callable[[T], T]:
+        """Register a lifecycle hook: a startup and its shutdown in one async generator."""
+        from arkitekt_spec.declare.agents.hooks.declare import declare_lifecycle
+
+        return declare_lifecycle(  # type: ignore[return-value]
             func,  # type: ignore[arg-type]
             name=name,
             registry=self.hooks_registry,
