@@ -15,16 +15,112 @@ service declares.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable, Mapping, Sequence
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 from arkitekt_spec.actions import ProvidesInput, RequiresInput
+from arkitekt_spec.rules import iter_call_arguments
 
 if TYPE_CHECKING:
     from arkitekt_spec.declare.task import StateRequirement
 
 Constraint = RequiresInput | ProvidesInput
+
+Number = int | float
+
+
+def _hardware_value(hardware: Mapping[str, Any], name: str) -> Any:
+    """One of ``AGENT_HARDWARE`` from what an agent says: the GPU values are derived."""
+    if name == "gpu_count":
+        return len(hardware["gpus"]) if "gpus" in hardware else None
+    if name == "gpu_memory_mib":
+        memories = [gpu["memory_mib"] for gpu in hardware.get("gpus", ()) if gpu.get("memory_mib") is not None]
+        return max(memories) if memories else None
+    return hardware.get(name)
+
+
+def _fits_read(path: str, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]) -> Number | None:
+    root, name = path.split("/", 1)
+    value = (
+        descriptors.get(name.replace("~1", "/").replace("~0", "~"))
+        if root == "value"
+        else _hardware_value(hardware, name)
+    )
+    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _fits_number(argument: Any, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]) -> Number | None:
+    if argument.value_path is not None:
+        return _fits_read(argument.value_path, descriptors, hardware)
+    if argument.util_call is None:
+        return argument.value_literal
+    operands: dict[str, Number] = {}
+    for nested in argument.util_call.arguments:
+        operand = _fits_number(nested, descriptors, hardware)
+        if operand is None:
+            return None
+        operands[nested.key] = operand
+    match argument.util_call.operation:
+        case "math.add":
+            return operands["a"] + operands["b"]
+        case "math.sub":
+            return operands["a"] - operands["b"]
+        case "math.mul":
+            return operands["a"] * operands["b"]
+        case "math.div":
+            return operands["a"] / operands["b"] if operands["b"] != 0 else None
+        case "math.neg":
+            return -operands["a"]
+        case "math.abs":
+            return abs(operands["value"])
+        case "math.floor":
+            return math.floor(operands["value"])
+        case "math.ceil":
+            return math.ceil(operands["value"])
+    return None
+
+
+def fits_holds(call: Any, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]) -> bool:
+    """Whether an object fits, the way the database predicate that matches actions answers it.
+
+    The first evaluator of a call tree in Python, and only of the subset a ``Fits`` may use
+    (:func:`arkitekt_spec.rules.check_fits`). A comparison on a missing value is false.
+    """
+    arguments = {argument.key: argument for argument in call.arguments or ()}
+    match call.operation:
+        case "logic.all":
+            return all(fits_holds(item.util_call, descriptors, hardware) for item in arguments["values"].value_list)
+        case "logic.any":
+            return any(fits_holds(item.util_call, descriptors, hardware) for item in arguments["values"].value_list)
+    a = _fits_number(arguments["a"], descriptors, hardware)
+    b = _fits_number(arguments["b"], descriptors, hardware)
+    if a is None or b is None:
+        return False
+    match call.operation:
+        case "cmp.gt":
+            return a > b
+        case "cmp.gte":
+            return a >= b
+        case "cmp.lt":
+            return a < b
+        case "cmp.lte":
+            return a <= b
+    return False
+
+
+def fits_can_be_tested(call: Any, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]) -> bool:
+    """Whether everything a formula reads is known here.
+
+    An agent describes an object from what it fetched, and may not know its own memory. Like a
+    constraint on a key the object's descriptors do not hold, that is not tested.
+    """
+    return all(
+        _fits_read(argument.value_path, descriptors, hardware) is not None
+        for argument in iter_call_arguments(call)
+        if argument.value_path is not None
+    )
 
 
 def operator_name(operator: object) -> str:

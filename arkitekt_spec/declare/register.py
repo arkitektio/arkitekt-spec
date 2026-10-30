@@ -3,15 +3,20 @@
 import hashlib
 import inspect
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from dataclasses import replace
 from typing import (
     TYPE_CHECKING,
+    Annotated,
     Any,
     Generic,
     Literal,
     ParamSpec,
     TypeVar,
     cast,
+    get_args,
+    get_origin,
+    get_type_hints,
     overload,
 )
 
@@ -30,7 +35,9 @@ from arkitekt_spec.actions import (
     DefinitionInput,
     EffectInput,
     Effects,
+    EstimatedRuntimeInput,
     Execution,
+    FitsInput,
     ImplementationInput,
     InformBlokInput,
     OptimisticInput,
@@ -50,7 +57,9 @@ from arkitekt_spec.declare.actors.types import (
     DeclaredImplementation,
     RegisterConfig,
 )
+from arkitekt_spec.declare.annotations.markers import Fits
 from arkitekt_spec.declare.blok.action import ActionBloks, build_action_bloks
+from arkitekt_spec.declare.blok.parser import parse_estimated_runtime, parse_fits
 from arkitekt_spec.declare.blok.validate import blok_context
 from arkitekt_spec.declare.coercible_types import (
     OptimisticCoercible,
@@ -180,6 +189,49 @@ def _declared_interactions(
     return fields
 
 
+def _fits_markers(hint: Any) -> Iterator[Fits]:
+    """Every ``Fits`` in an annotation, however deep: where one sits wrongly, the rules say so."""
+    if get_origin(hint) is Annotated:
+        yield from (marker for marker in hint.__metadata__ if isinstance(marker, Fits))
+    for nested in get_args(hint):
+        yield from _fits_markers(nested)
+
+
+def _fits_of(function_or_actor: AnyFunction, interface: str) -> tuple[FitsInput, ...]:
+    """The ``Fits`` of a function's arguments, parsed. Nothing for an actor class."""
+    if not inspect.isroutine(function_or_actor):
+        return ()
+    fits = []
+    for key, hint in get_type_hints(function_or_actor, include_extras=True).items():
+        for marker in _fits_markers(hint):
+            try:
+                fits.append(FitsInput(port=key, call=parse_fits(marker.expression), source=marker.expression))
+            except ValueError as error:
+                raise DefinitionError(f"{interface}: {error}") from error
+    return tuple(fits)
+
+
+def _estimated_runtime_of(config: RegisterConfig, interface: str) -> dict[str, Any]:
+    """The ``estimated_runtime`` field of an implementation, only when it has one."""
+    if config.estimated_runtime is None:
+        if config.estimated_runtime_ui is not None:
+            raise DefinitionError(f"{interface}: estimated_runtime_ui needs estimated_runtime, which is what the action query filters by")
+        return {}
+    try:
+        estimate = EstimatedRuntimeInput(
+            call=parse_estimated_runtime(config.estimated_runtime),
+            source=config.estimated_runtime,
+            **(
+                {"ui_call": parse_estimated_runtime(config.estimated_runtime_ui), "ui_source": config.estimated_runtime_ui}
+                if config.estimated_runtime_ui is not None
+                else {}
+            ),
+        )
+    except ValueError as error:
+        raise DefinitionError(f"{interface}: {error}") from error
+    return {"estimated_runtime": estimate}
+
+
 def register_func(
     function_or_actor: AnyFunction,
     structure_registry: StructureRegistry,
@@ -280,6 +332,12 @@ def register_func(
         for optimistic in (config.optimistics or [])
     ]
 
+    fits = _fits_of(function_or_actor, interface)
+    declared_fits: dict[str, Any] = {}
+    if fits:
+        config = replace(config, fits=fits)
+        declared_fits["fits"] = fits
+
     # The spec's models carry the structural rules; what needs rekuest (search
     # queries, state references) is checked here, at the decorator.
     implementation_registry.register_at_interface(
@@ -300,6 +358,8 @@ def register_func(
             **_logo_of(config, interface, implementation_registry),
             # The same for interactions and the dynamic flags: an action declaring none keeps its hash.
             **_declared_interactions(asks, informs, config),
+            **_estimated_runtime_of(config, interface),
+            **declared_fits,
         )),
         DeclaredImplementation(function_or_actor, config, actifier),
     )
@@ -344,6 +404,8 @@ def declare_implementation(
     dynamic_asks: bool = False,
     dynamic_calls: bool = False,
     dynamic_informs: bool = False,
+    estimated_runtime: str | None = None,
+    estimated_runtime_ui: str | None = None,
 ) -> WrappedFunction[P, R]:
     """Register a function directly: ``declare_implementation(fn, implementation_registry=...)``."""
 
@@ -383,6 +445,8 @@ def declare_implementation(
     dynamic_asks: bool = False,
     dynamic_calls: bool = False,
     dynamic_informs: bool = False,
+    estimated_runtime: str | None = None,
+    estimated_runtime_ui: str | None = None,
 ) -> Callable[[Callable[P, R]], WrappedFunction[P, R]]:
     """Build a configured decorator: ``declare_implementation(implementation_registry=..., name=...)``."""
 
@@ -421,6 +485,8 @@ def declare_implementation(
     dynamic_asks: bool = False,
     dynamic_calls: bool = False,
     dynamic_informs: bool = False,
+    estimated_runtime: str | None = None,
+    estimated_runtime_ui: str | None = None,
 ) -> WrappedFunction[P, R] | Callable[[Callable[P, R]], WrappedFunction[P, R]]:
     """Register a function or actor with an app registry.
 
@@ -498,6 +564,14 @@ def declare_implementation(
         dynamic_informs (bool): Whether a task may show a blok made at inform time
             (``task.inform`` by source or id). The server refuses it otherwise, and
             without the ``rekuest_dynamic_inform`` scope.
+        estimated_runtime (str): A formula for how long it runs, in seconds, such as
+            ``'args.image["@mikro/size"] / agent.cpu_count / 5e7'``. Parsed here, never
+            run. The action query filters and sorts by it, so it is refused unless the
+            server can compute it: arithmetic over one structure argument's descriptors
+            and the agent's hardware.
+        estimated_runtime_ui (str): A richer formula for the form only, shown instead of
+            ``estimated_runtime``, which it requires: any pure function, and the form's
+            values too. The two can disagree.
     Returns:
         The wrapped function, or a decorator producing it.
     """
@@ -532,6 +606,8 @@ def declare_implementation(
         dynamic_asks=dynamic_asks,
         dynamic_calls=dynamic_calls,
         dynamic_informs=dynamic_informs,
+        estimated_runtime=estimated_runtime,
+        estimated_runtime_ui=estimated_runtime_ui,
     )
 
     def offer(function_or_actor: Callable[P, R]) -> WrappedFunction[P, R]:

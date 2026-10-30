@@ -11,13 +11,25 @@ them as plain strings (``use_enum_values=True``).
 """
 
 import re
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from typing import Any, Protocol, Self, cast
 
 from pydantic import BaseModel, field_validator, model_validator
 
 #: The reserved ``value_path`` root that refers to the port's own value.
 OWN_VALUE = "value"
+
+#: The ``value_path`` roots of a runtime formula: the form's values and the agent's.
+ESTIMATE_ARGS_ROOT = "args"
+ESTIMATE_AGENT_ROOT = "agent"
+
+#: What a runtime formula reads of the agent's hardware (``agent.cpu_count``).
+AGENT_HARDWARE = ("cpu_count", "memory_mib", "gpu_count", "gpu_memory_mib")
+
+#: What a ``Fits`` may be made of: what compiles to a ``jsonpath`` and evaluates alike everywhere.
+FITS_ARITHMETIC = frozenset({"math.add", "math.sub", "math.mul", "math.div", "math.neg", "math.abs", "math.floor", "math.ceil"})
+FITS_COMPARISONS = frozenset({"cmp.gt", "cmp.gte", "cmp.lt", "cmp.lte"})
+FITS_COMBINATIONS = frozenset({"logic.all", "logic.any"})
 
 #: Separator of a port path: ``foo..bar`` is the child ``bar`` of port ``foo``.
 PORT_PATH_SEPARATOR = ".."
@@ -39,6 +51,7 @@ ITEM_KEY = "..."
 class _Argument(Protocol):
     key: str | None
     value_path: str | None
+    value_literal: Any
     util_call: Any
     agent_call: Any
     value_list: Any
@@ -155,6 +168,121 @@ def check_pure_call(call: _Call, dependencies: Iterable[str] | None, owner: str)
                 )
 
 
+def _pointer_segment(segment: str) -> str:
+    """The text of one RFC 6901 segment of a ``value_path``."""
+    return segment.replace("~1", "/").replace("~0", "~")
+
+
+def check_estimated_runtime(call: _Call, ports: Iterable[Any], owner: str) -> None:
+    """Raise unless ``call`` is a number the server can compute when matching actions.
+
+    The action query filters and sorts by it for one object, so it reads the descriptors of
+    one structure argument (``args/<port>/@pkg~1key``) and ``agent/<one of AGENT_HARDWARE>``,
+    and only uses what a Postgres ``jsonpath`` has. ``estimated_runtime_ui`` has the rest.
+    """
+    hint = "; a formula using more goes in estimated_runtime_ui"
+    check_call_shape(call, owner)
+    if call.operation not in FITS_ARITHMETIC:
+        raise ValueError(f"{owner}: {call.operation} cannot be computed when matching actions, which only has {', '.join(sorted(FITS_ARITHMETIC))}{hint}")
+    by_key = {port.key: port for port in ports}
+    read: set[str] = set()
+
+    def check_read(path: str) -> None:
+        segments = path.split("/")
+        if segments[0] == ESTIMATE_ARGS_ROOT:
+            port = by_key.get(segments[1]) if len(segments) > 1 else None
+            if len(segments) != 3 or not segments[2].startswith("@") or port is None or not port.identifier:
+                raise ValueError(f"{owner} reads '{path}': it can read the descriptors of a structure argument, args.<port>[\"@pkg/key\"]{hint}")
+            read.add(segments[1])
+            if len(read) > 1:
+                raise ValueError(f"{owner} reads {' and '.join(sorted(read))}: the action query has one object, so it reads one argument{hint}")
+        elif segments[0] != ESTIMATE_AGENT_ROOT or len(segments) != 2 or segments[1] not in AGENT_HARDWARE:
+            raise ValueError(f"{owner} reads '{path}': it can read a structure argument's descriptors and agent.{{{', '.join(AGENT_HARDWARE)}}}{hint}")
+
+    try:
+        for argument in call.arguments or ():
+            _check_formula_number(argument, owner, check_read)
+    except ValueError as error:
+        raise ValueError(f"{error}{'' if hint in str(error) else hint}") from error
+
+
+def check_estimated_runtime_ui(call: _Call, ports: Iterable[Any], owner: str) -> None:
+    """Raise unless ``call`` is pure and reads only what the form's estimate may read.
+
+    Only the frontend evaluates it, against the form and the agent, so its paths are
+    ``args/<port>`` (nested fields below it), ``args/<port>/@pkg~1key`` (a descriptor of the
+    structure picked there) and ``agent/<one of AGENT_HARDWARE>``.
+    """
+    check_call_shape(call, owner)
+    by_key = {port.key: port for port in ports}
+    for argument in iter_call_arguments(call):
+        if argument.agent_call is not None:
+            raise ValueError(f"{owner} must be pure: nested agent calls are not allowed")
+        if argument.value_path is None:
+            continue
+        root, *rest = argument.value_path.split("/")
+        if root == ESTIMATE_ARGS_ROOT and rest:
+            port = by_key.get(rest[0])
+            if port is None:
+                raise ValueError(f"{owner} reads args.{rest[0]}, but the action has no such argument")
+            descriptors = [_pointer_segment(segment) for segment in rest[1:] if segment.startswith("@")]
+            if descriptors and (len(rest) != 2 or not port.identifier):
+                raise ValueError(f"{owner} reads the descriptor {descriptors[0]} of args.{rest[0]}, which only a structure argument has")
+        elif root == ESTIMATE_AGENT_ROOT and rest:
+            if len(rest) != 1 or rest[0] not in AGENT_HARDWARE:
+                raise ValueError(f"{owner} reads agent.{'.'.join(rest)}; an agent has {', '.join(AGENT_HARDWARE)}")
+        else:
+            raise ValueError(f"{owner} reads '{argument.value_path}': a path starts with args.<port> or agent.")
+
+
+def _check_fits_read(path: str, owner: str) -> None:
+    segments = path.split("/")
+    if segments[0] == OWN_VALUE:
+        if len(segments) != 2 or not segments[1].startswith("@"):
+            raise ValueError(f"{owner} reads '{path}': name a descriptor of this argument, such as @mikro/size")
+    elif segments[0] != ESTIMATE_AGENT_ROOT or len(segments) != 2 or segments[1] not in AGENT_HARDWARE:
+        raise ValueError(f"{owner} reads '{path}': it can read this argument's descriptors and agent.{{{', '.join(AGENT_HARDWARE)}}}. Agent state and other arguments cannot be tested when matching actions")
+
+
+def _check_formula_number(argument: _Argument, owner: str, check_read: Callable[[str], None]) -> None:
+    """Hold one operand to what a database predicate can compute."""
+    if argument.util_call is not None:
+        if argument.util_call.operation not in FITS_ARITHMETIC:
+            raise ValueError(f"{owner}: {argument.util_call.operation} cannot be computed when matching actions, which only has {', '.join(sorted(FITS_ARITHMETIC))}")
+        for nested in argument.util_call.arguments or ():
+            _check_formula_number(nested, owner, check_read)
+    elif argument.value_path is not None:
+        check_read(argument.value_path)
+    elif isinstance(argument.value_literal, bool) or not isinstance(argument.value_literal, (int, float)):
+        raise ValueError(f"{owner} uses {argument.value_literal!r}: it only works on numbers")
+
+
+def _check_fits_predicate(call: _Call, owner: str) -> None:
+    if call.operation in FITS_COMPARISONS:
+        for argument in call.arguments or ():
+            _check_formula_number(argument, owner, lambda path: _check_fits_read(path, owner))
+    elif call.operation in FITS_COMBINATIONS:
+        for argument in call.arguments or ():
+            for item in argument.value_list or ():
+                if item.util_call is None:
+                    raise ValueError(f"{owner}: and/or combine comparisons")
+                _check_fits_predicate(item.util_call, owner)
+    else:
+        raise ValueError(f"{owner} must be a comparison ({', '.join(sorted(FITS_COMPARISONS))}), or several joined by and/or, not {call.operation}. Exact values belong in Requires")
+
+
+def check_fits(call: _Call, owner: str) -> None:
+    """Raise unless ``call`` compiles to the database predicate that matches actions.
+
+    The server, the agent and the frontend all evaluate it, so it stays where they agree: a
+    comparison of numbers, on a missing value false everywhere. That leaves out ``not``, ``==``
+    and ``!=``, which disagree on a missing value, and ``**``, ``sqrt`` and ``log``, which a
+    Postgres ``jsonpath`` does not have.
+    """
+    check_call_shape(call, owner)
+    _check_fits_predicate(call, owner)
+
+
 def resolve_port_path(path: str, ports: Iterable[Any]) -> bool:
     """True if a port path (``a..b..c``) resolves through ``children`` from the given roots."""
     candidates = list(ports)
@@ -253,6 +381,48 @@ class ValidatorRules(BaseModel):
             validator.dependencies,
             f"Validator {validator.label or validator.call.operation}",
         )
+        return self
+
+
+class FitsRules(BaseModel):
+    """A ``Fits``: a formula a database predicate can express."""
+
+    @model_validator(mode="after")
+    def _predicate(self) -> Self:
+        fits: Any = self
+        check_fits(fits.call, f"Fits of {fits.port}")
+        return self
+
+
+class ImplementationRules(BaseModel):
+    """An implementation: its formulas read the arguments of its own definition."""
+
+    @model_validator(mode="after")
+    def _fits_single_structures(self) -> Self:
+        implementation: Any = self
+        ports = {port.key: port for port in implementation.definition.args or ()}
+        seen: set[str] = set()
+        for fits in implementation.fits or ():
+            owner = f"The Fits of {implementation.interface or implementation.definition.name} on {fits.port}"
+            port = ports.get(fits.port)
+            if port is None:
+                raise ValueError(f"{owner}: the action has no such argument")
+            if _value(port.kind) != "STRUCTURE":
+                raise ValueError(f"{owner}: only a single structure argument can have one")
+            if fits.port in seen:
+                raise ValueError(f"{owner}: an argument has one Fits; join conditions with and/or")
+            seen.add(fits.port)
+        return self
+
+    @model_validator(mode="after")
+    def _estimate_reads_its_arguments(self) -> Self:
+        implementation: Any = self
+        estimate = implementation.estimated_runtime
+        if estimate is not None:
+            name = implementation.interface or implementation.definition.name
+            check_estimated_runtime(estimate.call, implementation.definition.args, f"The estimated runtime of {name}")
+            if estimate.ui_call is not None:
+                check_estimated_runtime_ui(estimate.ui_call, implementation.definition.args, f"The form's estimated runtime of {name}")
         return self
 
 

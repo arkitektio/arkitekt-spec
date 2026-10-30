@@ -124,6 +124,28 @@ class Requires(RequiresInput):
         return f"Requires({self.key}, {self.operator}, {self.value})"
 
 
+class Fits:
+    """What this implementation can handle of a structure argument.
+
+    Beside :class:`Requires`, which says what the action accepts: a ``Fits`` is about one
+    deployment, and lives on its implementation, not on the action or in its hash. It is a
+    formula over the argument's descriptors and the agent's hardware, parsed and never run::
+
+        image: Annotated[Lens, Fits("@mikro/size * @mikro/dsize < agent.memory_mib * 1048576")]
+
+    An action is not offered for an object no live implementation fits, and the agent refuses
+    one that reaches it anyway.
+    """
+
+    def __init__(self, expression: str) -> None:
+        """Hold the formula; :func:`~arkitekt_spec.declare.register.register_func` parses it."""
+        self.expression = expression
+
+    def __repr__(self) -> str:
+        """Return a string representation of the Fits marker."""
+        return f"Fits({self.expression!r})"
+
+
 class Provides(ProvidesInput):
     """Provides class for type hinting.
 

@@ -1788,6 +1788,8 @@ class AppRegistry(BaseModel):
         dynamic_asks: bool = False,
         dynamic_calls: bool = False,
         dynamic_informs: bool = False,
+        estimated_runtime: str | None = None,
+        estimated_runtime_ui: str | None = None,
     ) -> "WrappedFunction[P, R]":
         """Register a function as an action, as a plain call rather than a decorator.
 
@@ -1846,6 +1848,11 @@ class AppRegistry(BaseModel):
                 (``task.call``), not only its dependencies. A workflow only.
             dynamic_informs: Whether a task may show a blok made at inform time
                 (``task.inform`` by source or id), not only the app's own bloks.
+            estimated_runtime: A formula for how long it runs, in seconds, that the
+                action query filters and sorts by. Parsed here, never run, and refused
+                unless the server can compute it.
+            estimated_runtime_ui: A richer formula for the form only, which needs
+                ``estimated_runtime``: any pure function, and the form's values too.
 
         Returns:
             The function, still callable as itself.
@@ -1884,6 +1891,8 @@ class AppRegistry(BaseModel):
             dynamic_asks=dynamic_asks,
             dynamic_calls=dynamic_calls,
             dynamic_informs=dynamic_informs,
+            estimated_runtime=estimated_runtime,
+            estimated_runtime_ui=estimated_runtime_ui,
         )
 
     def register_workflow(

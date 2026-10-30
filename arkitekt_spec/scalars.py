@@ -78,7 +78,7 @@ def validate_identifier(value: str) -> str:
 # ``requires`` is the port's own constraints: a frontend fills it from the port the
 # widget sits on, so one widget on a structure serves every port typed on it, and
 # the service that answers the query keeps only what the port accepts.
-RESERVED_SEARCH_VARIABLES = frozenset({"search", "values", "limit", "offset", "requires"})
+RESERVED_SEARCH_VARIABLES = frozenset({"search", "values", "limit", "offset", "requires", "fits"})
 
 _HEADER_VARIABLE = re.compile(r"\$([_A-Za-z][_0-9A-Za-z]*)\s*:")
 

@@ -11,13 +11,16 @@ from arkitekt_spec.actions import (
     UtilCallInput,
 )
 from arkitekt_spec.blok.bsx import parse_bsx
+from arkitekt_spec.blok.vocabulary import load_vocabulary
 from arkitekt_spec.declare.traits.calls import resolve_base_arguments
+from arkitekt_spec.rules import check_fits
 
 # ``@dep.op(...).into(name)`` binds the call's task to ``name``.
 BOUND_CALL_STEP = "into"
 
 # ``@mikro/arraydataset``: what a structure port carries as its identifier.
 _STRUCTURE_IDENTIFIER = re.compile(r"@[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+_DESCRIPTOR_KEY = re.compile(r"(?<![\w\"'])@[A-Za-z0-9_-]+/[A-Za-z0-9_-]+")
 
 
 EVENT_ROOT = "event"
@@ -189,7 +192,7 @@ class PortCallParser:
             if name is None:
                 raise ValueError(
                     f"Operator {type(node.op).__name__} is not supported in port calls "
-                    "(the base catalog has add, sub, mul, div and mod)"
+                    f"(the catalog has {', '.join(cls._ARITHMETIC.values())})"
                 )
             return cls._base_call(name, a=node.left, b=node.right)
         raise ValueError(f"Unsupported expression in port call: {type(node).__name__}")
@@ -409,6 +412,130 @@ def parse_util_call(expression: str) -> UtilCallInput:
             agent call.
     """
     return PortCallParser.parse_expression(expression)
+
+
+class EstimatedRuntimeParser(PortCallParser):
+    """The port-call grammar with ``**`` too: a formula names the vocabulary, which has ``math.pow``."""
+
+    _ARITHMETIC = {**PortCallParser._ARITHMETIC, ast.Pow: "pow"}
+
+
+_VOCABULARY_NAMES = {
+    "add": "math.add",
+    "sub": "math.sub",
+    "mul": "math.mul",
+    "div": "math.div",
+    "mod": "math.mod",
+    "pow": "math.pow",
+    "neg": "math.neg",
+    "eq": "cmp.eq",
+    "ne": "cmp.ne",
+    "gt": "cmp.gt",
+    "gte": "cmp.gte",
+    "lt": "cmp.lt",
+    "lte": "cmp.lte",
+    "not": "logic.negate",
+    "if": "logic.choose",
+    "is_null": "val.is_null",
+    "is_set": "val.is_set",
+}
+"""What the parser's sugar is called in the blok vocabulary, the only functions the renderer has."""
+
+_VOCABULARY_KEYS = {("if", "condition"): "cond", ("is_null", "a"): "value", ("is_set", "a"): "value"}
+"""The arguments the vocabulary names differently from the base catalog."""
+
+_VOCABULARY_FOLDS = {"and": "logic.all", "or": "logic.any", "coalesce": "logic.coalesce"}
+"""What the base catalog takes as two arguments and the vocabulary as one list."""
+
+
+def _in_vocabulary(call: UtilCallInput, owner: str) -> UtilCallInput:
+    """``call``, its operations and argument keys renamed to the blok vocabulary's."""
+    if call.operation in _VOCABULARY_FOLDS:
+        operands = tuple(
+            argument.model_copy(update={"key": None}) for argument in _vocabulary_arguments(call, owner)
+        )
+        return UtilCallInput(
+            operation=_VOCABULARY_FOLDS[call.operation],
+            arguments=(ActionArgumentInput(key="values", value_list=operands),),
+        )
+
+    operation = _VOCABULARY_NAMES.get(call.operation, call.operation)
+    function = load_vocabulary().function(operation)
+    if function is None or function.effect:
+        raise ValueError(f"{owner}: {operation} is not a pure function of the blok language")
+
+    arguments = []
+    for index, argument in enumerate(_vocabulary_arguments(call, owner)):
+        key = argument.key or str(index)
+        key = _VOCABULARY_KEYS.get((call.operation, key), key)
+        if key.isdigit():
+            if int(key) >= len(function.keys):
+                raise ValueError(f"{owner}: {operation} takes {', '.join(function.keys)}")
+            key = function.keys[int(key)]
+        if key not in function.keys:
+            raise ValueError(f"{owner}: {operation} has no argument {key} ({', '.join(function.keys)})")
+        arguments.append(argument.model_copy(update={"key": key}))
+
+    missing = set(function.required_keys) - {argument.key for argument in arguments}
+    if missing:
+        raise ValueError(f"{owner}: {operation} needs {', '.join(sorted(missing))}")
+    return UtilCallInput(operation=operation, arguments=tuple(arguments))
+
+
+def _vocabulary_arguments(call: UtilCallInput, owner: str) -> list[ActionArgumentInput]:
+    """The arguments of ``call`` with every call nested in them renamed."""
+
+    def renamed(argument: ActionArgumentInput) -> ActionArgumentInput:
+        update: dict[str, object] = {}
+        if argument.util_call is not None:
+            update["util_call"] = _in_vocabulary(argument.util_call, owner)
+        if argument.value_list is not None:
+            update["value_list"] = tuple(renamed(item) for item in argument.value_list)
+        if argument.value_dict is not None:
+            update["value_dict"] = tuple(renamed(item) for item in argument.value_dict)
+        return argument.model_copy(update=update)
+
+    return [renamed(argument) for argument in call.arguments or ()]
+
+
+def parse_estimated_runtime(expression: str) -> UtilCallInput:
+    """Parse a runtime formula, in seconds, into a call of the blok vocabulary.
+
+    The formula is parsed, never run: Python's grammar only reads it, and what comes out is
+    a tree of pure functions. Port calls name the base catalog (``mul``); this names what the
+    renderer implements (``math.mul``). What each formula may then use is the rules' to say:
+    :func:`arkitekt_spec.rules.check_estimated_runtime` for ``estimated_runtime``, which the
+    server computes, and :func:`arkitekt_spec.rules.check_estimated_runtime_ui` for
+    ``estimated_runtime_ui``, which only the frontend does.
+
+    Example:
+        ``parse_estimated_runtime('args.image["@mikro/size"] / agent.cpu_count / 5e7')``
+
+    Raises:
+        ValueError: If the formula does not parse, or calls anything but a pure function.
+    """
+    return _in_vocabulary(EstimatedRuntimeParser.parse_expression(expression), f"Estimated runtime '{expression}'")
+
+
+def parse_fits(expression: str) -> UtilCallInput:
+    """Parse what a deployment can handle into a call of the blok vocabulary.
+
+    The formula is parsed, never run. A bare ``@pkg/key`` is a descriptor of the argument it
+    annotates, ``agent.memory_mib`` the agent's hardware. The server compiles the result to a
+    database predicate, so only what that predicate can express passes
+    (:func:`arkitekt_spec.rules.check_fits`).
+
+    Example:
+        ``parse_fits("@mikro/size * @mikro/dsize < agent.memory_mib * 1048576")``
+
+    Raises:
+        ValueError: If the formula does not parse, or uses anything a predicate cannot express.
+    """
+    source = _DESCRIPTOR_KEY.sub(lambda key: f'value["{key.group()}"]', expression)
+    owner = f"Fits '{expression}'"
+    call = _in_vocabulary(EstimatedRuntimeParser.parse_expression(source), owner)
+    check_fits(call, owner)
+    return call
 
 
 def coerce_util_call(call: "str | UtilCallInput") -> UtilCallInput:

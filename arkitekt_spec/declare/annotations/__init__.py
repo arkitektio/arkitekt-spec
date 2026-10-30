@@ -9,6 +9,7 @@ port-building fields live in :mod:`rekuest.annotations.parsers`.
 from arkitekt_spec.declare.annotations.markers import (
     Default,
     Description,
+    Fits,
     Key,
     Provides,
     Requires,
@@ -22,6 +23,7 @@ from arkitekt_spec.declare.annotations.parsers import (
 __all__ = [
     "Default",
     "Description",
+    "Fits",
     "Key",
     "PortAnnotations",
     "Provides",

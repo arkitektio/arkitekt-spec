@@ -24,6 +24,8 @@ from arkitekt_spec.rules import (
     BlokRules,
     DefinitionRules,
     EffectRules,
+    FitsRules,
+    ImplementationRules,
     InformBlokRules,
     PortRules,
     SliderRules,
@@ -1413,7 +1415,31 @@ class ImplementAgentInput(AgentRules, ActionModel):
     )
 
 
-class ImplementationInput(ActionModel):
+class EstimatedRuntimeInput(ActionModel):
+    """A formula for how long an implementation runs, in seconds, that the action query filters and sorts by."""
+
+    call: "UtilCallInput" = Field(
+        description="The pure blok UtilCall giving seconds, which the server compiles and the frontend evaluates: arithmetic over args/<port>/<descriptor key> of one structure argument and agent/<hardware>."
+    )
+    source: str | None = Field(default=None, description="The formula as its author wrote it.")
+    ui_call: "UtilCallInput | None" = Field(
+        default=None,
+        description="A richer formula for the form, which only the frontend evaluates: any pure function, over args/<port>, args/<port>/<descriptor key> and agent/<hardware>.",
+    )
+    ui_source: str | None = Field(default=None, description="That formula as its author wrote it.")
+
+
+class FitsInput(FitsRules, ActionModel):
+    """What one implementation can handle of one argument: a formula over its descriptors and the agent's hardware."""
+
+    port: str = Field(description="The key of the structure argument it is about.")
+    call: "UtilCallInput" = Field(
+        description="The pure blok UtilCall: a comparison of numbers, or several joined by logic.all/any. Its value_paths read value/<descriptor key> and agent/<hardware>."
+    )
+    source: str | None = Field(default=None, description="The formula as its author wrote it.")
+
+
+class ImplementationInput(ImplementationRules, ActionModel):
     """A implementation is a blueprint for a action. It is composed of a definition, a list of dependencies, and a list of params."""
 
     definition: DefinitionInput = Field(
@@ -1499,6 +1525,16 @@ class ImplementationInput(ActionModel):
         serialization_alias="dynamicAsks",
         default=None,
         description="Whether a task may also ask through a blok made at ask time, or any blok of the organization. The server refuses it otherwise, and without the `rekuest_dynamic_ask` scope.",
+    )
+    fits: tuple[FitsInput, ...] | None = Field(
+        default=None,
+        description="What this implementation can handle, per argument. The server compiles each to a predicate: an action is not offered for an object no live implementation fits.",
+    )
+    estimated_runtime: EstimatedRuntimeInput | None = Field(
+        validation_alias=AliasChoices("estimated_runtime", "estimatedRuntime"),
+        serialization_alias="estimatedRuntime",
+        default=None,
+        description="How long this implementation runs, in seconds, for an object and the agent. The action query filters and sorts by it; the form shows it, or its richer ui formula.",
     )
     dynamic_informs: bool | None = Field(
         validation_alias=AliasChoices("dynamic_informs", "dynamicInforms"),
@@ -1968,6 +2004,8 @@ CustomReturnWidgetInput.model_rebuild()
 DefinitionInput.model_rebuild()
 EffectInput.model_rebuild()
 ImplementAgentInput.model_rebuild()
+EstimatedRuntimeInput.model_rebuild()
+FitsInput.model_rebuild()
 ImplementationInput.model_rebuild()
 OptimisticInput.model_rebuild()
 PortMatchInput.model_rebuild()

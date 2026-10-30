@@ -3032,6 +3032,58 @@
       "title": "Effects",
       "type": "string"
     },
+    "EstimatedRuntimeInput": {
+      "description": "A formula for how long an implementation runs, in seconds, that the action query filters and sorts by.",
+      "properties": {
+        "call": {
+          "$ref": "#/$defs/UtilCallInput",
+          "description": "The pure blok UtilCall giving seconds, which the server compiles and the frontend evaluates: arithmetic over args/<port>/<descriptor key> of one structure argument and agent/<hardware>."
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The formula as its author wrote it.",
+          "title": "Source"
+        },
+        "ui_call": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UtilCallInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A richer formula for the form, which only the frontend evaluates: any pure function, over args/<port>, args/<port>/<descriptor key> and agent/<hardware>."
+        },
+        "ui_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "That formula as its author wrote it.",
+          "title": "Ui Source"
+        }
+      },
+      "required": [
+        "call"
+      ],
+      "title": "EstimatedRuntimeInput",
+      "type": "object"
+    },
     "Execution": {
       "description": "How an implementation runs. A WORKFLOW may call other actions and is resumed from its journal when its agent dies; a PLAIN implementation may not call other actions, and a task of it whose agent dies ends LOST.",
       "enum": [
@@ -3040,6 +3092,39 @@
       ],
       "title": "Execution",
       "type": "string"
+    },
+    "FitsInput": {
+      "description": "What one implementation can handle of one argument: a formula over its descriptors and the agent's hardware.",
+      "properties": {
+        "call": {
+          "$ref": "#/$defs/UtilCallInput",
+          "description": "The pure blok UtilCall: a comparison of numbers, or several joined by logic.all/any. Its value_paths read value/<descriptor key> and agent/<hardware>."
+        },
+        "port": {
+          "description": "The key of the structure argument it is about.",
+          "title": "Port",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The formula as its author wrote it.",
+          "title": "Source"
+        }
+      },
+      "required": [
+        "port",
+        "call"
+      ],
+      "title": "FitsInput",
+      "type": "object"
     },
     "FolderCapability": {
       "additionalProperties": false,
@@ -3227,10 +3312,38 @@
           "default": "UNKNOWN",
           "description": "What running this implementation again would do to the world. Informational only: shown to whoever decides about a lost task."
         },
+        "estimated_runtime": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EstimatedRuntimeInput"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How long this implementation runs, in seconds, for an object and the agent. The action query filters and sorts by it; the form shows it, or its richer ui formula."
+        },
         "execution": {
           "$ref": "#/$defs/Execution",
           "default": "PLAIN",
           "description": "How this implementation runs: a WORKFLOW may call other actions and is resumed when its agent dies; a PLAIN one may not call other actions."
+        },
+        "fits": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/FitsInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What this implementation can handle, per argument. The server compiles each to a predicate: an action is not offered for an object no live implementation fits.",
+          "title": "Fits"
         },
         "informs": {
           "anyOf": [

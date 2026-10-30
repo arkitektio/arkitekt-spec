@@ -15,6 +15,7 @@ from arkitekt_spec.actions import (
     DefinitionInput,
     Effects,
     Execution,
+    FitsInput,
     PortGroupInput,
     TestTargetInput,
     TrackInput,
@@ -223,6 +224,12 @@ class RegisterConfig:
     """Whether a task may call actions it found at run time (``task.call``), not only its dependencies. A WORKFLOW only."""
     dynamic_informs: bool = False
     """Whether a task may show a blok made at inform time (``task.inform`` by source or id), not only the app's own bloks."""
+    fits: tuple[FitsInput, ...] = ()
+    """What it can handle per argument, read off its ``Fits`` markers when it is registered."""
+    estimated_runtime: str | None = None
+    """A formula for how long it runs, in seconds, that the action query filters and sorts by (:func:`~arkitekt_spec.declare.blok.parser.parse_estimated_runtime`)."""
+    estimated_runtime_ui: str | None = None
+    """A richer formula for the form only: any pure function, and the form's values too."""
 
 
 @runtime_checkable
