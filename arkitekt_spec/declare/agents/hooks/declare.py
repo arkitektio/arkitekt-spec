@@ -99,7 +99,8 @@ def _yields_as_returns(func: AnyFunction) -> AnyFunction:
     yields: Any = inspect.Signature.empty
     if "return" in hints:
         returns = hints.pop("return")
-        if get_origin(returns) not in (
+        # A bare `collections.abc.AsyncIterator` has no origin: it is one itself.
+        if (get_origin(returns) or returns) not in (
             collections.abc.AsyncIterator,
             collections.abc.AsyncGenerator,
             collections.abc.AsyncIterable,
@@ -109,7 +110,8 @@ def _yields_as_returns(func: AnyFunction) -> AnyFunction:
                 "yields as AsyncIterator[SomeContext], or AsyncIterator[tuple[SomeContext, SomeState]]."
             )
         args = get_args(returns)
-        if args and args[0] is not type(None):
+        # `typing.AsyncIterator[None]` holds NoneType, `collections.abc`'s holds None.
+        if args and args[0] is not None and args[0] is not type(None):
             yields = args[0]
 
     def stand_in() -> None: ...
