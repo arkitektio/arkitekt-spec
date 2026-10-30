@@ -22,25 +22,54 @@ from arkitekt_spec.declare.protocol.types import (
     ShutdownFunction,
     StartupFunction,
 )
-from arkitekt_spec.declare.state.utils import get_return_length, is_empty_type
+from arkitekt_spec.declare.state.utils import (
+    get_return_length,
+    is_empty_type,
+    prepare_previous_state_variables,
+)
 
 if TYPE_CHECKING:
     from arkitekt_spec.declare.structures.registry import StructureRegistry
 
 
 class StartupWithVariables(WithVariables):
-    """Startup hooks run before any state or context exists: only the app context is injectable."""
+    """Startup hooks run before any state or context exists: only the app context is
+    injectable, and what an earlier run persisted of a state (``SomeState | None``)."""
 
     hook_kind = "Startup"
     injects_states = False
 
-    def get_startup_kwargs(self, app_context: Any, bound_app: BoundApp | None) -> dict[str, Any]:
-        """Bind the app context and the app by parameter name.
+    def __init__(
+        self, func: AnyFunction, structure_registry: "StructureRegistry | None" = None
+    ) -> None:
+        self.previous_state_variables = prepare_previous_state_variables(func, structure_registry)
+        super().__init__(func, structure_registry)
 
-        By name rather than by position, so one hook can take both. No state or
+    def _validate_arguments(self, func: AnyFunction) -> None:
+        if self.state_variables.count:
+            raise ValueError(
+                f"Startup function {func.__name__} takes the state "
+                f"{list(self.state_variables.variable_keys)}, but no state exists yet when it "
+                "runs. To read what an earlier run persisted, annotate it `SomeState | None` "
+                "and declare the state with @app.state(persist=...)."
+            )
+        super()._validate_arguments(func)
+
+    def get_startup_kwargs(
+        self,
+        app_context: Any,
+        bound_app: BoundApp | None,
+        previous_states: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Bind the app context, the app and earlier runs' states by parameter name.
+
+        By name rather than by position, so one hook can take them all. No state or
         context exists yet, hence the empty mappings.
         """
-        return self.get_kwargs({}, {}, app_context, bound_app=bound_app)
+        kwargs = self.get_kwargs({}, {}, app_context, bound_app=bound_app)
+        for key, interface in self.previous_state_variables.items():
+            kwargs[key] = (previous_states or {}).get(interface)
+        return kwargs
 
     def validate_returns(self, func: AnyFunction) -> None:
         allowed_return_types = self.state_returns.count + self.context_returns.count

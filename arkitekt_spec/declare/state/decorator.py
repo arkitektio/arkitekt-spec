@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
+    Literal,
     TypeVar,
     get_type_hints,
     overload,
@@ -65,6 +66,7 @@ def inspect_state(
 def declare_state(cls: type[T], /, *,
     name: str | None = None,
     required_locks: list[str] | None = None,
+    persist: Literal["synchronous"] | float | None = None,
     registry: "AppRegistry",
     structure_reg: StructureRegistry | None = None,
 ) -> type[T]: ...
@@ -74,6 +76,7 @@ def declare_state(cls: type[T], /, *,
 def declare_state(cls: None = None, /, *,
     name: str | None = None,
     required_locks: list[str] | None = None,
+    persist: Literal["synchronous"] | float | None = None,
     registry: "AppRegistry",
     structure_reg: StructureRegistry | None = None,
 ) -> Callable[[type[T]], type[T]]: ...
@@ -85,6 +88,7 @@ def declare_state(
     *,
     name: str | None = None,
     required_locks: list[str] | None = None,
+    persist: Literal["synchronous"] | float | None = None,
     registry: "AppRegistry",
     structure_reg: StructureRegistry | None = None,
 ) -> type[T] | Callable[[type[T]], type[T]]:
@@ -108,6 +112,10 @@ def declare_state(
         required_locks: Locks every action taking this state holds (added to its
             inferred locks), so no two actions command it at once. They do not
             guard writes: managers and background hooks change the state freely.
+        persist: Keep its last value on disk, so a startup hook of the next run can
+            take it as ``old: ThisState | None``: ``"synchronous"`` for every change
+            (an fsync on the event loop), or a period in seconds. ``None`` keeps nothing,
+            and such a state cannot be taken by a startup hook.
         registry: The app registry the state is recorded in.
         structure_reg: Structure registry used while inspecting the state
             schema. Defaults to the app registry's.
@@ -145,6 +153,7 @@ def declare_state(
             inspect_state(cls, interface, structure_registry),
             structure_registry,
             required_locks=required_locks,
+            persist=persist,
         )
         return cls
 

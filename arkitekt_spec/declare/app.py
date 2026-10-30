@@ -282,6 +282,37 @@ DEPENDENCY_CALL_SCOPE = "rekuest_dependency_call"
 """The scope a task's agent needs to call an action through a dependency its action declares."""
 
 
+def _refuse_unpersistable(
+    state: StateImplementationInput, persist: Literal["synchronous"] | float | None
+) -> None:
+    """``persist`` is ``"synchronous"`` or a period, on a state that can outlive its process.
+
+    A memory structure cannot: its drawer dies with the process, and its reference would
+    expand to a dead id without any complaint.
+    """
+    if persist is None:
+        return
+    if persist != "synchronous" and (
+        isinstance(persist, bool) or not isinstance(persist, (int, float)) or persist <= 0
+    ):
+        raise ValueError(
+            f"The state '{state.interface}' has persist={persist!r}: use \"synchronous\" "
+            "or a period in seconds above 0."
+        )
+
+    def in_memory(port: Any) -> bool:
+        return port.kind == PortKind.MEMORY_STRUCTURE or any(
+            in_memory(child) for child in port.children or ()
+        )
+
+    held = [port.key for port in state.definition.ports if in_memory(port)]
+    if held:
+        raise ValueError(
+            f"The state '{state.interface}' cannot be persisted: {held} hold memory "
+            "structures, which die with the process."
+        )
+
+
 class AppRegistry(BaseModel):
     """The single registry that consolidates all agent registration data.
 
@@ -700,6 +731,7 @@ class AppRegistry(BaseModel):
         registry: StructureRegistry,
         *,
         required_locks: Sequence[str] | None = None,
+        persist: Literal["synchronous"] | float | None = None,
     ) -> None:
         """Register a state schema at its interface, with the rules for changing it.
 
@@ -713,8 +745,12 @@ class AppRegistry(BaseModel):
             registry: The structures its ports were built against.
             required_locks: Locks every action taking it holds (inferred). Not a
                 write guard.
+            persist: Keep its last value on disk for a startup hook of the next run:
+                ``"synchronous"`` (every change, an fsync on the event loop) or a
+                period in seconds. ``None`` keeps nothing.
         """
         self._refuse_if_frozen(f"the state '{state.interface}'")
+        _refuse_unpersistable(state, persist)
         if state.interface in load_vocabulary().reserved_state_names:
             raise ValueError(
                 f"A state cannot be called '{state.interface}': it is a segment of an agent in a blok "
@@ -728,6 +764,7 @@ class AppRegistry(BaseModel):
             interface=state.interface,
             definition=state.definition,
             required_locks=tuple(required_locks or ()),
+            persist=persist,
         )
         # On this app's structures, and on the ones the schema was built against
         # when those are separate: a definition built against the latter must
@@ -1426,6 +1463,7 @@ class AppRegistry(BaseModel):
         *,
         name: str | None = None,
         required_locks: list[str] | None = None,
+        persist: Literal["synchronous"] | float | None = None,
     ) -> type[T]: ...
 
     @overload
@@ -1435,6 +1473,7 @@ class AppRegistry(BaseModel):
         *,
         name: str | None = None,
         required_locks: list[str] | None = None,
+        persist: Literal["synchronous"] | float | None = None,
     ) -> Callable[[type[T]], type[T]]: ...
 
     @dataclass_transform(field_specifiers=(model_field,))
@@ -1443,6 +1482,7 @@ class AppRegistry(BaseModel):
         *args: type[T],
         name: str | None = None,
         required_locks: list[str] | None = None,
+        persist: Literal["synchronous"] | float | None = None,
     ) -> type[T] | Callable[[type[T]], type[T]]:
         """Register a class as a stateful entity (it becomes a dataclass).
 
@@ -1455,6 +1495,7 @@ class AppRegistry(BaseModel):
             *args,
             name=name,
             required_locks=required_locks,
+            persist=persist,
             registry=self,
             structure_reg=self.structure_registry,
         )

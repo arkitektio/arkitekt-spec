@@ -39,6 +39,9 @@ class WithVariables:
     #: Tells the agent this hook accepts ``bound_app=`` in ``arun``. Hook classes
     #: written against the bare protocols do not, and are called as before.
     takes_bound_app: bool = True
+    #: Parameter → state interface, for a parameter taking an earlier run's state
+    #: (startup hooks only).
+    previous_state_variables: dict[str, str] = {}
 
     def __init__(
         self, func: AnyFunction, structure_registry: "StructureRegistry | None" = None
@@ -63,6 +66,7 @@ class WithVariables:
         # take them. A hook runs for no task, so it cannot take a Task.
         injectable = list(self.app_context_variables.app_context_variables.keys())
         injectable += list(self.injected_variables.service_client_variables)
+        injectable += list(self.previous_state_variables)
         if self.injected_variables.task_variables:
             raise ValueError(
                 f"{self.hook_kind} function {func.__name__} asks for a Task, but a "

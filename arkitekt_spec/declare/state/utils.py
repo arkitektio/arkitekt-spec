@@ -15,6 +15,7 @@ from arkitekt_spec.declare.agents.types import unwrap_injectable
 from arkitekt_spec.declare.definition.define import (
     get_non_null_variants,
     is_none_type,
+    is_nullable,
     is_tuple,
 )
 from arkitekt_spec.declare.state.predicate import (
@@ -121,6 +122,50 @@ def prepare_state_variables(
         read_only_variables=read_only_variables,
         required_state_locks=required_state_locks,
     ), PreparedStateReturns(state_returns=state_returns)
+
+
+def prepare_previous_state_variables(
+    function: AnyFunction, structure_registry: "StructureRegistry | None" = None
+) -> dict[str, str]:
+    """Find the parameters of a startup hook that take an earlier run's state.
+
+    Such a parameter is annotated ``SomeState | None``: the state's last persisted
+    value, ``None`` when there is none to restore.
+
+    Args:
+        function: The startup hook to inspect.
+        structure_registry: The app's structures, which know its states.
+
+    Returns:
+        Parameter name → the state's interface.
+
+    Raises:
+        ValueError: If the state is not declared with ``persist=``, so no earlier run
+            can have kept it.
+    """
+    try:
+        hints = get_type_hints(function, include_extras=True)
+    except Exception:
+        hints = {}
+
+    previous: dict[str, str] = {}
+    for key, value in inspect.signature(function).parameters.items():
+        annotation = hints.get(key, value.annotation)
+        if not is_nullable(annotation):
+            continue
+        variants = get_non_null_variants(annotation)
+        if len(variants) != 1 or not is_state(variants[0], structure_registry):
+            continue
+        assert structure_registry is not None
+        declaration = structure_registry.state_for(variants[0])
+        if declaration.persist is None:
+            raise ValueError(
+                f"Startup function {function.__name__} takes {key}: "
+                f"{variants[0].__name__} | None, but that state is not persisted, so no "
+                f"earlier run kept it. Declare it with @app.state(persist=...) to read it."
+            )
+        previous[key] = declaration.interface
+    return previous
 
 
 def prepare_appcontext(

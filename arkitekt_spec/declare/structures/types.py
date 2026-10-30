@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from enum import Enum
 from typing import (
     Any,
+    Literal,
     Protocol,
     TypeVar,
     cast,
@@ -351,6 +352,10 @@ class StateDeclaration:
     interface: str
     definition: StateDefinitionInput
     required_locks: tuple[str, ...] = ()
+    persist: Literal["synchronous"] | float | None = None
+    """How the agent keeps the state's last value on disk, for a startup hook of the
+    next run: every change (``"synchronous"``), at most once per that many seconds, or
+    not at all (``None``). Local to the agent: not part of the definition."""
 
 
 @dataclasses.dataclass(frozen=True)
