@@ -108,7 +108,9 @@ def _yields_as_returns(func: AnyFunction) -> AnyFunction:
                 f"Lifecycle function {func.__name__} is annotated {returns}. Annotate what it "
                 "yields as AsyncIterator[SomeContext], or AsyncIterator[tuple[SomeContext, SomeState]]."
             )
-        yields = get_args(returns)[0]
+        args = get_args(returns)
+        if args and args[0] is not type(None):
+            yields = args[0]
 
     def stand_in() -> None: ...
 
