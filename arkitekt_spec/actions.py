@@ -198,20 +198,6 @@ class PortKind(str, Enum):
     __str__ = str.__str__
 
 
-class WindowFunction(str, Enum):
-    """Aggregation computed over a tracked value within a window."""
-
-    MEAN = "MEAN"
-    MIN = "MIN"
-    MAX = "MAX"
-    SUM = "SUM"
-    COUNT = "COUNT"
-    LAST = "LAST"
-    FIRST = "FIRST"
-    STD = "STD"
-    __str__ = str.__str__
-
-
 class ChoiceAssignWidgetInput(ActionModel):
     """A dropdown over the port's `choices`."""
 
@@ -1449,10 +1435,6 @@ class ImplementationInput(ImplementationRules, ActionModel):
         default=(), description="The agent dependencies required by this implementation."
     )
     "The agent dependencies required by this implementation.\nDefault: []"
-    tracks: tuple["TrackInput", ...] | None = Field(
-        default=None,
-        description="The tracks of the definition. This is used to track values over time during the runtime of an action. This is the state of a dependency",
-    )
     interface: str | None = Field(
         default=None,
         description="The interface of the implementation. This is used to group implementations together in the UI",
@@ -1895,39 +1877,6 @@ class TestTargetInput(ActionModel):
     )
 
 
-class TrackInput(ActionModel):
-    """A value that is being tracked over time during the runtime of an action. This is the state of a dependency"""
-
-    dependency_key: str | None = Field(
-        validation_alias=AliasChoices("dependency_key", "dependencyKey"),
-        serialization_alias="dependencyKey",
-        default=None,
-        description="The key of the dependency whose state is being tracked.",
-    )
-    state_key: str = Field(
-        validation_alias=AliasChoices("state_key", "stateKey"),
-        serialization_alias="stateKey",
-        description="The key of the state to track.",
-    )
-    value_key: str = Field(
-        validation_alias=AliasChoices("value_key", "valueKey"),
-        serialization_alias="valueKey",
-        description="The key of the value within the state to track.",
-    )
-    label: str | None = Field(
-        default=None, description="An optional human-readable label for the track."
-    )
-    description: str | None = Field(
-        default=None, description="An optional description for the track."
-    )
-    windows: tuple["WindowInput", ...] | None = Field(
-        default=None, description="The windows (aggregations) computed over the tracked value."
-    )
-    model_config = ConfigDict(
-        frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
-    )
-
-
 class UtilCallInput(ActionModel):
     """Defines a utility call that can be invoked within the system."""
 
@@ -1974,22 +1923,6 @@ class ValidatorInput(ValidatorRules, ActionModel):
     )
 
 
-class WindowInput(ActionModel):
-    """A window that is calculated"""
-
-    window_function: WindowFunction = Field(
-        validation_alias=AliasChoices("window_function", "windowFunction"),
-        serialization_alias="windowFunction",
-        description="The aggregation to compute over the tracked value within the window.",
-    )
-    label: str | None = Field(
-        default=None, description="An optional human-readable label for the window."
-    )
-    model_config = ConfigDict(
-        frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
-    )
-
-
 ActionArgumentInput.model_rebuild()
 ActionDemandInput.model_rebuild()
 AgentDependencyInput.model_rebuild()
@@ -2013,7 +1946,6 @@ ReturnPortInput.model_rebuild()
 SearchAssignWidgetInput.model_rebuild()
 StateAccessorInput.model_rebuild()
 StateChoiceAssignWidgetInput.model_rebuild()
-TrackInput.model_rebuild()
 
 #: The fields of a definition that make up its identity, and so its hash.
 #: Qualifiers and the like are deliberately absent: changing them must not make an

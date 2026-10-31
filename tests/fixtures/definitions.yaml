@@ -96,7 +96,7 @@ definitions:
     locks: []
     needsToken: true
   server_hash: 081c3fb1d1395ef9371aa56021c3ea80bb5ddf32171b15df47fde91cccb92d14
-- source: starmist inspect all from PyPI arkitekt 3.2.0 (snake_case, explicit nulls)
+- source: starmist inspect all from PyPI arkitekt 3.2.0 (snake_case, explicit nulls), tracks removed
   implementation:
     definition:
       allow_probe: null
@@ -208,9 +208,8 @@ definitions:
     optimistics: []
     params: null
     provenance_audience: null
-    tracks: []
   server_hash: 6b1bb50e2bd3c8d0c605280be8915abc4fd7d0cfc90e68ba60ba6455a43291e8
-- source: starmist inspect all from PyPI arkitekt 3.2.0 (snake_case, explicit nulls)
+- source: starmist inspect all from PyPI arkitekt 3.2.0 (snake_case, explicit nulls), tracks removed
   implementation:
     definition:
       allow_probe: null
@@ -324,5 +323,4 @@ definitions:
     optimistics: []
     params: null
     provenance_audience: null
-    tracks: []
   server_hash: 49fa84ec1c5b45e7603794f499665a476f176a3900f7d40010bd6ab630d4e86e

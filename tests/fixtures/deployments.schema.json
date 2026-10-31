@@ -3480,22 +3480,6 @@
           "default": null,
           "description": "The downstream service(s) the provenance token should be scoped to (the token's `aud`). If omitted, Rekuest derives the audience from the structures the assignment acts on.",
           "title": "Provenance Audience"
-        },
-        "tracks": {
-          "anyOf": [
-            {
-              "items": {
-                "$ref": "#/$defs/TrackInput"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The tracks of the definition. This is used to track values over time during the runtime of an action. This is the state of a dependency",
-          "title": "Tracks"
         }
       },
       "required": [
@@ -5328,83 +5312,6 @@
       "title": "TestTargetInput",
       "type": "object"
     },
-    "TrackInput": {
-      "additionalProperties": false,
-      "description": "A value that is being tracked over time during the runtime of an action. This is the state of a dependency",
-      "properties": {
-        "dependency_key": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The key of the dependency whose state is being tracked.",
-          "title": "Dependency Key"
-        },
-        "description": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "An optional description for the track.",
-          "title": "Description"
-        },
-        "label": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "An optional human-readable label for the track.",
-          "title": "Label"
-        },
-        "state_key": {
-          "description": "The key of the state to track.",
-          "title": "State Key",
-          "type": "string"
-        },
-        "value_key": {
-          "description": "The key of the value within the state to track.",
-          "title": "Value Key",
-          "type": "string"
-        },
-        "windows": {
-          "anyOf": [
-            {
-              "items": {
-                "$ref": "#/$defs/WindowInput"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The windows (aggregations) computed over the tracked value.",
-          "title": "Windows"
-        }
-      },
-      "required": [
-        "state_key",
-        "value_key"
-      ],
-      "title": "TrackInput",
-      "type": "object"
-    },
     "UtilCallInput": {
       "additionalProperties": false,
       "description": "Defines a utility call that can be invoked within the system.",
@@ -5498,49 +5405,6 @@
         "call"
       ],
       "title": "ValidatorInput",
-      "type": "object"
-    },
-    "WindowFunction": {
-      "description": "Aggregation computed over a tracked value within a window.",
-      "enum": [
-        "MEAN",
-        "MIN",
-        "MAX",
-        "SUM",
-        "COUNT",
-        "LAST",
-        "FIRST",
-        "STD"
-      ],
-      "title": "WindowFunction",
-      "type": "string"
-    },
-    "WindowInput": {
-      "additionalProperties": false,
-      "description": "A window that is calculated",
-      "properties": {
-        "label": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "An optional human-readable label for the window.",
-          "title": "Label"
-        },
-        "window_function": {
-          "$ref": "#/$defs/WindowFunction",
-          "description": "The aggregation to compute over the tracked value within the window."
-        }
-      },
-      "required": [
-        "window_function"
-      ],
-      "title": "WindowInput",
       "type": "object"
     }
   },
