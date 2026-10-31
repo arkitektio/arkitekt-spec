@@ -150,7 +150,7 @@ def test_an_app_dump_lists_its_assets_with_their_paths_and_hashes(registry: AppR
         {"name": "scope", "kind": "MODEL_3D", "ref": "sha256:" + hashlib.sha256(GLB).hexdigest(), "size": len(GLB), "source": None, "path": "models/scope.glb"},
     ]
     # The server is told everything but where the files are on this machine.
-    assert [set(asset.model_dump(exclude_unset=True)) for asset in declaration.to_agent_input().assets] == [{"name", "kind", "ref", "size"}] * 2
+    assert [set(asset.model_dump(exclude_unset=True)) for asset in registry.to_implement_agent_input().assets] == [{"name", "kind", "ref", "size"}] * 2
 
 
 REF = "sha256:" + "9f" * 32

@@ -30,9 +30,8 @@ def derive_implementation_details(
     """Inspect a function's state/context/dependency variables and resolve the
     implementation metadata.
 
-    Explicit ``config.locks``/``config.manipulates`` win; otherwise locks are
-    inferred from the required state/context locks (when ``config.auto_locks``)
-    and manipulates from the written state variables.
+    Explicit ``config.locks`` win; otherwise locks are inferred from the required
+    state/context locks. Manipulates are the written state variables.
     """
     state_variables, state_returns = prepare_state_variables(function, structure_registry)
     context_variables, context_returns = prepare_context_variables(function, structure_registry)
@@ -41,7 +40,7 @@ def derive_implementation_details(
     injected_variables = prepare_injected_variables(function, structure_registry)
 
     locks = config.locks
-    if locks is None and config.auto_locks:
+    if locks is None:
         newlocks: list[str] = []
         for lock in context_variables.required_context_locks.values():
             newlocks.extend(lock)
@@ -51,9 +50,7 @@ def derive_implementation_details(
         # ``set`` order depends on the hash seed.
         locks = sorted(set(newlocks))
 
-    manipulates = config.manipulates
-    if manipulates is None:
-        manipulates = sorted(set(state_variables.write_state_variables.values()))
+    manipulates = sorted(set(state_variables.write_state_variables.values()))
 
     return ImplementationDetails(
         state_variables=state_variables,
@@ -96,7 +93,6 @@ def prepare_definition_from_config(
         is_test_for=config.is_test_for,
         name=config.name,
         description=config.description,
-        return_widgets=config.return_widgets,
         key=config.key,
         version=config.version,
         catalogs=config.catalogs,

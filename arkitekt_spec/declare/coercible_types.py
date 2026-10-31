@@ -1,20 +1,8 @@
-from typing import Any, Protocol
+from typing import Protocol
 
 from arkitekt_spec.actions import (
-    AgentDependencyInput,
     OptimisticInput,
 )
-
-
-class ToDependencyProtocol(Protocol):
-    """A type that can be coerced into a DependencyInput."""
-
-    def to_dependency_input(
-        self, key: str, structure_registry: Any
-    ) -> AgentDependencyInput: ...
-
-
-DependencyCoercible = AgentDependencyInput | ToDependencyProtocol
 
 
 class ToOptimisticProtocol(Protocol):

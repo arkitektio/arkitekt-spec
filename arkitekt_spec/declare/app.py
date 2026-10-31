@@ -26,7 +26,6 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, SkipValidation
 
 from arkitekt_spec.actions import (
     ASSET_SOURCE_MAX_LENGTH,
-    AgentDependencyInput,
     ArgPortInput,
     AssetInput,
     AssetKind,
@@ -355,9 +354,6 @@ class AppRegistry(BaseModel):
     state_interface_classes: dict[str, AnyState] = Field(
         default_factory=dict, exclude=True
     )
-    state_classes_interfaces: dict[type[AnyState], str] = Field(
-        default_factory=dict, exclude=True
-    )
 
     # --- bloks (formerly BlokRegistry) ---
     registered_bloks: dict[str, "BlokDeclaration"] = Field(default_factory=dict)
@@ -443,7 +439,7 @@ class AppRegistry(BaseModel):
         ``@registry.declare(app="lab") class CameraProtocol: ...``. Every demand's
         ports are built now, against this registry's structures, and the class
         is returned unchanged -- see
-        :meth:`StructureRegistry.declare <rekuest.structures.registry.StructureRegistry.declare>`.
+        :meth:`StructureRegistry.declare <arkitekt_spec.declare.structures.registry.StructureRegistry.declare>`.
         An action parameter annotated with the class is then handed a proxy that
         calls the remote agent, and a blok names it under a key in its
         ``dependencies``.
@@ -758,7 +754,6 @@ class AppRegistry(BaseModel):
             )
         self.states[state.interface] = state
         self.state_registry_schemas[state.interface] = registry
-        self.state_classes_interfaces[cls] = state.interface
         self.state_interface_classes[state.interface] = cls
         declaration = StateDeclaration(
             interface=state.interface,
@@ -776,11 +771,6 @@ class AppRegistry(BaseModel):
         """Get the structure registry for a state interface."""
         assert interface in self.state_registry_schemas, "No definition for interface"
         return self.state_registry_schemas[interface]
-
-    def get_interface_for_class(self, cls: type[AnyState]) -> str:
-        """Get the interface for a state class."""
-        assert cls in self.state_classes_interfaces, "No definition for class"
-        return self.state_classes_interfaces[cls]
 
     # ------------------------------------------------------------------ #
     # Blok storage                                                       #
@@ -1150,26 +1140,6 @@ class AppRegistry(BaseModel):
             return default_view()
         return blok_view([orkestrator_module()], complete=False)
 
-    def _resolve_dependencies(
-        self,
-        dependencies: "Mapping[str, type[Any]] | Sequence[AgentDependencyInput] | None",
-    ) -> list[AgentDependencyInput] | None:
-        """Turn declared protocol classes into dependencies under their keys.
-
-        Their ports were built when this app declared them.
-
-        Raises:
-            KeyError: If a class was not declared on this app.
-        """
-        if dependencies is None:
-            return None
-        if isinstance(dependencies, Mapping):
-            return [
-                self.structure_registry.protocol_for(cls).to_dependency_input(key)
-                for key, cls in dependencies.items()
-            ]
-        return list(dependencies)
-
     def get_declared_bloks(self) -> dict[str, BlokImplementationInput]:
         """Generate blok inputs from their declarations against this registry."""
         return build_declared_bloks(self)
@@ -1186,8 +1156,8 @@ class AppRegistry(BaseModel):
 
         Constructing the :class:`ImplementAgentInput` runs the spec's structural
         rules over every port, widget and call, and
-        :func:`~rekuest.definition.checks.check_agent_input` then runs the checks
-        that need rekuest (search queries, state references, blok components), so
+        :func:`~arkitekt_spec.declare.definition.checks.check_agent_input` then runs the checks
+        that need the whole declaration (search queries, state references, blok components), so
         this is the single validated retrieval point for everything the agent
         registers.
 
@@ -1289,9 +1259,7 @@ class AppRegistry(BaseModel):
                     interface
                 ]
             if interface in other.state_interface_classes:
-                cls = other.state_interface_classes[interface]
-                self.state_interface_classes[interface] = cls
-                self.state_classes_interfaces[cls] = interface
+                self.state_interface_classes[interface] = other.state_interface_classes[interface]
 
         for name, blok in other.registered_bloks.items():
             if name in self.registered_bloks:
@@ -1387,7 +1355,6 @@ class AppRegistry(BaseModel):
                 key: structures for key in self.state_registry_schemas
             },
             state_interface_classes=dict(self.state_interface_classes),
-            state_classes_interfaces=dict(self.state_classes_interfaces),
             registered_bloks=dict(self.registered_bloks),
             registered_assets=dict(self.registered_assets),
             root=self.root,
@@ -1594,7 +1561,7 @@ class AppRegistry(BaseModel):
         """Declare a context class of this app: ``@app.context``.
 
         The registry surface of
-        :meth:`~rekuest.structures.registry.StructureRegistry.context`: the class
+        :meth:`~arkitekt_spec.declare.structures.registry.StructureRegistry.context`: the class
         is returned unchanged and what this app knows about it -- the name the
         agent keeps it under, the locks its use requires -- is kept on this app's
         structures.
@@ -1634,7 +1601,7 @@ class AppRegistry(BaseModel):
         """Declare a type that travels by id: ``@registry.structure("@mikro/image")``.
 
         The registry surface of
-        :meth:`~rekuest.structures.registry.StructureRegistry.structure`, so a
+        :meth:`~arkitekt_spec.declare.structures.registry.StructureRegistry.structure`, so a
         client package declares its structures and its actions into one object.
         The expander's return annotation is the class that travels::
 
@@ -1767,7 +1734,7 @@ class AppRegistry(BaseModel):
         """Declare a model of this app: a class whose instances travel by value.
 
         The registry surface of
-        :meth:`~rekuest.structures.registry.StructureRegistry.model`: the class
+        :meth:`~arkitekt_spec.declare.structures.registry.StructureRegistry.model`: the class
         is made a dataclass if it is not one and registered on this app's
         structures. A port annotated with it has one child per field::
 

@@ -1,8 +1,8 @@
 """Type-level definitions shared by the agent package.
 
 Protocol-like markers, type variables and the decorators that stamp them. Data
-containers live in :mod:`rekuest.agents.dataclasses`; behaviour lives on
-:class:`rekuest.agents.base.BaseAgent`.
+containers live in :mod:`arkitekt_runtime.agents.dataclasses`; behaviour lives on
+:class:`arkitekt_runtime.agents.base.BaseAgent`.
 """
 
 from collections.abc import Mapping
@@ -59,7 +59,7 @@ def unwrap_injectable(annotation: object) -> object:
     ``Optional[Mikro]`` still asks for the client; the ``None`` only says the author
     guards for its absence. Any other union is returned as is and is not injectable.
     Whether the class *is* a client is the structure registry's to say
-    (:meth:`~rekuest.structures.registry.StructureRegistry.is_client`): it is one
+    (:meth:`~arkitekt_spec.declare.structures.registry.StructureRegistry.is_client`): it is one
     when a registered service returns it.
     """
     import types

@@ -71,7 +71,7 @@ def model_field(
 def ensure_model_dataclass(cls: T) -> T:
     """Make ``cls`` a dataclass if it is not one, for use as a model.
 
-    Called by :meth:`~rekuest.structures.registry.StructureRegistry.model` when
+    Called by :meth:`~arkitekt_spec.declare.structures.registry.StructureRegistry.model` when
     an app declares the class. Dataclass construction failures are augmented
     with source-aware error messages that point at the offending class line
     when possible.

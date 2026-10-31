@@ -5,7 +5,7 @@ requires/provides, proposed units) can be supplied as markers inside
 :data:`typing.Annotated`. :func:`extract_annotations` runs every registered
 parser over those markers and accumulates the result into a single
 :class:`PortAnnotations` dataclass, which the port converters in
-:mod:`rekuest.definition.define` then read by name.
+:mod:`arkitekt_spec.declare.definition.define` then read by name.
 """
 
 import logging
@@ -35,7 +35,7 @@ class PortAnnotations:
     """Accumulated port-building fields extracted from ``Annotated`` markers.
 
     Each parser reads the markers on a port and fills the relevant fields. The
-    converters in :mod:`rekuest.definition.define` seed an instance with the
+    converters in :mod:`arkitekt_spec.declare.definition.define` seed an instance with the
     values known so far and read the fields back by name after parsing.
     """
 

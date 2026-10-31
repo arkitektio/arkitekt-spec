@@ -40,7 +40,7 @@ from arkitekt_spec.actions import (
     ValidatorInput,
 )
 from arkitekt_spec.declare.annotations import Key, PortAnnotations, extract_annotations
-from arkitekt_spec.declare.definition.errors import DefinitionError, NonSufficientDocumentation
+from arkitekt_spec.declare.definition.errors import DefinitionError
 from arkitekt_spec.declare.structures.convert import is_literal
 from arkitekt_spec.declare.structures.errors import StructureRegistryError
 from arkitekt_spec.declare.structures.model import inspect_model_class
@@ -544,9 +544,7 @@ def convert_object_to_returnport(
     )
 
 
-GroupMap = dict[str, list[str]]
 AssignWidgetMap = dict[str, AssignWidgetInput]
-ReturnWidgetMap = dict[str, ReturnWidgetInput]
 EffectsMap = dict[str, list[EffectInput]]
 
 
@@ -599,10 +597,8 @@ def prepare_definition(
     function: Callable[..., Any],
     structure_registry: StructureRegistry,
     widgets: AssignWidgetMap | None = None,
-    return_widgets: ReturnWidgetMap | None = None,
     port_effects: EffectsMap | None = None,
     port_groups: list[PortGroupInput] | None = None,
-    allow_empty_doc: bool = True,
     collections: list[str] | None = None,
     description: str | None = None,
     is_test_for: list[TestTargetInput] | None = None,
@@ -610,10 +606,7 @@ def prepare_definition(
     name: str | None = None,
     omitfirst: int | None = None,
     stateful: bool = False,
-    omitkeys: list[str] | None = None,
     return_annotations: list[Any] | None = None,
-    allow_dev: bool = True,
-    allow_annotations: bool = True,
     version: str | None = None,
     key: str | None = None,
     catalogs: list[str] | None = None,
@@ -630,7 +623,6 @@ def prepare_definition(
         function (Callable): The function you want to define
         structure_registry (StructureRegistry): The structure registry that should be checked against and new parameters registered within
         widgets (Dict[str, WidgetInput], optional): The widgets to use for function parameters. If none or key not present the default widget will be used.
-        return_widgets ()
     """
 
     assert structure_registry is not None, "You need to pass a StructureRegistry"
@@ -645,8 +637,6 @@ def prepare_definition(
     widgets = dict(widgets or {})
     effects = dict(port_effects or {})
     validators = dict(validators or {})
-    return_widgets = dict(return_widgets or {})
-    omitkeys = omitkeys or []
     port_groups = port_groups or []
     collections = collections or []
     # Generate Args and Kwargs from the Annotation
@@ -671,21 +661,15 @@ def prepare_definition(
     # Whether the action carries any human-written documentation. The registered
     # name is *never* taken from the docstring (see below), so an undocumented
     # function is still perfectly registerable -- it is just flagged as a "dev"
-    # (insufficiently documented) action, and rejected outright when docs are
-    # required (``not allow_empty_doc``) and we are not in dev mode.
+    # (insufficiently documented) action.
     has_documentation = bool(
         description or docstring.short_description or docstring.long_description
     )
 
     if not has_documentation:
         is_dev = True
-        if not allow_empty_doc and not allow_dev:
-            raise NonSufficientDocumentation(
-                f"We are not in dev mode. Please document {function_name} with a "
-                "docstring or pass an explicit description. Try a docstring :)"
-            )
 
-    type_hints = get_type_hints(function, include_extras=allow_annotations)
+    type_hints = get_type_hints(function, include_extras=True)
 
     function_ins_annotation = sig.parameters
 
@@ -719,12 +703,9 @@ def prepare_definition(
         # We can skip arguments if the builder is going to provide additional arguments
         if omitfirst is not None and index < omitfirst:
             continue
-        if key in omitkeys:
-            continue
 
         assign_widget = widgets.pop(key, None)
         its_effects = effects.pop(key, [])
-        return_widget = return_widgets.pop(key, None)
         item_validators = validators.pop(key, [])
         default = value.default if value.default != inspect.Parameter.empty else None
         cls = type_hints.get(key, type(default) if default is not None else None)
@@ -752,7 +733,6 @@ def prepare_definition(
                     key,
                     structure_registry,
                     assign_widget=assign_widget,
-                    return_widget=return_widget,
                     default=default,
                     effects=its_effects,
                     nullable=value.default != inspect.Parameter.empty,
@@ -798,7 +778,6 @@ def prepare_definition(
                 cls,
                 key,
                 structure_registry,
-                return_widget=return_widgets.pop(key, None),
                 assign_widget=widgets.pop(key, None),
                 effects=effects.pop(key, []),
                 description=doc_param_description_map.pop(doc_key, None),
@@ -827,10 +806,6 @@ def prepare_definition(
     if widgets:
         raise DefinitionError(
             f"Could not find the following ports for the widgets in the function {function_name}: {','.join(widgets.keys())}. Did you forget the type hint?"
-        )
-    if return_widgets:
-        raise DefinitionError(
-            f"Could not find the following ports for the return widgets in the function {function_name}: {','.join(return_widgets.keys())}. Did you forget the type hint?"
         )
 
     _reject_reserved_port_keys(args, function_name)

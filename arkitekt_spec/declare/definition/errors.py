@@ -7,6 +7,3 @@ class DefinitionError(RekuestError):
     """Base class for all definition errors"""
 
 
-
-class NonSufficientDocumentation(DefinitionError):
-    """Raised when we cannot infer sufficcient documentatoin"""

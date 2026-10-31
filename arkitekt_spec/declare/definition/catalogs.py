@@ -1,6 +1,6 @@
 """Validate a definition's port calls and widgets against a catalog.
 
-The blok side has a component walker (:mod:`rekuest.blok.walk`); a definition does not,
+The blok side has a component walker (:mod:`arkitekt_spec.declare.blok.walk`); a definition does not,
 so this module is the one place that knows where a definition hides calls: validators and
 effects on args, returns and their nested children, port-group effects, optimistic pointer
 calls, and every widget, including fallback chains and the ports a SEARCH widget filters on.

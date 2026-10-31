@@ -69,23 +69,6 @@ def asset_path_parts(path: str) -> tuple[str, str] | None:
         raise ValueError(f"an asset is named '<dependency>.assets.<name>', not {path!r}")
     return parts[0], parts[2]
 
-LATEST_SEGMENT = "latest"
-"""What follows an action's key in the path of its latest task (``self.blur.latest.progress``)."""
-
-
-def latest_task_path_parts(path: str) -> tuple[str, str, list[str]] | None:
-    """The ``(dependency key, name, rest)`` of ``<dependency>.<name>.latest...``, or None.
-
-    The spelling alone: whether ``name`` is an action of the dependency, and so
-    whether the path reads a task at all, is for the caller to say. A state is
-    read the same way and may have a field called ``latest``.
-    """
-    parts = path.split(".")
-    if len(parts) < 3 or parts[2] != LATEST_SEGMENT or not all(parts[:2]):
-        return None
-    return parts[0], parts[1], parts[3:]
-
-
 HTML_CONTEXT = "HTML"
 SCENE_CONTEXT = "SCENE"
 LOGO_CONTEXT = "LOGO"
@@ -95,23 +78,9 @@ ACTION_LOGO_CONTEXT = "ACTION_LOGO"
 """A blok context only, never a component's: an action logo draws the same shapes as a logo."""
 LOGO_CONTEXTS = (LOGO_CONTEXT, ACTION_LOGO_CONTEXT)
 """The blok contexts held to the size of an icon."""
-OVERLAY_CONTEXT = "OVERLAY"
-"""A blok context only, and only an action's: drawn into the space that hosts a run of it."""
-ACTION_LOGO_TASK_ROOT = "task"
-"""The path root an action logo reads its task at: null until the viewer runs the action."""
 BLOK_ARGS_ROOT = "args"
 """The path root a blok reads the items it is opened for at (``@args.image``): null until it is opened for one."""
 
-LOGO_MAX_NODES = 200
-"""The most components a logo blok may have, counted once each as written."""
-LOGO_MAX_DEPTH = 12
-"""The deepest a logo blok may nest, its root at depth 1."""
-LOGO_MAX_PATH_DATA = 16 * 1024
-"""The most characters of path data (``d`` and ``points`` props) a logo blok may hold in all."""
-LOGO_MAX_FOREACH_ITEMS = 64
-"""The most items a ``foreach`` in a logo blok may draw from the blok's demo state."""
-LOGO_PATH_DATA_PROPS = ("d", "points")
-"""The props whose static values are path data."""
 LOGO_PAINT_TOKENS = ("ink", "muted", "brand", "brand-strong", "brand-soft", "surface", "none")
 """The palette: colours of the viewer's theme, never of the logo's own.
 
@@ -119,8 +88,6 @@ Orkestrator draws each from its brand hue (``var(--logo-<token>)``), so a logo p
 with them follows the viewer's brand and dark mode. A logo may use them beside any SVG
 colour; an action logo paints with nothing else, but a ``url(#id)`` to a gradient or
 clip path, whose stops are held to the same tokens."""
-LOGO_PAINT_PROPS = ("fill", "stroke", "stopColor")
-"""The props whose values are paint."""
 """The ``CatalogValueKind`` names, hard-coded so this module never imports the generated schema."""
 
 CALLBACK_KIND = "CALLBACK"
@@ -524,7 +491,6 @@ COMPONENT_CHILDREN = "component_children"
 COMPONENT_PROPS = "component_props"
 CALLBACK_PROP_UNBOUND = "callback_prop_unbound"
 ASSET_PROP = "asset_prop"
-COMPONENT_PLACEMENT = "component_placement"
 UNKNOWN_CATALOG = "unknown_catalog"
 BASE_CATALOG_DRIFT = "base_catalog_drift"
 
@@ -843,55 +809,6 @@ def check_catalog_names(names: Iterable[str], known: Iterable[str], owner: str) 
 
 
 # --------------------------------------------------------------------------- parity inventory
-
-
-def check_placement(
-    component: str,
-    ancestors: tuple[str, ...],
-    context: str,
-    view: CatalogView,
-    owner: str,
-    findings: list[Diagnostic] | None = None,
-) -> str:
-    """Check where a component sits in the tree; return the context of its children.
-
-    A tree starts in the html context. A component whose ``children_context`` differs from
-    its own bridges two renderers, and everything below it is checked in the new one. One
-    that ``inherits_context`` sits in whichever context is in force and passes it on. Does
-    nothing when ``view.components`` is ``None`` or does not know the component (which
-    :func:`check_component` reports).
-
-    Args:
-        component: The component's name.
-        ancestors: The names of the components above it, outermost first.
-        context: The context in force where it is placed.
-        view: The catalog view in force.
-        owner: The node's location, for error messages.
-        findings: Where to record what is wrong, as warnings, instead of raising it.
-
-    Raises:
-        ValueError: If the component is placed outside its context, lacks a required
-            ancestor, or sits under a forbidden one -- unless there are ``findings`` to
-            record it in.
-    """
-    spec = view.components.get(component) if view.components is not None else None
-    if spec is None:
-        return context
-    if not spec.inherits_context and spec.context != context:
-        message = (
-            f"{owner}: component {component!r} is a {spec.context.lower()} component "
-            f"and cannot be placed in the {context.lower()} context"
-        )
-        _finding(findings, COMPONENT_PLACEMENT, message, owner)
-    if spec.downstream_of and not set(spec.downstream_of) & set(ancestors):
-        message = f"{owner}: component {component!r} must be inside one of {sorted(spec.downstream_of)}"
-        _finding(findings, COMPONENT_PLACEMENT, message, owner)
-    forbidden = sorted(set(spec.not_downstream_of) & set(ancestors))
-    if forbidden:
-        _finding(findings, COMPONENT_PLACEMENT, f"{owner}: component {component!r} must not be inside {forbidden}", owner)
-    if spec.inherits_context:
-        return context
-    return spec.children_context or spec.context
 
 
 @dataclass(frozen=True)

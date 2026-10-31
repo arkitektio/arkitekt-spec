@@ -95,7 +95,7 @@ def declare_state(
     """Declare a class as an observable state of an app.
 
     The implementation behind ``@app.state``. Distinct from
-    :class:`~rekuest.declare.DeclaredAgentState`, which is a *dependency on another
+    :class:`~arkitekt_spec.declare.declare.DeclaredAgentState`, which is a *dependency on another
     agent's* state -- this declares one the app owns itself.
 
     The class is made a dataclass if it is not one, its schema is inspected
@@ -103,7 +103,7 @@ def declare_state(
     given name with its rules. The class itself is returned unchanged: it is
     the *app* that knows it as a state, so one class can be a state of any
     number of apps. An instance becomes evented when an agent adopts it (see
-    :func:`~rekuest.state.observable.evented`).
+    :func:`~arkitekt_runtime.state.observable.evented`).
 
     Args:
         *function: Class to decorate when used as ``@state`` without

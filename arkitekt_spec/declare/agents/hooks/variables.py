@@ -53,7 +53,6 @@ class WithVariables:
         # The registry says which annotations are a service's client; a hook
         # registered without one can take no client.
         self.injected_variables = prepare_injected_variables(func, structure_registry)
-        self.pass_app_context = self.app_context_variables.count > 0
 
         self._validate_arguments(func)
         self.validate_returns(func)

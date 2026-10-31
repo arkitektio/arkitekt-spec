@@ -31,7 +31,7 @@ def is_app_context(cls: Any, structure_registry: "StructureRegistry | None") -> 
 def is_read_only_state(cls: Any, structure_registry: "StructureRegistry | None") -> bool:
     """Whether ``cls`` is a state of the app marked read-only, i.e. ``ReadOnly[SomeState]``.
 
-    The marker is a :class:`~rekuest.state.types.ReadOnlyAnnotation` *instance*
+    The marker is a :class:`~arkitekt_spec.declare.state.types.ReadOnlyAnnotation` *instance*
     carried in the ``Annotated`` extras, so it has to be matched with ``isinstance``.
     Comparing it against the ``ReadOnly`` type alias itself never matches, which silently
     classified such a parameter as neither writeable nor read-only -- so it was dropped

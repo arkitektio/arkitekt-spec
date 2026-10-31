@@ -69,7 +69,7 @@ def test_a_functions_context_parameters_carry_the_apps_locks() -> None:
     assert variables.required_context_locks == {"session": ["camera", "stage"]}
     assert returns.context_returns == {0: "session"}
 
-    details = derive_implementation_details(use, RegisterConfig(auto_locks=True), registry.structure_registry)
+    details = derive_implementation_details(use, RegisterConfig(), registry.structure_registry)
     assert details.locks == ["camera", "stage"]
 
 

@@ -1,1 +1,1 @@
-"""Moved from rekuest."""
+"""The structural types a declaration is written against."""

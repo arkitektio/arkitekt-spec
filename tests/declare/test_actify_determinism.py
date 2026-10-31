@@ -35,7 +35,7 @@ def touch_both(first: First, second: Second) -> None:
 
 def test_derived_locks_and_manipulates_are_sorted_and_deduplicated() -> None:
     details = derive_implementation_details(
-        touch_both, RegisterConfig(auto_locks=True), _REGISTRY.structure_registry
+        touch_both, RegisterConfig(), _REGISTRY.structure_registry
     )
     assert details.locks == ["alpha", "beta", "mu", "zeta"]
     assert details.manipulates == ["First", "Second"]
@@ -44,8 +44,7 @@ def test_derived_locks_and_manipulates_are_sorted_and_deduplicated() -> None:
 def test_explicit_locks_keep_the_users_order() -> None:
     details = derive_implementation_details(
         touch_both,
-        RegisterConfig(locks=["zeta", "alpha"], manipulates=["Second", "First"]),
+        RegisterConfig(locks=["zeta", "alpha"]),
         _REGISTRY.structure_registry,
     )
     assert details.locks == ["zeta", "alpha"]
-    assert details.manipulates == ["Second", "First"]

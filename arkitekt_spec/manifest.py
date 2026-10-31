@@ -48,7 +48,3 @@ class AppManifest(WireModel):
         default=DEFAULT_ENTRYPOINT,
         description="The target (`module[:attr]`) the image runs to find the app.",
     )
-
-    def to_console_string(self) -> str:
-        """A one-line rendering for CLIs and logs."""
-        return f"📦 {self.identifier} ({self.version}) by {self.author}"

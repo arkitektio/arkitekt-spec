@@ -12,14 +12,11 @@ shapes, each read by a different party:
 so none of them can say something the others do not.
 """
 
-from typing import Any
 
 from pydantic import Field
 
 from arkitekt_spec.actions import (
-    AssetInput,
     BlokImplementationInput,
-    ImplementAgentInput,
     ImplementationInput,
     LockImplementationInput,
     StateImplementationInput,
@@ -53,28 +50,4 @@ class AppDeclaration(WireModel):
             locks=list(self.locks),
             bloks=list(self.bloks),
             assets=list(self.assets),
-        )
-
-    def to_agent_input(self, name: str | None = None) -> ImplementAgentInput:
-        """The declaration as an agent registers it (the action-language payload).
-
-        ``description`` is only set when the app has one, so an undescribed app
-        leaves the field unset rather than sending an explicit null.
-        """
-        # Set only when there is something to say: an explicit null is not "unset".
-        optional: dict[str, Any] = {}
-        if self.manifest.description is not None:
-            optional["description"] = self.manifest.description
-        if self.assets:
-            # Without the paths, which are this machine's.
-            optional["assets"] = tuple(
-                AssetInput(**a.model_dump(exclude={"path"}, exclude_none=True)) for a in self.assets
-            )
-        return ImplementAgentInput(
-            name=name,
-            implementations=tuple(self.implementations),
-            states=tuple(self.states),
-            locks=tuple(self.locks),
-            bloks=tuple(self.bloks),
-            **optional,
         )

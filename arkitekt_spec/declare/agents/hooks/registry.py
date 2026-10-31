@@ -16,32 +16,6 @@ if TYPE_CHECKING:
     from arkitekt_spec.declare.state.publish import StateHolder
 
 
-@runtime_checkable
-class BackgroundTask(Protocol):
-    """Background task that runs in the background
-    This task is used to run a function in the background
-    It is run in the order they are registered.
-    """
-
-    async def arun(
-        self,
-        agent: "StateHolder",
-        contexts: dict[str, Any],
-        states: dict[str, Any],
-        app_context: Any = None,
-    ) -> None:
-        """Run the background task in the event loop
-        Args:
-            agent (Agent): The agent running the background task
-            contexts (Dict[str, Any]): The contexts of the agent
-            states (Dict[str, Any]): The state variables of the agent
-            app_context (Any): The app context the agent was started with, if any
-        Returns:
-            None
-        """
-        ...
-
-
 @dataclass
 class StartupHookReturns:
     """Startup hook returns

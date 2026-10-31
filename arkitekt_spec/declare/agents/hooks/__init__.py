@@ -1,1 +1,1 @@
-"""Moved from rekuest."""
+"""Startup, shutdown, lifecycle and background hooks, declared."""

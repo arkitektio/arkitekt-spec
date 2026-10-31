@@ -20,20 +20,14 @@ def declaration(description: str | None = "Segments nuclei") -> AppDeclaration:
     )
 
 
-def test_the_inspection_and_the_agent_input_say_the_same_thing():
+def test_the_inspection_says_what_the_declaration_says():
     app = declaration()
     inspection = app.to_inspection(size=42)
-    agent = app.to_agent_input()
 
     assert inspection.size == 42
-    assert inspection.description == agent.description == "Segments nuclei"
+    assert inspection.description == "Segments nuclei"
     assert inspection.requirements == app.requirements
-    assert list(inspection.implementations) == list(agent.implementations or ())
-
-
-def test_an_undescribed_app_leaves_the_agent_description_unset():
-    agent = declaration(description=None).to_agent_input()
-    assert "description" not in agent.model_fields_set
+    assert list(inspection.implementations) == list(app.implementations)
 
 
 def test_a_declaration_round_trips_as_json():

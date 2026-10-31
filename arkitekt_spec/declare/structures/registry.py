@@ -28,7 +28,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from arkitekt_spec.actions import (
     ArgPortInput,
     AssignWidgetInput,
-    ChoiceInput,
     EffectInput,
     PortKind,
     ProvidesInput,
@@ -47,7 +46,6 @@ from arkitekt_spec.declare.structures.convert import (
     fullfilled_structure_from_cls,
     is_global_structure,
     is_literal,
-    make_enum_converter,
     model_identifier,
 )
 from arkitekt_spec.declare.structures.model import ensure_model_dataclass, model_field
@@ -207,7 +205,7 @@ def _refuse_undeclared_fragment(cls: type[Any]) -> None:
 
 
 class _ClientsAsApp:
-    """A :class:`~rekuest.agents.types.BoundApp` over a plain ``{service: client}`` map.
+    """A :class:`~arkitekt_spec.declare.agents.types.BoundApp` over a plain ``{service: client}`` map.
 
     Binding a registry on its own -- in a test, or anywhere outside a run -- is a
     supported thing to do, and a bare mapping is the natural way to say it. This
@@ -375,7 +373,7 @@ class StructureRegistry(BaseModel):
     resolves to the same enum.
     """
     # Typed loosely: pydantic would need the protocol class at import to build
-    # the field, and `rekuest.declare` imports this module.
+    # the field, and `arkitekt_spec.declare.declare` imports this module.
     protocols: dict[type[Any], Any] = Field(default_factory=dict, exclude=True)
     interactions: dict[type[Any], Any] = Field(default_factory=dict, exclude=True)
     """The interactions protocols this app declared (``@app.interactions``), each a ``DeclaredInteractions``."""
@@ -405,7 +403,7 @@ class StructureRegistry(BaseModel):
     an agent adopting an instance makes it evented with these rules. Nothing is
     written on the class, so one class can be a state of any number of apps.
     """
-    """The :class:`~rekuest.declare.DeclaredAgentProtocol` this app declared, by class.
+    """The :class:`~arkitekt_spec.declare.declare.DeclaredAgentProtocol` this app declared, by class.
 
     Written by :meth:`declare`. A parameter annotated with one of these classes
     is handed a proxy to the remote agent instead of becoming a port; a blok
@@ -591,30 +589,6 @@ class StructureRegistry(BaseModel):
             identifier=identifier,
             predicate=predicate or build_instance_predicate(cls),
             description=description,
-        )
-
-        self.fullfill_registration(fullfile_type)
-
-    def register_as_enum(
-        self,
-        cls: type[Any],
-        identifier: str,
-        choices: list[ChoiceInput],
-        description: str | None = None,
-        default_widget: AssignWidgetInput | None = None,
-        default_returnwidget: ReturnWidgetInput | None = None,
-    ) -> None:
-        """Register a class as an enum."""
-        fullfile_type = FullFilledEnum(
-            cls=cls,
-            identifier=identifier,
-            choices=choices,
-            members=dict(cls.__members__),
-            predicate=build_instance_predicate(cls),
-            description=description,
-            default_widget=default_widget,
-            convert_default=make_enum_converter(cls),
-            default_returnwidget=default_returnwidget,
         )
 
         self.fullfill_registration(fullfile_type)
@@ -832,7 +806,7 @@ class StructureRegistry(BaseModel):
         demands, public annotated attributes become state demands (each
         annotated with a class whose annotations are the state's fields) -- and
         every demand's ports are built now, against this registry. The class itself is returned unchanged; the resulting
-        :class:`~rekuest.declare.DeclaredAgentProtocol` is kept here under it.
+        :class:`~arkitekt_spec.declare.declare.DeclaredAgentProtocol` is kept here under it.
 
         Args:
             app: The remote app the protocol is directed at, if any.
@@ -1308,7 +1282,7 @@ class StructureRegistry(BaseModel):
           clients by annotation (``expand(id, mikro: Mikro)``). Those are
           resolved by class, the same way an action's are, and applied to the
           function now -- so nothing is looked up per expansion and
-          :class:`~rekuest.structures.types.Expander` never widens.
+          :class:`~arkitekt_spec.declare.structures.types.Expander` never widens.
 
         Only for a registry that one run owns -- a :meth:`copy_maps` copy, such as
         a snapshot's. The bound entries are copies, so a declaration sharing the
@@ -1324,7 +1298,7 @@ class StructureRegistry(BaseModel):
         Raises:
             StructureClientError: If a declared structure's service has no client,
                 its client is not a
-                :class:`~rekuest.structures.client.StructureClient`, or a
+                ``aexpand``/``ashrink``/``ashrink_many``-shaped client, or a
                 hand-registered structure's expander wants a client this run has
                 not got. Binding fails here, when a run starts, instead of at the
                 first expansion inside some action.
@@ -1537,14 +1511,3 @@ class StructureRegistry(BaseModel):
     ) -> ArgPortInput:
         """Create an :class:`ArgPortInput` for a class (see :meth:`get_port_for_cls`)."""
         return cast(ArgPortInput, self.get_port_for_cls(cls, key, "arg", **kwargs))
-
-    def get_returnport_for_cls(
-        self,
-        cls: type[Any],
-        key: str,
-        **kwargs: Any,
-    ) -> ReturnPortInput:
-        """Create a :class:`ReturnPortInput` for a class (see :meth:`get_port_for_cls`)."""
-        return cast(
-            ReturnPortInput, self.get_port_for_cls(cls, key, "return", **kwargs)
-        )

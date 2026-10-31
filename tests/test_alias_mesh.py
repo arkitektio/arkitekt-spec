@@ -41,15 +41,15 @@ def test_an_unknown_kind_is_kept_and_not_mesh() -> None:
 
     assert alias.kind == "satellite"
     assert alias.is_mesh() is False
-    assert alias.is_docker() is False
+    assert alias.is_internal() is False
 
 
 @pytest.mark.parametrize(
     ("kind", "expected"),
     [("docker", True), ("absolute", False), ("mesh", False), (None, False)],
 )
-def test_is_docker(kind: str | None, expected: bool) -> None:
-    assert Alias(id="a", host="gateway", kind=kind).is_docker() is expected
+def test_is_internal_by_kind(kind: str | None, expected: bool) -> None:
+    assert Alias(id="a", host="gateway", kind=kind).is_internal() is expected
 
 
 class FakeNode:
@@ -113,7 +113,6 @@ def test_reach_says_where_an_alias_works_and_kind_still_counts() -> None:
     assert Alias(id="i", host="gateway", reach="internal").is_internal()
     # An older server says docker; a newer one internal. Both are internal.
     assert Alias(id="d", host="gateway", kind="docker").is_internal()
-    assert Alias(id="d", host="gateway", kind="docker").is_docker()
     assert Alias(id="l", host="127.0.0.1").is_loopback()
     assert Alias(id="l", host="[::1]").is_loopback()
     assert Alias(id="r", host="box", reach="loopback").is_loopback()

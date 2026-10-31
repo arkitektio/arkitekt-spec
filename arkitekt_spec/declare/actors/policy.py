@@ -8,7 +8,7 @@ three-second blip is the bug.
 
 Hence a per-action declaration, defaulting to :attr:`OnDisconnect.KEEP` so nothing
 that works today changes. The agent-level half of the story — how hard to fight for
-the link in the first place — lives in :mod:`rekuest.agents.policy`.
+the link in the first place — lives in :mod:`arkitekt_runtime.agents.policy`.
 
 This policy is client-local. It is never sent to the backend, and it could not be:
 the server cannot reach a disconnected agent, so the whole property has to be

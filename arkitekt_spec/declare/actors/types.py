@@ -28,7 +28,6 @@ from arkitekt_spec.declare.coercible_types import OptimisticCoercible
 from arkitekt_spec.declare.definition.define import (
     AssignWidgetMap,
     EffectsMap,
-    ReturnWidgetMap,
 )
 from arkitekt_spec.declare.protocol.types import AnyFunction
 
@@ -72,7 +71,7 @@ class PreparedInjectedVariables:
 
     ``service_client_variables`` map a parameter to the client class it receives
     from the app the agent is bound to (``mikro: Mikro``); ``task_variables``
-    receive the :class:`rekuest.task.Task` being run; ``app_context_variables``
+    receive the :class:`arkitekt_spec.declare.task.Task` being run; ``app_context_variables``
     receive the app context the run started the agent with, keyed by the class
     the app declared.
     """
@@ -170,14 +169,14 @@ class RegisterConfig:
     The fields fall into two groups:
 
     * **definition-shaping** — unpacked by the actifier into ``prepare_definition``:
-      ``name``, ``description``, ``widgets``, ``return_widgets``, ``port_effects``,
+      ``name``, ``description``, ``widgets``, ``port_effects``,
       ``validators``, ``collections``, ``port_groups``,
       ``is_test_for``, ``stateful``, ``version``, ``key``.
     * **implementation/actor-shaping** — used by the actifier's actor build and by
       ``register_func`` when constructing the ``ImplementationInput``:
-      ``optimistics``, ``locks``, ``tracks``, ``manipulates``, ``in_process``,
+      ``optimistics``, ``locks``, ``tracks``, ``in_process``,
       ``effects``, ``execution``,
-      ``bypass_shrink``, ``bypass_expand``, ``auto_locks``, ``concurrency``,
+      ``bypass_shrink``, ``bypass_expand``, ``concurrency``,
       ``policy``.
     """
 
@@ -186,7 +185,6 @@ class RegisterConfig:
     description: str | None = None
     interface: str | None = None
     widgets: AssignWidgetMap | None = None
-    return_widgets: ReturnWidgetMap | None = None
     port_effects: EffectsMap | None = None
     validators: dict[str, list[ValidatorInput]] | None = None
     collections: list[str] | None = None
@@ -203,11 +201,9 @@ class RegisterConfig:
     optimistics: list[OptimisticCoercible] | None = None
     locks: list[str] | None = None
     tracks: list[TrackInput] | None = None
-    manipulates: list[str] | None = None
     in_process: bool = False
     bypass_shrink: bool = False
     bypass_expand: bool = False
-    auto_locks: bool = True
     concurrency: Literal["parallel", "serial"] = "serial"
     policy: DisconnectPolicy = KEEP
     effects: Effects | None = None

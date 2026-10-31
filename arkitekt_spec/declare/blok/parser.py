@@ -15,19 +15,7 @@ from arkitekt_spec.blok.vocabulary import load_vocabulary
 from arkitekt_spec.declare.traits.calls import resolve_base_arguments
 from arkitekt_spec.rules import check_fits
 
-# ``@dep.op(...).into(name)`` binds the call's task to ``name``.
-BOUND_CALL_STEP = "into"
-
-# ``@mikro/arraydataset``: what a structure port carries as its identifier.
-_STRUCTURE_IDENTIFIER = re.compile(r"@[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 _DESCRIPTOR_KEY = re.compile(r"(?<![\w\"'])@[A-Za-z0-9_-]+/[A-Za-z0-9_-]+")
-
-
-EVENT_ROOT = "event"
-"""How a handler's arguments name the value that triggered it."""
-
-EVENT_SCOPE_KEY = "$event"
-"""The path root the renderer publishes that value under."""
 
 
 class PortCallParser:

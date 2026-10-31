@@ -1,6 +1,6 @@
 """The ``demand`` decorator for agent-dependency protocol methods.
 
-A method on a :func:`~rekuest.declare.declare` protocol becomes an *action
+A method on a :func:`~arkitekt_spec.declare.declare.declare` protocol becomes an *action
 demand*. By default that demand inherits its ``app`` from the protocol's core
 app and its ``key`` from the method name. Applying :func:`demand` to a method
 overrides that identity — letting a single method point at *another* action
@@ -53,7 +53,7 @@ def demand(
 ) -> Callable[[F], F]:
     """Override the action an agent-dependency protocol method demands.
 
-    Attach to a method of a :func:`~rekuest.declare.declare` protocol to
+    Attach to a method of a :func:`~arkitekt_spec.declare.declare.declare` protocol to
     redirect its demand to another action — specifying the demanded ``app`` +
     ``key`` (and optional version/hash/protocols) explicitly instead of
     inheriting them from the protocol's core app and the method name.

@@ -5,7 +5,7 @@ demands) and its public annotated attributes (state demands, each annotated
 with a class whose annotations are the state's fields). It is declared on an
 app -- ``@app.declare(app="lab")`` -- and its ports are built then and there,
 against that app's structure registry. Nothing is written on the
-class: the app's :class:`~rekuest.structures.registry.StructureRegistry` keeps
+class: the app's :class:`~arkitekt_spec.declare.structures.registry.StructureRegistry` keeps
 the :class:`DeclaredAgentProtocol` under the class, so one class can be declared
 on any number of apps, each building its own ports.
 """

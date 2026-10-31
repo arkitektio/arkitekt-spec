@@ -191,10 +191,6 @@ class Alias(BaseModel):
         """
         return self.reach == "internal" or self.kind == "docker"
 
-    def is_docker(self) -> bool:
-        """Deprecated: :meth:`is_internal`."""
-        return self.is_internal()
-
     def is_loopback(self) -> bool:
         """Whether this alias never leaves this machine: the server says so, or
         its host is ``localhost``, ``*.localhost`` or a loopback address."""
