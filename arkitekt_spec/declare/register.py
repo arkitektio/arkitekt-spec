@@ -33,7 +33,6 @@ from arkitekt_spec.actions import (
     ComponentContext,
     ComponentNodeInput,
     DefinitionInput,
-    EffectInput,
     Effects,
     EstimatedRuntimeInput,
     Execution,
@@ -43,7 +42,6 @@ from arkitekt_spec.actions import (
     OptimisticInput,
     PortGroupInput,
     TestTargetInput,
-    TrackInput,
     ValidatorInput,
     definition_hash,
 )
@@ -348,7 +346,6 @@ def register_func(
             locks=tuple(implementation_details.locks or []),
             optimistics=tuple(optimistics),
             dependencies=tuple(dependencies),
-            tracks=tuple(implementation_details.tracks or []),
             needs_token=True,  # TODO: Make this configurable in the future, but for now, we want to ensure that all actors require tokens for security reasons.
             manipulates=tuple(implementation_details.manipulates or []),
             effects=config.effects or implementation_registry.default_effects,
@@ -384,13 +381,11 @@ def declare_implementation(
     widgets: dict[str, AssignWidgetInput] | None = None,
     collections: list[str] | None = None,
     port_groups: list[PortGroupInput] | None = None,
-    port_effects: dict[str, list[EffectInput]] | None = None,
     is_test_for: list[TestTargetInput] | None = None,
     validators: dict[str, list[ValidatorInput]] | None = None,
     structure_registry: StructureRegistry | None = None,
     optimistics: list[OptimisticCoercible] | None = None,
     in_process: bool = False,
-    tracks: list[TrackInput] | None = None,
     locks: list[str] | None = None,
     concurrency: Literal["parallel", "serial"] = "serial",
     policy: DisconnectPolicy = KEEP,
@@ -425,13 +420,11 @@ def declare_implementation(
     widgets: dict[str, AssignWidgetInput] | None = None,
     collections: list[str] | None = None,
     port_groups: list[PortGroupInput] | None = None,
-    port_effects: dict[str, list[EffectInput]] | None = None,
     is_test_for: list[TestTargetInput] | None = None,
     validators: dict[str, list[ValidatorInput]] | None = None,
     structure_registry: StructureRegistry | None = None,
     optimistics: list[OptimisticCoercible] | None = None,
     in_process: bool = False,
-    tracks: list[TrackInput] | None = None,
     locks: list[str] | None = None,
     concurrency: Literal["parallel", "serial"] = "serial",
     policy: DisconnectPolicy = KEEP,
@@ -465,12 +458,10 @@ def declare_implementation(
     widgets: dict[str, AssignWidgetInput] | None = None,
     collections: list[str] | None = None,
     port_groups: list[PortGroupInput] | None = None,
-    port_effects: dict[str, list[EffectInput]] | None = None,
     is_test_for: list[TestTargetInput] | None = None,
     optimistics: list[OptimisticCoercible] | None = None,
     validators: dict[str, list[ValidatorInput]] | None = None,
     structure_registry: StructureRegistry | None = None,
-    tracks: list[TrackInput] | None = None,
     in_process: bool = False,
     locks: list[str] | None = None,
     concurrency: Literal["parallel", "serial"] = "serial",
@@ -525,7 +516,6 @@ def declare_implementation(
         widgets (Optional[Dict[str, AssignWidgetInput]]): Widgets per argument.
         collections (Optional[List[str]]): Organizational groupings.
         port_groups (Optional[List[PortGroupInput]]): Port group assignments.
-        port_effects (Optional[Dict[str, List[EffectInput]]]): UI effects per port.
         is_test_for (Optional[List[TestTargetInput]]): Actions this function is a
             test for, each identified by hash or by (app, key, version).
         validators (Optional[Dict[str, List[ValidatorInput]]]): Input validation
@@ -534,7 +524,6 @@ def declare_implementation(
             the ports. Defaults to ``implementation_registry.structure_registry``.
         optimistics (Optional[List[OptimisticCoercible]]): Optimistic outputs.
         in_process (bool): Run the actor in the event loop instead of a thread.
-        tracks (Optional[List[TrackInput]]): Tracks the implementation follows.
         locks (Optional[List[str]]): Resource locks held during assignment
             (auto-inferred from state/context locks when omitted).
         concurrency (Literal["parallel", "serial"]): Whether assignments to the
@@ -584,7 +573,6 @@ def declare_implementation(
         description=description,
         interface=interface,
         widgets=widgets,
-        port_effects=port_effects,
         validators=validators,
         collections=collections,
         port_groups=port_groups,
@@ -597,7 +585,6 @@ def declare_implementation(
         locks=locks,
         concurrency=concurrency,
         policy=policy,
-        tracks=tracks,
         in_process=in_process,
         effects=effects,
         execution=execution,

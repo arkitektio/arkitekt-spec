@@ -545,7 +545,6 @@ def convert_object_to_returnport(
 
 
 AssignWidgetMap = dict[str, AssignWidgetInput]
-EffectsMap = dict[str, list[EffectInput]]
 
 
 def snake_to_title_case(snake_str: str) -> str:
@@ -597,7 +596,6 @@ def prepare_definition(
     function: Callable[..., Any],
     structure_registry: StructureRegistry,
     widgets: AssignWidgetMap | None = None,
-    port_effects: EffectsMap | None = None,
     port_groups: list[PortGroupInput] | None = None,
     collections: list[str] | None = None,
     description: str | None = None,
@@ -635,7 +633,6 @@ def prepare_definition(
     # Per-port maps are consumed (popped) below; copy so the caller's dicts
     # survive the call.
     widgets = dict(widgets or {})
-    effects = dict(port_effects or {})
     validators = dict(validators or {})
     port_groups = port_groups or []
     collections = collections or []
@@ -705,7 +702,6 @@ def prepare_definition(
             continue
 
         assign_widget = widgets.pop(key, None)
-        its_effects = effects.pop(key, [])
         item_validators = validators.pop(key, [])
         default = value.default if value.default != inspect.Parameter.empty else None
         cls = type_hints.get(key, type(default) if default is not None else None)
@@ -734,7 +730,6 @@ def prepare_definition(
                     structure_registry,
                     assign_widget=assign_widget,
                     default=default,
-                    effects=its_effects,
                     nullable=value.default != inspect.Parameter.empty,
                     description=doc_param_description_map.pop(key, None),
                     label=doc_param_label_map.pop(key, None),
@@ -779,7 +774,6 @@ def prepare_definition(
                 key,
                 structure_registry,
                 assign_widget=widgets.pop(key, None),
-                effects=effects.pop(key, []),
                 description=doc_param_description_map.pop(doc_key, None),
                 label=doc_param_label_map.pop(doc_key, None),
             )

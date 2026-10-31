@@ -18,7 +18,6 @@ from arkitekt_spec.actions import (
     FitsInput,
     PortGroupInput,
     TestTargetInput,
-    TrackInput,
     ValidatorInput,
 )
 from arkitekt_spec.declare.actors.policy import KEEP, DisconnectPolicy
@@ -27,7 +26,6 @@ from arkitekt_spec.declare.blok.action import ActionBloks
 from arkitekt_spec.declare.coercible_types import OptimisticCoercible
 from arkitekt_spec.declare.definition.define import (
     AssignWidgetMap,
-    EffectsMap,
 )
 from arkitekt_spec.declare.protocol.types import AnyFunction
 
@@ -130,7 +128,6 @@ class ImplementationDetails:
     context_returns: PreparedContextReturns
     dependency_variables: PreparedDependencyVariables
     locks: list[str] | None = None
-    tracks: list["TrackInput"] | None = None
     manipulates: list[str] | None = None
     injected_variables: PreparedInjectedVariables = field(
         default_factory=PreparedInjectedVariables
@@ -169,12 +166,12 @@ class RegisterConfig:
     The fields fall into two groups:
 
     * **definition-shaping** — unpacked by the actifier into ``prepare_definition``:
-      ``name``, ``description``, ``widgets``, ``port_effects``,
+      ``name``, ``description``, ``widgets``,
       ``validators``, ``collections``, ``port_groups``,
       ``is_test_for``, ``stateful``, ``version``, ``key``.
     * **implementation/actor-shaping** — used by the actifier's actor build and by
       ``register_func`` when constructing the ``ImplementationInput``:
-      ``optimistics``, ``locks``, ``tracks``, ``in_process``,
+      ``optimistics``, ``locks``, ``in_process``,
       ``effects``, ``execution``,
       ``bypass_shrink``, ``bypass_expand``, ``concurrency``,
       ``policy``.
@@ -185,7 +182,6 @@ class RegisterConfig:
     description: str | None = None
     interface: str | None = None
     widgets: AssignWidgetMap | None = None
-    port_effects: EffectsMap | None = None
     validators: dict[str, list[ValidatorInput]] | None = None
     collections: list[str] | None = None
     port_groups: list[PortGroupInput] | None = None
@@ -200,7 +196,6 @@ class RegisterConfig:
     # implementation / actor-shaping
     optimistics: list[OptimisticCoercible] | None = None
     locks: list[str] | None = None
-    tracks: list[TrackInput] | None = None
     in_process: bool = False
     bypass_shrink: bool = False
     bypass_expand: bool = False

@@ -38,7 +38,6 @@ from arkitekt_spec.actions import (
     BlokSubscriptionInput,
     ComponentContext,
     ComponentNodeInput,
-    EffectInput,
     Effects,
     Execution,
     ImplementAgentInput,
@@ -50,7 +49,6 @@ from arkitekt_spec.actions import (
     ReturnWidgetInput,
     StateImplementationInput,
     TestTargetInput,
-    TrackInput,
     ValidatorInput,
     is_asset_source,
 )
@@ -1849,12 +1847,10 @@ class AppRegistry(BaseModel):
         widgets: dict[str, AssignWidgetInput] | None = None,
         collections: list[str] | None = None,
         port_groups: list[PortGroupInput] | None = None,
-        port_effects: dict[str, list[EffectInput]] | None = None,
         is_test_for: list[TestTargetInput] | None = None,
         validators: dict[str, list[ValidatorInput]] | None = None,
         optimistics: list[OptimisticCoercible] | None = None,
         in_process: bool = False,
-        tracks: list[TrackInput] | None = None,
         locks: list[str] | None = None,
         concurrency: Literal["parallel", "serial"] = "serial",
         policy: DisconnectPolicy = KEEP,
@@ -1896,12 +1892,10 @@ class AppRegistry(BaseModel):
             widgets: Widgets per argument.
             collections: Collections the action is grouped into.
             port_groups: Port group assignments.
-            port_effects: UI effects per port (hide, disable, … as its values change).
             is_test_for: Actions this one tests.
             validators: Input validation rules per argument.
             optimistics: Optimistic outputs.
             in_process: Run in the event loop instead of a worker thread.
-            tracks: Tracks the implementation follows.
             locks: Locks held while an assignment runs.
             concurrency: Whether assignments may run concurrently.
             policy: What happens to a running assignment when its caller
@@ -1952,12 +1946,10 @@ class AppRegistry(BaseModel):
             widgets=widgets,
             collections=collections,
             port_groups=port_groups,
-            port_effects=port_effects,
             is_test_for=is_test_for,
             validators=validators,
             optimistics=optimistics,
             in_process=in_process,
-            tracks=tracks,
             locks=locks,
             concurrency=concurrency,
             policy=policy,

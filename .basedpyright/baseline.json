@@ -2,14 +2,6 @@
     "files": {
         "./arkitekt_spec/declare/app.py": [
             {
-                "code": "reportArgumentType",
-                "range": {
-                    "startColumn": 16,
-                    "endColumn": 50,
-                    "lineCount": 1
-                }
-            },
-            {
                 "code": "reportIncompatibleMethodOverride",
                 "range": {
                     "startColumn": 8,
