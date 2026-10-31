@@ -117,7 +117,7 @@ def iter_definition_calls(
 
 
 def _check_call_tree(
-    call: UtilCallInput, view: CatalogView, owner: str
+    call: UtilCallInput, view: CatalogView, owner: str, findings: list[Diagnostic] | None = None
 ) -> list[Diagnostic]:
     """Check ``call`` and every util call nested in its argument tree."""
     diagnostics: list[Diagnostic] = []
@@ -131,6 +131,7 @@ def _check_call_tree(
             [a.key for a in candidate.arguments or () if a.key is not None],
             view,
             owner,
+            findings,
         )
         if finding is not None:
             diagnostics.append(finding)
@@ -141,6 +142,8 @@ def validate_definition_against_catalog(
     definition: DefinitionInput,
     view: CatalogView,
     optimistics: Sequence[OptimisticInput] | None = None,
+    *,
+    strict: bool = True,
 ) -> list[Diagnostic]:
     """Check every call and widget of ``definition`` against ``view``.
 
@@ -148,16 +151,26 @@ def validate_definition_against_catalog(
     server, so an unknown widget component is caught by the same rule as an unknown
     blok component.
 
+    Args:
+        definition: The definition to check.
+        view: The catalogs in force.
+        optimistics: The implementation's optimistic calls, which sit beside the definition.
+        strict: Whether a misused operation or a broken component rule raises. The server
+            only warns about those, so what checks a declaration it would accept passes
+            ``False``, and they come back as findings too.
+
     Returns:
         The non-fatal findings, e.g. operations the catalog does not provide.
 
     Raises:
-        ValueError: If a known operation is misused, or a component rule is broken.
+        ValueError: If ``strict``, and a known operation is misused or a component rule is
+            broken.
     """
     diagnostics: list[Diagnostic] = []
+    recorded = None if strict else diagnostics
 
     for owner, call in iter_definition_calls(definition, optimistics):
-        diagnostics.extend(_check_call_tree(call, view, owner))
+        diagnostics.extend(_check_call_tree(call, view, owner, recorded))
 
     for owner, widget in iter_definition_widgets(definition):
         widget_owner = f"widget of {owner}"
@@ -174,12 +187,13 @@ def validate_definition_against_catalog(
                 },
                 view,
                 widget_owner,
+                findings=recorded,
             )
         for prop in getattr(widget, "props", None) or ():
             prop_owner = f"prop {prop.key!r} of {widget_owner}"
             for call in _prop_calls(prop):
-                diagnostics.extend(_check_call_tree(call, view, prop_owner))
+                diagnostics.extend(_check_call_tree(call, view, prop_owner, recorded))
         for call in iter_widget_calls(widget):
-            diagnostics.extend(_check_call_tree(call, view, widget_owner))
+            diagnostics.extend(_check_call_tree(call, view, widget_owner, recorded))
 
     return diagnostics

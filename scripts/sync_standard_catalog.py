@@ -16,15 +16,10 @@ Two directions, one owner each:
 The ``orkestrator`` module (``modules/orkestrator.json``: the MikroScene and table parts) is what
 only the Orkestrator draws. Orkestrator writes it (``node scripts/export-blok-catalog.mjs`` →
 ``dist/catalog/blok-module.json``); ``--orkestrator <checkout>`` copies it in.
-
-The v1 mirror the spec still checks definitions' operations against (``declare/catalogs/
-orkestrator.json``, base@1) is refreshed from a release with ``--v1-mirror <tag>`` (``gh``).
 """
 
 import argparse
 import json
-import subprocess
-import tempfile
 from pathlib import Path
 
 from arkitekt_spec.blok.catalogs import BASE_NAME, catalog_text
@@ -32,11 +27,7 @@ from arkitekt_spec.blok.corpus import write
 from arkitekt_spec.blok.vocabulary import load_vocabulary, vocabulary_text
 
 DEFAULT_INTO = Path("packages/bsx/src/spec")
-REPOSITORY = "arkitektio/orkestrator"
-ASSET = "blok-catalog.json"
-SPEC = Path(__file__).resolve().parent.parent / "arkitekt_spec"
-BLOK = SPEC / "blok"
-V1_CATALOGS = SPEC / "declare" / "catalogs"
+BLOK = Path(__file__).resolve().parent.parent / "arkitekt_spec" / "blok"
 
 
 def global_catalog_files() -> list[str]:
@@ -71,33 +62,20 @@ def sync_orkestrator_module(checkout: Path) -> Path:
     return target
 
 
-def refresh_v1_mirror(tag: str) -> None:
-    """Download the v1 ``blok-catalog.json`` of release ``tag`` into the spec (definitions only)."""
-    with tempfile.TemporaryDirectory() as directory:
-        subprocess.run(["gh", "release", "download", tag, "-R", REPOSITORY, "-p", ASSET, "-D", directory], check=True)
-        text = (Path(directory) / ASSET).read_text(encoding="utf-8")
-    json.loads(text)  # refuses a download that is not the catalog
-    (V1_CATALOGS / "orkestrator.json").write_text(text, encoding="utf-8")
-    (V1_CATALOGS / "orkestrator.release").write_text(tag + "\n", encoding="utf-8")
-
-
 def main() -> None:
-    """Sync into a checkout, or refresh the v1 mirror."""
+    """Sync into a checkout, or copy the orkestrator module in."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("checkout", nargs="?", type=Path, help="a checkout of @arkitektio/bsx (typescript/libraries/bsx): its catalogs are copied in, the language written out")
     parser.add_argument("--into", type=Path, default=DEFAULT_INTO, help=f"where in the checkout (default {DEFAULT_INTO})")
     parser.add_argument("--orkestrator", type=Path, metavar="CHECKOUT", help="copy the orkestrator module in from this Orkestrator checkout's dist/catalog/blok-module.json")
-    parser.add_argument("--v1-mirror", metavar="TAG", help="refresh the v1 mirror (definitions) from this Orkestrator release")
     args = parser.parse_args()
-    if args.v1_mirror:
-        refresh_v1_mirror(args.v1_mirror)
     if args.orkestrator is not None:
         print(sync_orkestrator_module(args.orkestrator))
     if args.checkout is not None:
         for path in sync(args.checkout, args.into):
             print(path)
-    elif not args.v1_mirror and args.orkestrator is None:
-        parser.error("name a checkout to sync into, --orkestrator <checkout>, or --v1-mirror <tag>")
+    elif args.orkestrator is None:
+        parser.error("name a checkout to sync into, or --orkestrator <checkout>")
 
 
 if __name__ == "__main__":

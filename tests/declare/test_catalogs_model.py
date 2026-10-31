@@ -10,9 +10,7 @@ from arkitekt_spec.declare.catalogs import (
     ComponentSpec,
     OperationSpec,
     PropSpec,
-    base_only_view,
     base_operations,
-    base_version_named,
     check_extension_does_not_shadow_base,
     resolve_catalogs,
 )
@@ -88,27 +86,6 @@ def test_a_catalog_may_not_redefine_a_base_operation() -> None:
 
 def test_a_catalog_may_add_operations() -> None:
     check_extension_does_not_shadow_base(ELECTRON)
-
-
-@pytest.mark.parametrize(
-    ("name", "expected"),
-    [
-        ("base", BASE_CATALOG_VERSION),
-        ("base@1", 1),
-        ("base@2", 2),
-        ("electron", None),
-        ("base@", None),
-        ("base@x", None),
-    ],
-)
-def test_base_version_named(name: str, expected: int | None) -> None:
-    assert base_version_named(name) == expected
-
-
-def test_base_only_view_is_not_authoritative() -> None:
-    """Offline there is no way to tell a typo from an operation the UI provides."""
-    view = base_only_view()
-    assert view.authoritative is False and view.components is None
 
 
 def test_specs_are_frozen_and_comparable() -> None:

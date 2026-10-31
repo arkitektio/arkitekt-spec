@@ -1,5 +1,8 @@
 """Definition validators, effects and widgets checked against a catalog."""
 
+import warnings
+from typing import Annotated
+
 import pytest
 
 from arkitekt_spec.actions import (
@@ -12,7 +15,8 @@ from arkitekt_spec.actions import (
     PortGroupInput,
     PortKind,
 )
-from arkitekt_spec.declare.catalogs import UNKNOWN_OPERATION
+from arkitekt_spec.declare.app import AppRegistry
+from arkitekt_spec.declare.catalogs import UNKNOWN_OPERATION, CatalogWarning
 from arkitekt_spec.declare.definition.catalogs import (
     iter_definition_calls,
     iter_definition_widgets,
@@ -20,7 +24,7 @@ from arkitekt_spec.declare.definition.catalogs import (
 )
 from arkitekt_spec.declare.widgets import withEffect, withValidator
 
-from .catalog_cases import base_view, electron_view
+from .catalog_cases import ELECTRON, base_view, electron_view
 
 
 def _definition(
@@ -237,3 +241,39 @@ def test_a_fallback_chain_does_not_duplicate_findings() -> None:
     )
     definition = _definition(args=(_arg(widget=widget),))
     assert validate_definition_against_catalog(definition, electron_view()) == []
+
+
+def _app_calling(call: str, **options: object) -> AppRegistry:
+    registry = AppRegistry()
+
+    @registry.register(**options)
+    def measure(a: Annotated[int, withValidator(call)]) -> int:
+        """Measure."""
+        return a
+
+    return registry
+
+
+def test_a_snapshot_warns_what_an_action_calls_and_its_catalogs_do_not_provide() -> None:
+    """Base@1 is all a definition naming no catalog has, as on the server; one it declared is added."""
+    with pytest.warns(CatalogWarning, match="nosuchop") as caught:
+        _app_calling("nosuchop(value)").snapshot()
+    assert caught[0].filename == __file__
+
+    registry = _app_calling("clamp(value=value)", catalogs=["electron"])
+    registry.declared_catalogs["electron"] = ELECTRON
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", CatalogWarning)
+        registry.snapshot()
+
+
+def test_a_snapshot_warns_of_a_misused_operation_where_the_server_would_accept_it() -> None:
+    """The server only warns, so this must not refuse what it accepts; a module only it holds stays quiet."""
+    registry = _app_calling("clamp(value=value, nope=1)", catalogs=["electron"])
+    registry.declared_catalogs["electron"] = ELECTRON
+    with pytest.warns(CatalogWarning, match="does not accept arguments"):
+        registry.snapshot()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", CatalogWarning)
+        _app_calling("nosuchop(value)", catalogs=["held-by-the-server"]).snapshot()

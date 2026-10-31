@@ -1,30 +1,22 @@
-"""Catalogs: what a UI can render and evaluate, and the rules a blok is checked against.
+"""Catalogs: what a UI can render and evaluate, and the rules a definition is held to.
 
 A *catalog* is a UI app's capability manifest. It declares the components the renderer can
-draw and the pure operations it can evaluate for port validators, effects and blok util calls.
+draw and the pure operations it can evaluate.
 
-Two layers, exactly as on the server:
+Blok trees are checked against a :class:`~arkitekt_spec.blok.catalogs.BlokView` built from these
+types. What stays on the rules here is a definition's port calls and CUSTOM widgets: they feed
+its hash, so they stay on base@1.
 
 - The **base catalog** (``base_v1.json``, a byte-for-byte copy of the server's
   ``rekuest_core/catalogs/base_v1.json``; a test diffs them when the server tree is present)
-  is implicit for every definition and blok. Its operations are always available, positional
-  call arguments resolve to its parameter names, and a UI catalog only ever *extends* it.
+  is implicit for every definition. Its operations are always available, positional call
+  arguments resolve to its parameter names, and a UI catalog only ever *extends* it.
 - A **UI catalog** adds components and further operations. It may not redefine a base
   operation, and two catalogs may only agree.
 
-This module also holds the validation rules themselves, mirroring the server's
-``facade.catalog_validation``. They take plain primitives rather than the generated pydantic
-models so that they stay usable from anywhere -- see the import rule below.
-
-.. warning::
-   This module must import **nothing** from ``rekuest``. ``rekuest.protocol.schema`` imports
-   ``rekuest.traits.ports`` while it is still executing, and that reaches this loader, so any
-   ``rekuest`` import here is a cycle. ``tests/test_base_catalog.py`` enforces it as a
-   source-level substring check, which is why even a sibling ``rekuest.catalogs.x`` import is
-   refused and everything schema-free lives in this one file. Code that needs the generated
-   models lives elsewhere: ``rekuest.client.catalogs`` for the half that speaks to the server,
-   ``rekuest.blok.validate`` and ``rekuest.definition.catalogs`` for the rest. This package is
-   now a leaf -- it is ``__init__.py`` and ``base_v1.json``, and nothing else.
+The rules mirror the server's ``facade.catalog_validation``. They take plain primitives rather
+than pydantic models, and this module imports nothing else of the package, because
+``arkitekt_spec.declare.traits`` reaches it while the action models are still being built.
 """
 
 import functools
@@ -281,10 +273,6 @@ def is_base_component(name: str) -> bool:
 STANDARD_CATALOG_NAME = "orkestrator"
 """The catalog a blok is checked against when it names none: what the Orkestrator app renders."""
 
-STANDARD_CATALOG_SOURCE = "arkitektio/orkestrator"
-"""The repository whose releases publish the standard catalog, as ``blok-catalog.json``."""
-
-
 def _parse_context(raw: dict, component: str, value: object) -> str | None:  # type: ignore[type-arg]
     if value is None:
         return None
@@ -411,48 +399,9 @@ def _parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]
     )
 
 
-@functools.lru_cache(maxsize=1)
-def load_standard_catalog() -> Catalog:
-    """The vendored standard catalog, parsed and validated (cached).
-
-    ``orkestrator.json`` is the ``blok-catalog.json`` of an Orkestrator release, unmodified:
-    the components that app draws and the operations it evaluates. It is the frontend's to
-    write and only ever copied here (``scripts/sync_standard_catalog.py``), which is what
-    keeps a blok written against it from drifting from what is rendered. Where it is wrong,
-    the fix is an Orkestrator release, not a patch here.
-    """
-    text = resources.files(__package__ or "arkitekt_spec.declare.catalogs").joinpath("orkestrator.json").read_text(encoding="utf-8")
-    catalog = _parse_ui_catalog(json.loads(text))
-    if catalog.name != STANDARD_CATALOG_NAME:
-        raise ValueError(f"the standard catalog is named {catalog.name!r}, not {STANDARD_CATALOG_NAME!r}")
-    return catalog
-
-
-@functools.lru_cache(maxsize=1)
-def standard_catalog_release() -> str:
-    """The Orkestrator release the vendored standard catalog was copied from, e.g. ``v2.19.0``."""
-    return resources.files(__package__ or "arkitekt_spec.declare.catalogs").joinpath("orkestrator.release").read_text(encoding="utf-8").strip()
-
-
 def is_standard_catalog(name: str | None) -> bool:
     """Whether a blok naming ``name`` is checked against the standard catalog: it names it, or none."""
     return name is None or name == STANDARD_CATALOG_NAME
-
-
-def standard_view() -> "CatalogView":
-    """The view of the standard catalog: its components, and its operations on the base's."""
-    return resolve_catalogs([load_standard_catalog()], authoritative=True)
-
-
-def ui_catalog_view(raw: dict) -> "CatalogView":  # type: ignore[type-arg]
-    """The view of a published UI catalog, read as the vendored standard one is read.
-
-    ``raw`` is a ``blok-catalog.json`` as a UI app exports it, e.g. a checkout's fresh
-    ``dist/catalog/blok-catalog.json``: a blok can be checked against what that checkout
-    renders before a release vendors it. Raises ``ValueError`` when the payload is not a
-    valid catalog.
-    """
-    return resolve_catalogs([parse_ui_catalog(raw)], authoritative=True)
 
 
 def parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]
@@ -467,21 +416,6 @@ def parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]
         raise ValueError(f"not a UI catalog payload: {error!r}") from error
 
 
-def base_version_named(name: str) -> int | None:
-    """The base-catalog version ``name`` refers to, or ``None`` if it names another catalog.
-
-    ``"base"`` means the version this client ships; ``"base@2"`` means 2.
-    """
-    if name == BASE_CATALOG_NAME:
-        return BASE_CATALOG_VERSION
-    prefix = f"{BASE_CATALOG_NAME}@"
-    if name.startswith(prefix):
-        suffix = name[len(prefix) :]
-        if suffix.isdigit():
-            return int(suffix)
-    return None
-
-
 # --------------------------------------------------------------------------- diagnostics
 
 UNKNOWN_OPERATION = "unknown_operation"
@@ -491,8 +425,6 @@ COMPONENT_CHILDREN = "component_children"
 COMPONENT_PROPS = "component_props"
 CALLBACK_PROP_UNBOUND = "callback_prop_unbound"
 ASSET_PROP = "asset_prop"
-UNKNOWN_CATALOG = "unknown_catalog"
-BASE_CATALOG_DRIFT = "base_catalog_drift"
 
 WARNING = "WARNING"
 """The only diagnostic level there is: a hard finding is raised, never recorded."""
@@ -635,11 +567,6 @@ def resolve_catalogs(catalogs: Sequence[Catalog], *, authoritative: bool) -> Cat
     )
 
 
-def base_only_view() -> CatalogView:
-    """The offline view: base operations, components unchecked, not authoritative."""
-    return resolve_catalogs((), authoritative=False)
-
-
 # --------------------------------------------------------------------------- rules
 
 
@@ -760,84 +687,3 @@ def check_component(
                     f"the app registered, as in {key}=\"@self.assets.<name>\""
                 )
                 _finding(findings, ASSET_PROP, message, owner)
-
-
-def check_catalog_names(names: Iterable[str], known: Iterable[str], owner: str) -> list[Diagnostic]:
-    """Warn for every catalog name that resolves to nothing.
-
-    ``base``/``base@1`` name the built-in catalog and are accepted silently; another base
-    version, or a name no catalog is registered under, is a warning.
-
-    This is a **definition-only** rule. A blok carries a single catalog name that the server
-    creates on demand, so a blok never produces an ``unknown_catalog`` finding.
-    """
-    known_names = set(known)
-    diagnostics: list[Diagnostic] = []
-    seen: set[str] = set()
-    for name in names:
-        if name in seen:
-            continue
-        seen.add(name)
-        version = base_version_named(name)
-        if version is not None:
-            if version != BASE_CATALOG_VERSION:
-                diagnostics.append(
-                    Diagnostic(
-                        level=WARNING,
-                        code=UNKNOWN_CATALOG,
-                        message=(
-                            f"{owner}: catalog {name!r} was not applied: "
-                            f"this client provides {BASE_CATALOG_ID}"
-                        ),
-                        path=owner,
-                    )
-                )
-            continue
-        if name not in known_names:
-            diagnostics.append(
-                Diagnostic(
-                    level=WARNING,
-                    code=UNKNOWN_CATALOG,
-                    message=(
-                        f"{owner}: catalog {name!r} was not applied: "
-                        "it is not registered in this organization"
-                    ),
-                    path=owner,
-                )
-            )
-    return diagnostics
-
-
-# --------------------------------------------------------------------------- parity inventory
-
-
-@dataclass(frozen=True)
-class Rule:
-    """One validation rule, and the server function this client mirrors it from.
-
-    ``server`` names a function in the server's ``facade.catalog_validation``. The parity test
-    asserts every rule site over there maps onto one of these -- coverage, not a bijection:
-    one entry may cover several raise sites.
-    """
-
-    id: str
-    server: str
-    description: str
-
-
-RULES: tuple[Rule, ...] = (
-    Rule("unknown_operation", "_check_call", "An operation no catalog in force provides (warning)."),
-    Rule("operation_arguments", "_check_call", "A known operation called with unaccepted or missing argument keys."),
-    Rule("unknown_component", "_check_component", "A component no catalog in force registered."),
-    Rule("component_children", "_check_component", "Children on a component that does not accept them."),
-    Rule("component_props", "_check_component", "Unknown or missing required props on a component."),
-    Rule("callback_prop_unbound", "_check_component", "A CALLBACK prop not bound via agent_call or util_call."),
-    Rule("asset_prop", "_check_asset_prop", "An ASSET prop that is not bound to a <dependency>.assets.<name> path."),
-    Rule("context_root", "validate_components_against_catalogs", "A scene, logo or action logo blok whose one root is not its Scene, SVG or ActionLogo component."),
-    Rule("logo_complexity", "check_logo_complexity", "A logo blok with too many nodes, too deep a tree, too much path data, or a foreach drawing too many items."),
-    Rule("logo_palette", "check_logo_palette", "An action logo blok painting with a colour of its own instead of a palette token."),
-    Rule("component_placement", "_check_placement", "A component outside its context, without a required ancestor, or under a forbidden one."),
-    Rule("catalog_conflict", "resolve_operations", "Two catalogs defining one operation or component differently."),
-    Rule("base_shadowed", "check_extension_does_not_shadow_base", "A UI catalog redefining a base operation."),
-    Rule("unknown_catalog", "catalogs_for_definition", "A definition naming a catalog that resolves to nothing (warning)."),
-)

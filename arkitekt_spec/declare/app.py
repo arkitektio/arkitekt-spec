@@ -6,6 +6,7 @@ and structure registries.
 """
 
 import hashlib
+import inspect
 import os
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace as dataclass_replace
@@ -55,7 +56,7 @@ from arkitekt_spec.actions import (
 )
 from arkitekt_spec.blok.bsx import parse_bsx
 from arkitekt_spec.blok.catalogs import BlokView, blok_view, default_view, orkestrator_module
-from arkitekt_spec.blok.vocabulary import VOCAB, BlokError, load_vocabulary
+from arkitekt_spec.blok.vocabulary import VOCAB, BlokError, Finding, load_vocabulary
 from arkitekt_spec.declare.actors.policy import KEEP, DisconnectPolicy
 from arkitekt_spec.declare.actors.types import Actifier, DeclaredImplementation
 from arkitekt_spec.declare.agents.hooks.registry import HooksRegistry
@@ -76,16 +77,19 @@ from arkitekt_spec.declare.catalogs import (
     MODEL_REF_PATTERN,
     BlokCheckMode,
     Catalog,
+    BASE_CATALOG_ID,
+    BASE_CATALOG_NAME,
+    WARNING,
     CatalogView,
+    Diagnostic,
     ComponentSpec,
     OperationSpec,
-    base_only_view,
     check_extension_does_not_shadow_base,
     is_standard_catalog,
     resolve_catalogs,
-    standard_view,
 )
 from arkitekt_spec.declare.coercible_types import OptimisticCoercible
+from arkitekt_spec.declare.definition.catalogs import validate_definition_against_catalog
 from arkitekt_spec.declare.definition.define import convert_object_to_argport
 from arkitekt_spec.declare.errors import AppContextError, RegistryFrozenError
 from arkitekt_spec.declare.interactions import DeclaredInteractions
@@ -111,6 +115,14 @@ R = TypeVar("R")
 
 if TYPE_CHECKING:
     from arkitekt_spec.declare.register import WrappedFunction
+
+
+def _function_origin(function: Any) -> DeclaredAt | None:  # noqa: ANN401
+    """The line ``function`` is defined on, where a warning about it points; ``None`` for a callable object."""
+    code = getattr(inspect.unwrap(function), "__code__", None)
+    if code is None:
+        return None
+    return DeclaredAt(filename=code.co_filename, lineno=code.co_firstlineno, module=str(getattr(function, "__module__", "")))
 
 
 class BlokDeclaration(BaseModel):
@@ -1101,27 +1113,48 @@ class AppRegistry(BaseModel):
             raise ValueError(f"The catalog {name!r} is already declared, differently.")
         self.declared_catalogs[name] = catalog
 
-    def catalog_view(self, name: str | None) -> "CatalogView":
-        """The v1 view a definition's catalog ``name`` is validated against offline (bloks: :meth:`blok_view`).
+    def definition_view(self, names: Sequence[str]) -> CatalogView:
+        """What a definition naming the catalogs ``names`` is checked against on this side.
 
-        A blok that names no catalog, or the standard one, is checked against
-        the standard catalog this package ships (``load_standard_catalog``): its
-        components and props are known, and one it does not have is refused. A
-        catalog this app declared is checked against that declaration. Either
-        makes the operation set authoritative, so an unknown operation becomes a
-        warning. A name nobody declared leaves only the base catalog, which
-        cannot tell a typo from an operation the UI legitimately provides, so
-        nothing but base operations is checked until the server sees it.
+        The base catalog, and those of ``names`` this app declared: what the server resolves
+        a definition against, so far as the app can know it. A name it did not declare is a
+        module only the server holds, which leaves an unknown operation unknowable, so
+        nothing is said about one then. Base operations are fully known either way.
         """
-        declared = self.declared_catalogs.get(name) if name is not None else None
-        if declared is not None:
-            return resolve_catalogs([declared], authoritative=True)
-        if is_standard_catalog(name):
-            # What a blok is drawn by unless it says otherwise: the vendored
-            # catalog of the Orkestrator app, so a component or prop it does
-            # not have is refused here and not found out in the user interface.
-            return standard_view()
-        return base_only_view()
+        declared = [self.declared_catalogs[name] for name in names if name in self.declared_catalogs]
+        complete = all(
+            name in self.declared_catalogs or name in (BASE_CATALOG_NAME, BASE_CATALOG_ID) for name in names
+        )
+        return resolve_catalogs(declared, authoritative=complete)
+
+    def _warn_definition_findings(self) -> None:
+        """Warn what this app's actions call that their catalogs do not provide.
+
+        Warnings only, as on the server: a UI may roll an operation out before or after an
+        agent uses it, and the client's knowledge of a module is partial. Each points at
+        the action's own line.
+        """
+        for interface, implementation in self.implementations.items():
+            definition = implementation.definition
+            at = _function_origin(self.declared_implementations[interface].function)
+            try:
+                findings = validate_definition_against_catalog(
+                    definition,
+                    self.definition_view(definition.catalogs or ()),
+                    implementation.optimistics,
+                    strict=False,
+                )
+            except ValueError as error:
+                # Two catalogs defining one operation differently: the view itself cannot be built.
+                findings = [Diagnostic(level=WARNING, code="catalog_conflict", message=str(error))]
+            for finding in findings:
+                message = f"Action {interface!r}: {finding.message} [{finding.code}]"
+                warn_at(
+                    message,
+                    at,
+                    finding=Finding(code=finding.code, level="warning", message=finding.message),
+                    blok=interface,
+                )
 
     def blok_view(self, name: str | None) -> BlokView:
         """The catalogs and the module a blok naming the module ``name`` is drawn with.
@@ -1390,6 +1423,9 @@ class AppRegistry(BaseModel):
         connection. (An expander or an action asking for a client no registered
         service returns is refused earlier, when it is registered.)
 
+        What an action calls is checked against its catalogs here too, once all of them
+        are declared. That only warns, as a :class:`CatalogWarning`.
+
         Raises:
             StructureRegistryError: Listing every problem it found.
         """
@@ -1435,6 +1471,8 @@ class AppRegistry(BaseModel):
                 "different app. Expanding one of these would fail mid-assignment "
                 "instead."
             )
+
+        self._warn_definition_findings()
 
     # ------------------------------------------------------------------ #
     # Decorators                                                         #
