@@ -22,7 +22,7 @@ import hashlib
 import json
 import re
 from collections.abc import Mapping
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 from pydantic import (
     Field,
@@ -32,14 +32,11 @@ from pydantic import (
     model_validator,
 )
 
-from arkitekt_spec.base import WireModel
+from arkitekt_spec.base import WireModel, current_spec_version
 from arkitekt_spec.capabilities import Capability, unique_names
 from arkitekt_spec.inspection import Inspection
 from arkitekt_spec.manifest import AppManifest
 from arkitekt_spec.selectors import Selector
-
-#: The current spec version. Bumped only for a change an older reader must refuse.
-SPEC_VERSION: Literal[1] = 1
 
 #: The media type of the descriptor. A manifest whose config has it is a release.
 RELEASE_MEDIA_TYPE = "application/vnd.arkitekt.release.v1+json"
@@ -107,8 +104,9 @@ class ReleaseFlavour(WireModel):
 class ReleaseDescriptor(WireModel):
     """One release of an app, as its registry repository carries it."""
 
-    spec_version: Literal[1] = Field(
-        default=SPEC_VERSION, description="The version of this spec the descriptor follows."
+    spec_version: str | int = Field(
+        default_factory=current_spec_version,
+        description="The arkitekt-spec that wrote the descriptor: the number 1 in one older than that.",
     )
     manifest: AppManifest
     channel: str | None = Field(

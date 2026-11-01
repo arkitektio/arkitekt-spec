@@ -2,11 +2,11 @@
 
 import datetime
 from collections.abc import Mapping
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import Field, SerializerFunctionWrapHandler, field_validator, model_serializer
 
-from arkitekt_spec.base import WireModel
+from arkitekt_spec.base import WireModel, current_spec_version
 from arkitekt_spec.capabilities import Capability, unique_names
 from arkitekt_spec.inspection import Inspection
 from arkitekt_spec.manifest import AppManifest
@@ -14,9 +14,6 @@ from arkitekt_spec.selectors import Selector
 
 #: The path of the deployments file, relative to the repository root.
 DEPLOYMENTS_PATH = ".arkitekt/deployments.yaml"
-
-#: The current spec version. Bumped only for a change an older reader must refuse.
-SPEC_VERSION: Literal[1] = 1
 
 
 class DockerImage(WireModel):
@@ -70,8 +67,9 @@ class DeploymentsFile(WireModel):
     spec existed reads unchanged.
     """
 
-    spec_version: Literal[1] = Field(
-        default=SPEC_VERSION, description="The version of this spec the file follows."
+    spec_version: str | int = Field(
+        default_factory=current_spec_version,
+        description="The arkitekt-spec that wrote the file: the number 1 in a file older than that.",
     )
     app_images: list[AppImage] = Field(default_factory=list)
     latest_app_image: str | None = None

@@ -21,7 +21,7 @@ from arkitekt_spec.actions import (
     LockImplementationInput,
     StateImplementationInput,
 )
-from arkitekt_spec.base import WireModel
+from arkitekt_spec.base import WireModel, current_spec_version
 from arkitekt_spec.inspection import InspectedAsset, Inspection
 from arkitekt_spec.manifest import AppManifest, Requirement
 
@@ -42,6 +42,7 @@ class AppDeclaration(WireModel):
     def to_inspection(self, size: int | None = None) -> Inspection:
         """The declaration as a built image records it (``deployments.yaml``)."""
         return Inspection(
+            spec_version=current_spec_version(),
             size=size,
             description=self.manifest.description,
             requirements=list(self.requirements),

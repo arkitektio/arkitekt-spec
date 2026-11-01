@@ -5,11 +5,13 @@ import pytest
 from pydantic import ValidationError
 
 from arkitekt_spec import (
+    AppDeclaration,
     AppManifest,
     CudaSelector,
     Inspection,
     ReleaseDescriptor,
     ReleaseFlavour,
+    current_spec_version,
     dump_descriptor,
     load_descriptor,
     parse_repository,
@@ -58,6 +60,16 @@ def test_golden_descriptor_reads_every_field():
     assert only.selectors == [CudaSelector(compute_capability="7.0")]
     assert only.inspection.implementations[0].definition.key == "predict_flou2"
     assert [r.key for r in only.inspection.requirements] == ["mikro", "rekuest"]
+
+
+def test_a_release_names_the_spec_that_wrote_it_and_its_inspections():
+    declaration = AppDeclaration(manifest=AppManifest(identifier="starmist", version="0.1.0"))
+    inspected = ReleaseFlavour(name="vanilla", image=PINNED, inspection=declaration.to_inspection())
+
+    data = json.loads(dump_descriptor(descriptor(flavours=[inspected])))
+
+    assert data["spec_version"] == current_spec_version()
+    assert data["flavours"][0]["inspection"]["spec_version"] == current_spec_version()
 
 
 def test_a_flavour_refuses_an_image_named_by_tag():

@@ -46,7 +46,7 @@ def test_a_file_written_before_the_spec_still_loads():
     """The server's historic fixture: no spec_version, no description anywhere."""
     file = load_deployments((FIXTURES / "legacy_deployments.yaml").read_text())
     (image,) = file.app_images
-    assert file.spec_version == 1
+    assert image.inspection.spec_version is None
     assert image.manifest.identifier == "ome"
     assert image.manifest.description is None
     assert image.inspection.description is None

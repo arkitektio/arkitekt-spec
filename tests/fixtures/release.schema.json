@@ -3619,6 +3619,19 @@
           "description": "The uncompressed size of the image, in bytes.",
           "title": "Size"
         },
+        "spec_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The arkitekt-spec the image wrote this with, which may be older than the file carrying it. Absent from an image older than this key.",
+          "title": "Spec Version"
+        },
         "states": {
           "items": {
             "$ref": "#/$defs/StateImplementationInput"
@@ -5452,11 +5465,16 @@
       "title": "Source"
     },
     "spec_version": {
-      "const": 1,
-      "default": 1,
-      "description": "The version of this spec the descriptor follows.",
-      "title": "Spec Version",
-      "type": "integer"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer"
+        }
+      ],
+      "description": "The arkitekt-spec that wrote the descriptor: the number 1 in one older than that.",
+      "title": "Spec Version"
     }
   },
   "required": [

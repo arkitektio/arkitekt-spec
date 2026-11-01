@@ -1,6 +1,17 @@
 """The model base every envelope type shares."""
 
+from importlib.metadata import PackageNotFoundError, version
+
 from pydantic import BaseModel, ConfigDict
+
+
+def current_spec_version() -> str:
+    """The arkitekt-spec writing a file now, which is what a reader picks its parser by."""
+    try:
+        return version("arkitekt-spec")
+    except PackageNotFoundError:
+        # A source checkout on the path. A released package always has its metadata.
+        return "0+local"
 
 
 class WireModel(BaseModel):
@@ -11,8 +22,8 @@ class WireModel(BaseModel):
     arkitekt it installed) and read by the host CLI, and ``deployments.yaml`` is
     written by the CLI and read by a kabinet server that upgrades on its own
     schedule. So an unknown key is IGNORED, not refused: adding a field is a minor
-    change an older reader survives. A change an older reader must not survive
-    bumps ``DeploymentsFile.spec_version`` instead.
+    change an older reader survives. Every file names the spec that wrote it in
+    ``spec_version``, and so does each inspection: a reader picks its parser by that.
 
     Refusing unknown keys here is exactly what broke builds when rekuest started
     emitting an agent ``description`` that kabinet's ``InspectionInput`` did not know.

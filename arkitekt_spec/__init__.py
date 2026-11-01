@@ -18,6 +18,7 @@ from pydantic import TypeAdapter
 
 from arkitekt_spec import actions
 from arkitekt_spec.actions import definition_hash
+from arkitekt_spec.base import current_spec_version
 from arkitekt_spec.capabilities import (
     CAPABILITY_KINDS,
     BaseCapability,
@@ -32,7 +33,6 @@ from arkitekt_spec.capabilities import (
 from arkitekt_spec.declaration import AppDeclaration
 from arkitekt_spec.deployment import (
     DEPLOYMENTS_PATH,
-    SPEC_VERSION,
     AppImage,
     DeploymentsFile,
     DockerImage,
@@ -93,7 +93,6 @@ __all__ = [
     "DEPLOYMENTS_PATH",
     "RELEASE_MEDIA_TYPE",
     "SELECTOR_KINDS",
-    "SPEC_VERSION",
     "UNKNOWN_AUTHOR",
     "AppDeclaration",
     "AppImage",
@@ -122,6 +121,7 @@ __all__ = [
     "SharedMemoryCapability",
     "actions",
     "capability_adapter",
+    "current_spec_version",
     "definition_hash",
     "dump_deployments",
     "dump_descriptor",
