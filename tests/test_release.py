@@ -33,11 +33,12 @@ PINNED = "ghcr.io/org/starmist@sha256:" + "a" * 64
 
 
 def flavour(name: str = "vanilla", image: str = PINNED) -> ReleaseFlavour:
-    return ReleaseFlavour(name=name, image=image, inspection=Inspection())
+    return ReleaseFlavour(name=name, image=image, inspection=Inspection(spec_version="8.0.0"))
 
 
 def descriptor(**changes: object) -> ReleaseDescriptor:
     fields: dict[str, object] = {
+        "spec_version": "8.0.0",
         "manifest": AppManifest(identifier="starmist", version="0.1.0"),
         "flavours": [flavour()],
     }
@@ -66,10 +67,29 @@ def test_a_release_names_the_spec_that_wrote_it_and_its_inspections():
     declaration = AppDeclaration(manifest=AppManifest(identifier="starmist", version="0.1.0"))
     inspected = ReleaseFlavour(name="vanilla", image=PINNED, inspection=declaration.to_inspection())
 
-    data = json.loads(dump_descriptor(descriptor(flavours=[inspected])))
+    data = json.loads(
+        dump_descriptor(descriptor(spec_version=current_spec_version(), flavours=[inspected]))
+    )
 
     assert data["spec_version"] == current_spec_version()
     assert data["flavours"][0]["inspection"]["spec_version"] == current_spec_version()
+
+
+@pytest.mark.parametrize("version", [None, 1])
+def test_a_release_that_names_no_spec_is_refused(version: int | None):
+    data = json.loads(dump_descriptor(descriptor()))
+    del data["spec_version"]
+    if version is not None:
+        data["spec_version"] = version
+    with pytest.raises(ValidationError, match="spec_version"):
+        load_descriptor(json.dumps(data))
+
+
+def test_a_release_whose_inspection_names_no_spec_is_refused():
+    data = json.loads(dump_descriptor(descriptor()))
+    del data["flavours"][0]["inspection"]["spec_version"]
+    with pytest.raises(ValidationError, match="spec_version"):
+        load_descriptor(json.dumps(data))
 
 
 def test_a_flavour_refuses_an_image_named_by_tag():

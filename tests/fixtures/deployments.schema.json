@@ -3781,17 +3781,9 @@
           "title": "Size"
         },
         "spec_version": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The arkitekt-spec the image wrote this with, which may be older than the file carrying it. Absent from an image older than this key.",
-          "title": "Spec Version"
+          "description": "The arkitekt-spec the image wrote this with, which may be older than the file carrying it.",
+          "title": "Spec Version",
+          "type": "string"
         },
         "states": {
           "items": {
@@ -3801,6 +3793,9 @@
           "type": "array"
         }
       },
+      "required": [
+        "spec_version"
+      ],
       "title": "Inspection",
       "type": "object"
     },
@@ -5459,18 +5454,14 @@
       "title": "Latest App Image"
     },
     "spec_version": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "integer"
-        }
-      ],
-      "description": "The arkitekt-spec that wrote the file: the number 1 in a file older than that.",
-      "title": "Spec Version"
+      "description": "The arkitekt-spec that wrote the file.",
+      "title": "Spec Version",
+      "type": "string"
     }
   },
+  "required": [
+    "spec_version"
+  ],
   "title": "DeploymentsFile",
   "type": "object"
 }

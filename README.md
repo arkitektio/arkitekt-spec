@@ -39,10 +39,13 @@ an image and read by the host CLI, and `deployments.yaml` is written by the CLI 
 kabinet server that upgrades on its own schedule. Adding a field is therefore a minor change
 an older reader survives.
 
-Every dumped file names the arkitekt-spec that wrote it in `spec_version` (`"7.1.0"`): a release
+Every dumped file names the arkitekt-spec that wrote it in `spec_version` (`"8.0.0"`): a release
 descriptor, `deployments.yaml`, `builds.yaml`, and each inspection, whose version is the image's
 and may be older than the file's. A reader picks its parser by it, as kabinet does with its
-`RELEASE_PARSERS`. The number `1`, or no key at all, marks a file older than this.
+`RELEASE_PARSERS`. A file without one, or with the number `1` older files have, is refused.
+
+An agent says the same on `Register`. That says what it was written against. What a server may
+send it is what its `features` say, never its spec version.
 
 Selectors and capabilities are the exception: they refuse unknown keys, because they are
 written by hand and a typo must not silently widen a placement constraint or change what is

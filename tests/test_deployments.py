@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from arkitekt_spec import (
@@ -10,6 +11,7 @@ from arkitekt_spec import (
     DeploymentsFile,
     Inspection,
     LabelSelector,
+    current_spec_version,
     dump_deployments,
     json_schema,
     load_deployments,
@@ -25,11 +27,6 @@ def test_golden_file_is_in_canonical_form():
     assert dump_deployments(load_deployments(text)) == text
 
 
-def test_the_legacy_file_canonicalises_stably():
-    once = dump_deployments(load_deployments((FIXTURES / "legacy_deployments.yaml").read_text()))
-    assert dump_deployments(load_deployments(once)) == once
-
-
 def test_golden_file_reads_every_envelope_field():
     file = load_deployments((FIXTURES / "deployments.yaml").read_text())
     (image,) = file.app_images
@@ -42,20 +39,22 @@ def test_golden_file_reads_every_envelope_field():
     assert file.latest_app_image == image.app_image_id
 
 
-def test_a_file_written_before_the_spec_still_loads():
-    """The server's historic fixture: no spec_version, no description anywhere."""
-    file = load_deployments((FIXTURES / "legacy_deployments.yaml").read_text())
-    (image,) = file.app_images
-    assert image.inspection.spec_version is None
-    assert image.manifest.identifier == "ome"
-    assert image.manifest.description is None
-    assert image.inspection.description is None
-    assert image.inspection.implementations[0].definition.key == "convert_omero"
-    assert image.selectors == []
+def _versioned_legacy_file() -> dict:
+    """The server's historic fixture, with the versions it never had: its spellings are the point."""
+    data = yaml.safe_load((FIXTURES / "legacy_deployments.yaml").read_text())
+    data["spec_version"] = "8.0.0"
+    for image in data["app_images"]:
+        image["inspection"]["spec_version"] = "8.0.0"
+    return data
+
+
+def test_a_file_that_names_no_spec_is_refused():
+    with pytest.raises(ValidationError, match="spec_version"):
+        load_deployments((FIXTURES / "legacy_deployments.yaml").read_text())
 
 
 def test_the_action_language_is_typed_and_reads_both_spellings():
-    legacy = load_deployments((FIXTURES / "legacy_deployments.yaml").read_text())
+    legacy = load_deployments(_versioned_legacy_file())
     definition = legacy.app_images[0].inspection.implementations[0].definition
     assert definition.key == "convert_omero"
     assert definition.is_dev is False  # read from camelCase `isDev`
@@ -64,7 +63,7 @@ def test_the_action_language_is_typed_and_reads_both_spellings():
 def test_an_unknown_envelope_key_is_ignored_not_refused():
     """A newer producer adds a field; an older reader must survive it."""
     inspection = Inspection.model_validate(
-        {"description": "x", "somethingNewer": 1, "implementations": []}
+        {"spec_version": "8.0.0", "description": "x", "somethingNewer": 1, "implementations": []}
     )
     assert inspection.description == "x"
 
@@ -87,8 +86,8 @@ def test_a_label_selector_needs_its_key():
 
 
 def test_empty_or_missing_file_is_an_empty_deployments_file():
-    assert load_deployments(None) == DeploymentsFile()
-    assert load_deployments("") == DeploymentsFile()
+    assert load_deployments(None) == DeploymentsFile(spec_version=current_spec_version())
+    assert load_deployments("") == DeploymentsFile(spec_version=current_spec_version())
 
 
 def test_plain_dump_stays_snake_case():

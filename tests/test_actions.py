@@ -52,6 +52,10 @@ def test_the_hash_ignores_what_is_not_identity():
 
 def test_an_inspection_types_its_entries():
     inspection = Inspection.model_validate(
-        {"implementations": [VECTORS[0]["implementation"]], "somethingNewer": 1}
+        {
+            "spec_version": "8.0.0",
+            "implementations": [VECTORS[0]["implementation"]],
+            "somethingNewer": 1,
+        }
     )
     assert isinstance(inspection.implementations[0], ImplementationInput)

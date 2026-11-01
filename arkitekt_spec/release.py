@@ -32,7 +32,7 @@ from pydantic import (
     model_validator,
 )
 
-from arkitekt_spec.base import WireModel, current_spec_version
+from arkitekt_spec.base import WireModel
 from arkitekt_spec.capabilities import Capability, unique_names
 from arkitekt_spec.inspection import Inspection
 from arkitekt_spec.manifest import AppManifest
@@ -104,10 +104,7 @@ class ReleaseFlavour(WireModel):
 class ReleaseDescriptor(WireModel):
     """One release of an app, as its registry repository carries it."""
 
-    spec_version: str | int = Field(
-        default_factory=current_spec_version,
-        description="The arkitekt-spec that wrote the descriptor: the number 1 in one older than that.",
-    )
+    spec_version: str = Field(description="The arkitekt-spec that wrote the descriptor.")
     manifest: AppManifest
     channel: str | None = Field(
         default=None,

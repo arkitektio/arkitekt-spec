@@ -67,10 +67,7 @@ class DeploymentsFile(WireModel):
     spec existed reads unchanged.
     """
 
-    spec_version: str | int = Field(
-        default_factory=current_spec_version,
-        description="The arkitekt-spec that wrote the file: the number 1 in a file older than that.",
-    )
+    spec_version: str = Field(description="The arkitekt-spec that wrote the file.")
     app_images: list[AppImage] = Field(default_factory=list)
     latest_app_image: str | None = None
 
@@ -81,7 +78,7 @@ def load_deployments(source: str | Mapping[str, Any] | None) -> DeploymentsFile:
 
     data: Any = yaml.safe_load(source) if isinstance(source, str) else source
     if data is None:
-        return DeploymentsFile()
+        return DeploymentsFile(spec_version=current_spec_version())
     return DeploymentsFile.model_validate(data)
 
 

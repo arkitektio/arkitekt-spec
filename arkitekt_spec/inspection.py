@@ -31,10 +31,9 @@ class Inspection(WireModel):
     fails where it is read rather than being stored half-understood.
     """
 
-    spec_version: str | None = Field(
-        default=None,
+    spec_version: str = Field(
         description="The arkitekt-spec the image wrote this with, which may be older than the "
-        "file carrying it. Absent from an image older than this key.",
+        "file carrying it.",
     )
     size: int | None = Field(
         default=None, description="The uncompressed size of the image, in bytes."

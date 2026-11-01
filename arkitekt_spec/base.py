@@ -23,7 +23,8 @@ class WireModel(BaseModel):
     written by the CLI and read by a kabinet server that upgrades on its own
     schedule. So an unknown key is IGNORED, not refused: adding a field is a minor
     change an older reader survives. Every file names the spec that wrote it in
-    ``spec_version``, and so does each inspection: a reader picks its parser by that.
+    ``spec_version``, and so does each inspection: a reader picks its parser by that,
+    and a file without one is refused.
 
     Refusing unknown keys here is exactly what broke builds when rekuest started
     emitting an agent ``description`` that kabinet's ``InspectionInput`` did not know.

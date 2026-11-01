@@ -33,7 +33,7 @@ def flavour(capabilities: list[dict[str, object]]) -> ReleaseFlavour:
         {
             "name": "vanilla",
             "image": PINNED,
-            "inspection": Inspection(),
+            "inspection": Inspection(spec_version="8.0.0"),
             "capabilities": capabilities,
         }
     )
@@ -101,6 +101,7 @@ def test_two_capabilities_of_one_name_are_refused():
 
 def test_a_descriptor_carries_its_flavours_capabilities_through_the_registry_bytes():
     release = ReleaseDescriptor(
+        spec_version="8.0.0",
         manifest=AppManifest(identifier="plugin_engine", version="1.0.0"),
         flavours=[flavour(EVERY_KIND)],
     )
@@ -114,7 +115,9 @@ def test_a_descriptor_carries_its_flavours_capabilities_through_the_registry_byt
 def test_a_flavour_without_capabilities_is_written_as_before_they_existed():
     """The digest of a descriptor is its identity: one with nothing to grant keeps its bytes."""
     release = ReleaseDescriptor(
-        manifest=AppManifest(identifier="starmist", version="0.1.0"), flavours=[flavour([])]
+        spec_version="8.0.0",
+        manifest=AppManifest(identifier="starmist", version="0.1.0"),
+        flavours=[flavour([])],
     )
     assert b"capabilities" not in dump_descriptor(release)
 
@@ -122,11 +125,12 @@ def test_a_flavour_without_capabilities_is_written_as_before_they_existed():
 def test_an_app_image_in_a_deployments_file_carries_capabilities_too():
     file = load_deployments(
         {
+            "spec_version": "8.0.0",
             "app_images": [
                 {
                     "appImageId": "1",
                     "manifest": {"identifier": "plugin_engine", "version": "1.0.0"},
-                    "inspection": {},
+                    "inspection": {"spec_version": "8.0.0"},
                     "image": {"imageString": "arkitektio/plugin_engine:1.0.0"},
                     "capabilities": [{"kind": "container_engine", "name": "engine"}],
                 }
