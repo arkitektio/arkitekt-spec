@@ -25,6 +25,7 @@ from arkitekt_spec.actions import (
     UtilCallInput,
     ValidatorInput,
 )
+from arkitekt_spec.blok.bsx import parse_bsx
 from arkitekt_spec.declare.blok.parser import coerce_util_call, normalize_expression
 from arkitekt_spec.declare.structures.types import JSONSerializable
 from arkitekt_spec.rules import infer_dependencies
@@ -180,6 +181,45 @@ def CustomWidget(
     return CustomAssignWidgetInput(
         component=component,
         props=tuple(props) if props else None,
+        dependencies=tuple(dependencies or ()),
+        fallback=fallback,
+    )
+
+
+def BsxWidget(
+    source: str,
+    dependencies: list[str] | None = None,
+    fallback: AssignWidgetInput | None = None,
+) -> AssignWidgetInput:
+    """A port's widget written as BSX: a small tree of the UI catalog's components.
+
+    The tree reads the port's value as ``value`` and each of ``dependencies`` by its name, and a
+    control with ``bind={value}`` writes the port. The form still owns the value and draws the
+    port's label and validation message. A tree is pure: it calls no agent and keeps no state.
+
+        scale: Annotated[float, BsxWidget('''
+            <Html>
+              <Slider bind={value} min={0} max={limit} />
+              <p>{value}</p>
+            </Html>
+        ''', dependencies=["limit"])]
+
+    Args:
+        source (str): The BSX, with one root. ``<Html>`` is the one the editor highlights.
+        dependencies (list[str], optional): The other ports the tree reads
+        fallback (AssignWidgetInput, optional): Widget for a UI that cannot draw the whole tree
+
+    Returns:
+        AssignWidgetInput: The widget input
+
+    Raises:
+        BlokError: If the source does not parse.
+    """
+    tree = parse_bsx(source)
+    return CustomAssignWidgetInput(
+        component=tree.component,
+        props=tree.props,
+        children=tree.children,
         dependencies=tuple(dependencies or ()),
         fallback=fallback,
     )

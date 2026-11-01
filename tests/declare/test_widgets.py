@@ -3,7 +3,16 @@
 import pytest
 from pydantic import ValidationError
 
-from arkitekt_spec.declare.widgets import SearchWidget, SliderWidget
+from arkitekt_spec.actions import (
+    ArgPortInput,
+    AssignWidgetInput,
+    CustomAssignWidgetInput,
+    DefinitionInput,
+    definition_hash,
+)
+from arkitekt_spec.blok.catalogs import default_view
+from arkitekt_spec.declare.definition.catalogs import widget_tree_findings
+from arkitekt_spec.declare.widgets import BsxWidget, CustomWidget, SearchWidget, SliderWidget
 
 
 def test_search_widget_error_on_wrong_graphql() -> None:
@@ -160,3 +169,52 @@ def test_structure_picker_refuses_a_variable_no_argument_backs() -> None:
 
     custom = StructurePicker(query, "mikro", ["path"], fallback=StringWidget())
     assert custom.fallback.kind == "STRING"
+
+
+TREE_SERVER_HASH = "f30bf99443ae0d7f48a85b851704bf43459fa83511d5c05ed521b3be698eed1c"
+
+TREE = """
+<Html>
+  <Slider bind={value} min={0} max={limit} disabled={true} />
+  <p>{value}</p>
+</Html>
+"""
+
+
+def _tree_definition(kind: str, widget: AssignWidgetInput) -> DefinitionInput:
+    return DefinitionInput(
+        key="k",
+        name="n",
+        version="0.1.0",
+        kind="FUNCTION",
+        args=(
+            ArgPortInput(key="scale", kind=kind, widget=widget, label="s"),
+            ArgPortInput(key="limit", kind="INT", label="l"),
+        ),
+    )
+
+
+def test_a_tree_hashes_as_the_server_hashes_it() -> None:
+    """Digest computed once by the rekuest server's `unique_hash` (takt's is held to it by its fixtures)."""
+    definition = _tree_definition("FLOAT", BsxWidget(TREE, dependencies=["limit"]))
+    assert definition_hash(definition) == TREE_SERVER_HASH
+
+
+def test_a_widget_without_a_tree_hashes_as_it_did() -> None:
+    assert "children" not in CustomWidget("X").model_dump()
+    assert "children" not in CustomAssignWidgetInput(component="X", children=()).model_dump()
+
+
+@pytest.mark.parametrize(
+    "source",
+    ["<Html><p>{nope}</p></Html>", "<Html><Button onClick={self.go()}>x</Button></Html>"],
+)
+def test_a_tree_reads_only_its_scope_and_calls_no_agent(source: str) -> None:
+    with pytest.raises(ValueError):
+        BsxWidget(source)
+
+
+def test_value_is_typed_from_the_port() -> None:
+    definition = _tree_definition("STRING", BsxWidget(TREE, dependencies=["limit"]))
+    assert [finding.code for _, finding in widget_tree_findings(definition, default_view())] == ["local.bind_kind"]
+

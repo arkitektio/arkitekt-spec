@@ -72,6 +72,11 @@ def value_path_root(value_path: str) -> str:
     return value_path.lstrip("/").split("/", 1)[0]
 
 
+def blok_path_root(path: str) -> str:
+    """The first segment of a blok's path, which is dotted (``'row.name'`` -> ``'row'``)."""
+    return path.lstrip("/").replace("/", ".").split(".", 1)[0]
+
+
 def iter_call_arguments(call: _Call) -> Iterator[_Argument]:
     """Every argument node in ``call``, depth first, through nested calls, lists and dicts."""
 
@@ -300,6 +305,33 @@ def _ensure_unique(values: Iterable[str], label: str) -> None:
         if value in seen:
             raise ValueError(f"Duplicate {label} '{value}' in agent input")
         seen.add(value)
+
+
+def check_widget_tree(nodes: Iterable[Any] | None, dependencies: Iterable[str] | None, owner: str) -> None:
+    """Raise unless a CUSTOM widget's tree is pure and reads only what the widget has in scope.
+
+    That is its own value, its ``dependencies`` and what a node above declares (a ``foreach``'s
+    ``let``). The server refuses the same, so this says it at the declaration.
+    """
+    for node in nodes or ():
+        props = node.props or ()
+        in_scope = {*(dependencies or ()), OWN_VALUE, *(prop.declares_value for prop in props if prop.declares_value)}
+        for prop in props:
+            prop_owner = f"{owner} node {node.id!r} prop {prop.key!r}"
+            if prop.agent_call is not None:
+                raise ValueError(f"{prop_owner} must be pure: agent calls are not allowed in widgets")
+            reads = [prop.dynamic_value.path] if prop.dynamic_value is not None and prop.dynamic_value.path else []
+            if prop.util_call is not None:
+                for argument in iter_call_arguments(prop.util_call):
+                    if argument.agent_call is not None:
+                        raise ValueError(f"{prop_owner} must be pure: nested agent calls are not allowed")
+                    if argument.value_path is not None:
+                        reads.append(argument.value_path)
+            for path in reads:
+                root = blok_path_root(path)
+                if root not in in_scope:
+                    raise ValueError(f"{prop_owner} references {root!r} but it is not in dependencies")
+        check_widget_tree(node.children, in_scope, owner)
 
 
 # --- The mixins -------------------------------------------------------------

@@ -13,14 +13,21 @@ from collections.abc import Iterator, Sequence
 from typing import Any
 
 from arkitekt_spec.actions import (
+    ArgPortInput,
     AssignWidgetInput,
+    BlokLocalInput,
+    ComponentNodeInput,
     DefinitionInput,
     OptimisticInput,
     ReturnWidgetInput,
     UtilCallInput,
 )
+from arkitekt_spec.blok.catalogs import BlokView
+from arkitekt_spec.blok.vocabulary import Finding
+from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
+from arkitekt_spec.declare.blok.walk import iter_nodes
 from arkitekt_spec.declare.catalogs import CatalogView, Diagnostic, check_call, check_component
-from arkitekt_spec.rules import iter_call_arguments
+from arkitekt_spec.rules import OWN_VALUE, iter_call_arguments
 
 
 def _prop_calls(prop: Any) -> Iterator[UtilCallInput]:
@@ -116,6 +123,44 @@ def iter_definition_calls(
             yield f"optimistic of {label}", optimistic.path_call
 
 
+def _widget_tree_scope(port: ArgPortInput, siblings: Sequence[ArgPortInput]) -> BlokScope:
+    """What a port's tree has in scope: its own port as ``value``, and each dependency that is a sibling, as locals.
+
+    A local is typed like a port and written through ``bind``, which is what these are to the tree.
+    The form holds them, so a default says nothing here. A dependency that is a path stays open.
+    """
+    widget = port.widget
+    named = {sibling.key: sibling for sibling in siblings}
+    scoped = [(OWN_VALUE, port), *((key, named[key]) for key in widget.dependencies if key in named)]
+    return BlokScope(
+        kind="custom",
+        context="HTML",
+        locals=tuple(
+            BlokLocalInput.model_validate({**source.model_dump(), "key": key, "default": None})
+            for key, source in scoped
+        ),
+    )
+
+
+def widget_tree_findings(definition: DefinitionInput, view: BlokView) -> Iterator[tuple[str, Finding]]:
+    """What the blok checker says of each CUSTOM widget's tree, with its port's own kind as ``value``'s.
+
+    Only a widget with children: one that has none is one component, checked as such above. The
+    client-side check of a tree the server has no opinion on (its kinds, its root), so a warning.
+    """
+
+    def walk(ports: Sequence[ArgPortInput]) -> Iterator[tuple[str, Finding]]:
+        for port in ports:
+            widget = port.widget
+            if getattr(widget, "kind", None) == CUSTOM_WIDGET_KIND and widget.children:
+                tree = ComponentNodeInput(id="widget", component=widget.component, props=widget.props, children=widget.children)
+                for finding in check_blok_tree(tree, _widget_tree_scope(port, ports), view):
+                    yield port.key, finding
+            yield from walk(port.children or ())
+
+    yield from walk(definition.args or ())
+
+
 def _check_call_tree(
     call: UtilCallInput, view: CatalogView, owner: str, findings: list[Diagnostic] | None = None
 ) -> list[Diagnostic]:
@@ -147,8 +192,8 @@ def validate_definition_against_catalog(
 ) -> list[Diagnostic]:
     """Check every call and widget of ``definition`` against ``view``.
 
-    A CUSTOM widget is validated as a one-node component manifest, exactly as on the
-    server, so an unknown widget component is caught by the same rule as an unknown
+    A CUSTOM widget is validated as a component manifest rooted at its component, exactly as
+    on the server, so an unknown widget component is caught by the same rule as an unknown
     blok component.
 
     Args:
@@ -175,24 +220,31 @@ def validate_definition_against_catalog(
     for owner, widget in iter_definition_widgets(definition):
         widget_owner = f"widget of {owner}"
         if getattr(widget, "kind", None) == CUSTOM_WIDGET_KIND:
-            props = getattr(widget, "props", None) or ()
-            check_component(
-                widget.component,
-                [prop.key for prop in props],
-                False,
-                {
-                    prop.key: getattr(prop, "agent_call", None) is not None
-                    or getattr(prop, "util_call", None) is not None
-                    for prop in props
-                },
-                view,
-                widget_owner,
-                findings=recorded,
+            root = ComponentNodeInput(
+                id="widget",
+                component=widget.component,
+                props=getattr(widget, "props", None),
+                children=getattr(widget, "children", None),
             )
-        for prop in getattr(widget, "props", None) or ():
-            prop_owner = f"prop {prop.key!r} of {widget_owner}"
-            for call in _prop_calls(prop):
-                diagnostics.extend(_check_call_tree(call, view, prop_owner, recorded))
+            for node in iter_nodes(root):
+                props = node.props or ()
+                check_component(
+                    node.component,
+                    [prop.key for prop in props],
+                    bool(node.children),
+                    {
+                        prop.key: getattr(prop, "agent_call", None) is not None
+                        or getattr(prop, "util_call", None) is not None
+                        for prop in props
+                    },
+                    view,
+                    widget_owner,
+                    findings=recorded,
+                )
+                for prop in props:
+                    prop_owner = f"prop {prop.key!r} of {widget_owner}"
+                    for call in _prop_calls(prop):
+                        diagnostics.extend(_check_call_tree(call, view, prop_owner, recorded))
         for call in iter_widget_calls(widget):
             diagnostics.extend(_check_call_tree(call, view, widget_owner, recorded))
 

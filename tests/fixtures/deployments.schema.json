@@ -2500,6 +2500,22 @@
       "additionalProperties": false,
       "description": "A catalog component rendered as the port's widget.",
       "properties": {
+        "children": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ComponentNodeInput"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The component's children: a tree of blok nodes under the same rules as its props. Left out of the definition's hash when empty, so a widget without any keeps the hash it has.",
+          "title": "Children"
+        },
         "component": {
           "description": "The catalog component to render. The port value is in scope as the reserved root `value`.",
           "title": "Component",

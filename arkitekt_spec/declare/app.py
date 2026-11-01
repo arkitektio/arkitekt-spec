@@ -87,7 +87,10 @@ from arkitekt_spec.declare.catalogs import (
     resolve_catalogs,
 )
 from arkitekt_spec.declare.coercible_types import OptimisticCoercible
-from arkitekt_spec.declare.definition.catalogs import validate_definition_against_catalog
+from arkitekt_spec.declare.definition.catalogs import (
+    validate_definition_against_catalog,
+    widget_tree_findings,
+)
 from arkitekt_spec.declare.definition.define import convert_object_to_argport
 from arkitekt_spec.declare.errors import AppContextError, RegistryFrozenError
 from arkitekt_spec.declare.interactions import DeclaredInteractions
@@ -1147,6 +1150,14 @@ class AppRegistry(BaseModel):
                 findings = [Diagnostic(level=WARNING, code="catalog_conflict", message=str(error))]
             for finding in findings:
                 message = f"Action {interface!r}: {finding.message} [{finding.code}]"
+                warn_at(
+                    message,
+                    at,
+                    finding=Finding(code=finding.code, level="warning", message=finding.message),
+                    blok=interface,
+                )
+            for port, finding in widget_tree_findings(definition, self.blok_view(None)):
+                message = f"Action {interface!r}: widget of port {port!r}: {finding.message} [{finding.code}]"
                 warn_at(
                     message,
                     at,

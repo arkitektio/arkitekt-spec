@@ -31,6 +31,7 @@ from arkitekt_spec.rules import (
     SliderRules,
     StateChoiceRules,
     ValidatorRules,
+    check_widget_tree,
 )
 from arkitekt_spec.scalars import (
     JSONSerializable,
@@ -251,6 +252,11 @@ class CustomAssignWidgetInput(ActionModel):
         default=None,
         description="Props of the component. value_paths may only reference `value` and `dependencies`; agent calls are not allowed.",
     )
+    children: tuple["ComponentNodeInput", ...] | None = Field(
+        default=None,
+        exclude_if=lambda children: not children,
+        description="The component's children: a tree of blok nodes under the same rules as its props. Left out of the definition's hash when empty, so a widget without any keeps the hash it has.",
+    )
     dependencies: Annotated[tuple[str, ...], GraphQLDefault("[]")] = Field(
         default=(),
         description="The other ports (port paths, `..` traverses children) whose values the props may reference.",
@@ -263,6 +269,12 @@ class CustomAssignWidgetInput(ActionModel):
 
     def model_post_init(self, context: Any, /) -> None:  # noqa: ANN401, D102
         self.__pydantic_fields_set__.update({"kind"})
+
+    @model_validator(mode="after")
+    def _tree_is_pure(self) -> Self:
+        declared = [prop.declares_value for prop in self.props or () if prop.declares_value]
+        check_widget_tree(self.children, [*self.dependencies, *declared], "CustomAssignWidget")
+        return self
 
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
