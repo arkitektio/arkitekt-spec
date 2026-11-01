@@ -72,15 +72,15 @@ from arkitekt_spec.declare.blok.origin import DeclaredAt, declared_at, finding_k
 from arkitekt_spec.declare.blok.registry import build_declared_bloks
 from arkitekt_spec.declare.blok.validate import BlokScope, blok_context, check_blok_tree
 from arkitekt_spec.declare.catalogs import (
-    MODEL_REF_PATTERN,
-    BlokCheckMode,
-    Catalog,
     BASE_CATALOG_ID,
     BASE_CATALOG_NAME,
+    MODEL_REF_PATTERN,
     WARNING,
+    BlokCheckMode,
+    Catalog,
     CatalogView,
-    Diagnostic,
     ComponentSpec,
+    Diagnostic,
     OperationSpec,
     check_extension_does_not_shadow_base,
     is_standard_catalog,
@@ -115,7 +115,7 @@ if TYPE_CHECKING:
     from arkitekt_spec.declare.register import WrappedFunction
 
 
-def _function_origin(function: Any) -> DeclaredAt | None:  # noqa: ANN401
+def _function_origin(function: Any) -> DeclaredAt | None:
     """The line ``function`` is defined on, where a warning about it points; ``None`` for a callable object."""
     code = getattr(inspect.unwrap(function), "__code__", None)
     if code is None:
