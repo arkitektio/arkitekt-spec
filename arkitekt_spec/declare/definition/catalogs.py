@@ -17,6 +17,8 @@ from arkitekt_spec.actions import (
     AssignWidgetInput,
     BlokLocalInput,
     ComponentNodeInput,
+    CustomAssignWidgetInput,
+    CustomReturnWidgetInput,
     DefinitionInput,
     OptimisticInput,
     ReturnWidgetInput,
@@ -50,8 +52,6 @@ def _prop_calls(prop: Any) -> Iterator[UtilCallInput]:
                     yield nested.util_call
 
 Widget = AssignWidgetInput | ReturnWidgetInput
-
-CUSTOM_WIDGET_KIND = "CUSTOM"
 
 
 def iter_widget_calls(widget: Widget) -> Iterator[UtilCallInput]:
@@ -123,13 +123,12 @@ def iter_definition_calls(
             yield f"optimistic of {label}", optimistic.path_call
 
 
-def _widget_tree_scope(port: ArgPortInput, siblings: Sequence[ArgPortInput]) -> BlokScope:
+def _widget_tree_scope(port: ArgPortInput, widget: CustomAssignWidgetInput, siblings: Sequence[ArgPortInput]) -> BlokScope:
     """What a port's tree has in scope: its own port as ``value``, and each dependency that is a sibling, as locals.
 
     A local is typed like a port and written through ``bind``, which is what these are to the tree.
     The form holds them, so a default says nothing here. A dependency that is a path stays open.
     """
-    widget = port.widget
     named = {sibling.key: sibling for sibling in siblings}
     scoped = [(OWN_VALUE, port), *((key, named[key]) for key in widget.dependencies if key in named)]
     return BlokScope(
@@ -152,9 +151,9 @@ def widget_tree_findings(definition: DefinitionInput, view: BlokView) -> Iterato
     def walk(ports: Sequence[ArgPortInput]) -> Iterator[tuple[str, Finding]]:
         for port in ports:
             widget = port.widget
-            if getattr(widget, "kind", None) == CUSTOM_WIDGET_KIND and widget.children:
+            if isinstance(widget, CustomAssignWidgetInput) and widget.children:
                 tree = ComponentNodeInput(id="widget", component=widget.component, props=widget.props, children=widget.children)
-                for finding in check_blok_tree(tree, _widget_tree_scope(port, ports), view):
+                for finding in check_blok_tree(tree, _widget_tree_scope(port, widget, ports), view):
                     yield port.key, finding
             yield from walk(port.children or ())
 
@@ -219,12 +218,12 @@ def validate_definition_against_catalog(
 
     for owner, widget in iter_definition_widgets(definition):
         widget_owner = f"widget of {owner}"
-        if getattr(widget, "kind", None) == CUSTOM_WIDGET_KIND:
+        if isinstance(widget, CustomAssignWidgetInput | CustomReturnWidgetInput):
             root = ComponentNodeInput(
                 id="widget",
                 component=widget.component,
-                props=getattr(widget, "props", None),
-                children=getattr(widget, "children", None),
+                props=widget.props,
+                children=widget.children if isinstance(widget, CustomAssignWidgetInput) else None,
             )
             for node in iter_nodes(root):
                 props = node.props or ()
