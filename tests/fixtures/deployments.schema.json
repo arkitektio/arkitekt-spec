@@ -201,6 +201,16 @@
           "description": "The module the blok renders against besides its catalogs; the Orkestrator's when absent.",
           "title": "Module"
         },
+        "phase": {
+          "default": "RUN",
+          "description": "When a client shows it: RUN for a run of the action (it reads the run as `task`), ASSIGN before one, to start it (no `task`; `<args />` places the argument form, `assign.start()` starts the run). One blok per context and phase. Sent only for ASSIGN.",
+          "enum": [
+            "RUN",
+            "ASSIGN"
+          ],
+          "title": "Phase",
+          "type": "string"
+        },
         "queries": {
           "default": [],
           "description": "Its declared reads.",
@@ -2677,7 +2687,7 @@
         },
         "bloks": {
           "default": [],
-          "description": "The action's own bloks, at most one per context: how a client shows a run of it (HTML in a task panel, SCENE a 3D view, as a `Space` placing the run's dependencies). They name devices only by the action's dependency keys. Stored with the action, never listed on their own, and not part of its hash.",
+          "description": "The action's own bloks, at most one per context: how a client shows a run of it (HTML in a task panel, SCENE a 3D view, as a `Space` placing the run's dependencies), and one per context for starting one (phase ASSIGN). They name devices only by the action's dependency keys. Stored with the action, never listed on their own, and not part of its hash.",
           "items": {
             "$ref": "#/$defs/ActionBlokInput"
           },

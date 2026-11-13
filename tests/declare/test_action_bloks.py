@@ -251,3 +251,52 @@ def test_an_action_blok_warning_names_the_action_and_context() -> None:
     warnings = [record.message for record in caught if isinstance(record.message, CatalogWarning)]
     assert {warning.blok for warning in warnings} == {"process:html"}
     assert {warning.finding.code for warning in warnings if warning.finding is not None} == {"catalog.unknown_component"}
+
+
+PREPARE = """
+<Html>
+  <Row>
+    <Space room="room:lab" height="24rem"><Placed dep="robot" /></Space>
+    <Card>
+      <Button disabled={homing.running} onClick={deps.robot.pick(slot: 1) into homing}>Home</Button>
+      <Text>{args.slots}</Text>
+      <args />
+      <Button onClick={assign.start()}>Start</Button>
+    </Card>
+  </Row>
+</Html>
+"""
+
+
+def registered_to_start(assign_bloks: ActionBloks | None, bloks: ActionBloks | None = None) -> DefinitionInput:
+    registry = AppRegistry()
+    registry.declare(app="arm")(Arm)
+
+    def process(robot: Arm, slots: list[int]) -> None:
+        """Process slides."""
+        robot.pick(slots[0])
+
+    registry.register_workflow(process, bloks=bloks, assign_bloks=assign_bloks)
+    return registry.implementations["process"].definition
+
+
+def test_an_assign_blok_is_the_actions_own_for_starting_a_run() -> None:
+    definition = registered_to_start(PREPARE, bloks="<Html><Card><ask /></Card></Html>")
+
+    assert [(blok.phase, blok.context) for blok in definition.bloks] == [("RUN", "HTML"), ("ASSIGN", "HTML")]
+    wire = definition.model_dump(mode="json", by_alias=False, exclude_unset=True)
+    assert [blok.get("phase") for blok in wire["bloks"]] == [None, "ASSIGN"], "a run's blok keeps its bytes"
+    assert definition_hash(definition) == definition_hash(registered_to_start(None))
+
+
+def test_starting_and_watching_keep_to_their_own_bloks() -> None:
+    with pytest.raises(BlokError, match=r"an assign blok has no 'task'"):
+        registered_to_start("<Html><Text>{task.status}</Text></Html>")
+    with pytest.raises(ValueError, match="holds no 'ask'"):
+        registered_to_start("<Html><ask /></Html>")
+    with pytest.raises(BlokError, match=r"<args> belongs to starting a run.*\[assign.kind\]"):
+        registered_to_start(None, bloks="<Html><args /></Html>")
+    with pytest.raises(BlokError, match=r"assign.start\(\) belongs to starting a run"):
+        registered_to_start(None, bloks="<Html><Button onClick={assign.start()}>Go</Button></Html>")
+    with pytest.raises(ValueError, match="one assign blok per context"):
+        registered_to_start(["<Html><args /></Html>", "<Html><args /></Html>"])

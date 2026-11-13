@@ -17,7 +17,7 @@ from arkitekt_spec.declare.catalogs import CALLBACK_KIND, VALUE_KINDS
 def test_base_is_the_language() -> None:
     names = {component.name for component in base_catalog().components}
 
-    assert names == {"if", "else", "foreach", "match", "case", "default", "fragment", "suspense", "fallback", "error", "ask", "Html"}
+    assert names == {"if", "else", "foreach", "match", "case", "default", "fragment", "suspense", "fallback", "error", "ask", "args", "Html"}
 
 
 def test_the_catalogs_are_versioned_the_module_not_and_their_names_unique() -> None:

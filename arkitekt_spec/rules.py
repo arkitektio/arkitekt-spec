@@ -682,7 +682,7 @@ class ActionBlokRules(BaseModel):
         context = _value(blok.context)
         if context not in ("HTML", "SCENE"):
             raise _wrong_context("action", context)
-        check_blok_declarations(blok, "action")
+        check_blok_declarations(blok, "assign" if getattr(blok, "phase", "RUN") == "ASSIGN" else "action")
         return self
 
 

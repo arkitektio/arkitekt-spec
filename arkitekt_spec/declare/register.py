@@ -308,17 +308,17 @@ def register_func(
         asks.extend(declared.to_ask_inputs(key))
         informs.extend(declared.to_inform_inputs(key))
 
-    if config.bloks:
+    if config.bloks or config.assign_bloks:
         # Set only when there are some, so an action without bloks keeps its wire bytes.
+        arg_keys = tuple(port.key for port in definition.args or ())
+        owner = f"Action {interface!r}"
         definition = definition.model_copy(
             update={
-                "bloks": build_action_bloks(
-                    config.bloks,
-                    tuple(dependencies),
-                    implementation_registry,
-                    f"Action {interface!r}",
-                    arg_keys=tuple(port.key for port in definition.args or ()),
-                    interface=interface,
+                "bloks": (
+                    *build_action_bloks(config.bloks or (), tuple(dependencies), implementation_registry, owner, arg_keys=arg_keys, interface=interface),
+                    *build_action_bloks(
+                        config.assign_bloks or (), tuple(dependencies), implementation_registry, owner, arg_keys=arg_keys, interface=interface, kind="assign"
+                    ),
                 )
             }
         )
@@ -396,6 +396,7 @@ def declare_implementation(
     execution: Execution = Execution.PLAIN,
     logo: str | ComponentNodeInput | None = None,
     bloks: "ActionBloks | None" = None,
+    assign_bloks: "ActionBloks | None" = None,
     dynamic_asks: bool = False,
     dynamic_calls: bool = False,
     dynamic_informs: bool = False,
@@ -435,6 +436,7 @@ def declare_implementation(
     execution: Execution = Execution.PLAIN,
     logo: str | ComponentNodeInput | None = None,
     bloks: "ActionBloks | None" = None,
+    assign_bloks: "ActionBloks | None" = None,
     dynamic_asks: bool = False,
     dynamic_calls: bool = False,
     dynamic_informs: bool = False,
@@ -473,6 +475,7 @@ def declare_implementation(
     execution: Execution = Execution.PLAIN,
     logo: str | ComponentNodeInput | None = None,
     bloks: "ActionBloks | None" = None,
+    assign_bloks: "ActionBloks | None" = None,
     dynamic_asks: bool = False,
     dynamic_calls: bool = False,
     dynamic_informs: bool = False,
@@ -538,6 +541,10 @@ def declare_implementation(
             the name of an action logo blok the app declares, or a tree of its
             own (``bsx("<ActionLogo>...</ActionLogo>")``), declared as the
             action logo blok ``<interface>.logo``.
+        assign_bloks (ActionBloks | None): The action's own bloks for starting a run of it, one per
+            context: shown before there is a task, with the arguments being filled in as ``args`` and
+            the agents a run would get as ``deps``. ``<args />`` places the argument form and
+            ``assign.start()`` starts the run with those agents.
         bloks (ActionBloks | None): The action's own bloks, one per context, which
             each one's root names (``"<Space room=...>...</Space>"``, or an ``ActionBlok``
             for locals and the like; one needs no list): how a client shows a run of it. Checked now against the function's
@@ -590,6 +597,7 @@ def declare_implementation(
         execution=execution,
         logo=logo,
         bloks=bloks,
+        assign_bloks=assign_bloks,
         dynamic_asks=dynamic_asks,
         dynamic_calls=dynamic_calls,
         dynamic_informs=dynamic_informs,

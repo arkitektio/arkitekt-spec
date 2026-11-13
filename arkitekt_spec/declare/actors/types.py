@@ -208,6 +208,8 @@ class RegisterConfig:
     logo: "str | ComponentNodeInput | None" = None
     """The action logo blok that draws the action: a declared action logo blok's name, or a tree (``bsx(...)``)."""
     bloks: ActionBloks | None = None
+    assign_bloks: ActionBloks | None = None
+    """The action's own bloks for starting a run of it, one per context: shown before there is a task (``<args />``, ``assign.start()``)."""
     """The action's own bloks, one per context, which each one's root names (``"<Space room=...>...</Space>"``): how a client shows a run of it."""
     dynamic_asks: bool = False
     """Whether a task may ask through a blok made at ask time (``task.dynamic_ask``), not only the asks it declares."""

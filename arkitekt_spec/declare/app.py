@@ -1867,6 +1867,7 @@ class AppRegistry(BaseModel):
         execution: Execution = Execution.PLAIN,
         logo: "str | ComponentNodeInput | None" = None,
         bloks: "ActionBloks | None" = None,
+        assign_bloks: "ActionBloks | None" = None,
         dynamic_asks: bool = False,
         dynamic_calls: bool = False,
         dynamic_informs: bool = False,
@@ -1918,6 +1919,9 @@ class AppRegistry(BaseModel):
                 this app declares (an ``<ActionLogo>`` registered with ``register_blok``),
                 or a tree of its own (``bsx("<ActionLogo>...</ActionLogo>")``).
                 Without one, a client shows the app's default logo.
+            assign_bloks: The action's own bloks for starting a run of it, one per context:
+                shown before there is a task, with ``<args />`` for the argument form and
+                ``assign.start()`` to start the run with the agents the blok was shown.
             bloks: The action's own bloks, one per context, which each one's root names
                 (``"<Space room=...>...</Space>"``, or an ``ActionBlok`` for locals and the like;
                 one needs no list): how a client shows a run of it. They name devices only by the function's
@@ -1966,6 +1970,7 @@ class AppRegistry(BaseModel):
             execution=execution,
             logo=logo,
             bloks=bloks,
+            assign_bloks=assign_bloks,
             dynamic_asks=dynamic_asks,
             dynamic_calls=dynamic_calls,
             dynamic_informs=dynamic_informs,

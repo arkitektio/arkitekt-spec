@@ -13,7 +13,7 @@ registration.
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from dataclasses import replace as dataclass_replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from arkitekt_spec.actions import (
     ACTION_BLOK_CONTEXTS,
@@ -110,9 +110,11 @@ def action_blok_components_in(node: ComponentNodeInput) -> list[ComponentNodeInp
     return [each for each in _nodes(node) if each.component in ACTION_BLOK_COMPONENTS]
 
 
-def action_blok_id(interface: str, context: ComponentContext | str) -> str:
-    """What names one of an action's bloks: its interface and context, ``crop:overlay``."""
-    return f"{interface}:{ComponentContext(context).value.lower()}"
+def action_blok_id(interface: str, context: ComponentContext | str, kind: str = "action") -> str:
+    """What names one of an action's bloks: its interface and context (``crop:scene``), an assign
+    blok's with its phase (``crop:assign:html``)."""
+    phase = "assign:" if kind == "assign" else ""
+    return f"{interface}:{phase}{ComponentContext(context).value.lower()}"
 
 
 def build_action_bloks(
@@ -123,11 +125,13 @@ def build_action_bloks(
     mode: BlokCheckMode = "warning",
     arg_keys: Sequence[str] | None = None,
     interface: str | None = None,
+    kind: Literal["action", "assign"] = "action",
 ) -> tuple[ActionBlokInput, ...]:
     """The wire bloks of an action, checked against its dependencies, its args and their catalogs.
 
     A warning names the blok :func:`action_blok_id` (``interface`` and the blok's context), so a
-    reader can tell an action's html blok from its overlay.
+    reader can tell an action's html blok from its scene. ``kind="assign"`` builds the bloks that
+    start a run (``assign_bloks=``): no ``task``, ``<args />`` and ``assign.start()`` allowed.
 
     Raises:
         ValueError: If two bloks share a context, a root is not ``<Html>``, ``<Scene>`` or
@@ -136,6 +140,7 @@ def build_action_bloks(
     """
     built: list[ActionBlokInput] = []
     at = declared_at()
+    phase = "assign " if kind == "assign" else ""
     for blok in as_action_bloks(bloks):
         view = registry.blok_view(blok.module)
         source = blok.component if isinstance(blok.component, str) else None
@@ -147,17 +152,19 @@ def build_action_bloks(
         if context.value not in ACTION_BLOK_CONTEXTS:
             raise ValueError(f"{owner}: an action's blok is an <Html>, <Scene> or <Space>, not <{component.component}>")
         if any(other.context == context.value for other in built):
-            raise ValueError(f"{owner}: the {context.value.lower()} blok is given twice; an action has one blok per context")
+            raise ValueError(f"{owner}: the {context.value.lower()} blok is given twice; an action has one {phase}blok per context")
+        if kind == "assign" and any(node.component == ASK_COMPONENT for node in _nodes(component)):
+            raise ValueError(f"{owner}: an assign blok is shown before there is a task, so it holds no 'ask'")
         try:
             locals_ = local_inputs(blok.locals, registry)
         except BlokError as error:
-            raise error.within(f"{owner} ({context.value.lower()} blok)") from None
+            raise error.within(f"{owner} ({phase}{context.value.lower()} blok)") from None
         queries = query_inputs(blok.queries)
         subscriptions = subscription_inputs(blok.subscriptions)
         demo = demo_input(blok.demo)
         catalogs = tuple(blok.catalogs or ()) or catalogs_of(component, view)
         scope = BlokScope(
-            kind="action",
+            kind=kind,
             context=context.value,
             dependencies=tuple(dependencies),
             locals=locals_,
@@ -169,20 +176,23 @@ def build_action_bloks(
         )
         scope = resolve_scope(component, scope, view)
         reported: set[str] = set()
-        blok_id = action_blok_id(interface, context) if interface is not None else None
+        blok_id = action_blok_id(interface, context, kind) if interface is not None else None
         for finding in check_unknown_module(blok.module, registry):
             if mode == "strict":
                 raise BlokError.from_finding(finding)
-            warn_at(f"{owner} ({context.value.lower()} blok): {finding.message} [{finding.code}]", at, finding=finding, blok=blok_id)
+            warn_at(f"{owner} ({phase}{context.value.lower()} blok): {finding.message} [{finding.code}]", at, finding=finding, blok=blok_id)
         for finding in check_blok_tree(component, scope, view):
             if finding.level == "error" or mode == "strict":
                 where = f", {finding.path}" if finding.path else ""
-                message = f"{owner} ({context.value.lower()} blok{where}): {finding.message}"
+                message = f"{owner} ({phase}{context.value.lower()} blok{where}): {finding.message}"
                 raise BlokError.from_finding(dataclass_replace(finding, path=None, message=message), node=finding.path)
             if finding_key(finding) not in reported:
                 reported.add(finding_key(finding))
-                warn_at(f"{owner} ({context.value.lower()} blok): {finding.message} [{finding.code}]", at, finding=finding, blok=blok_id)
+                warn_at(f"{owner} ({phase}{context.value.lower()} blok): {finding.message} [{finding.code}]", at, finding=finding, blok=blok_id)
         fields: dict[str, object] = {"context": context, "vocab": load_vocabulary().vocab}
+        if kind == "assign":
+            # Set only for an assign blok: a run's blok keeps the bytes it had before there were phases.
+            fields["phase"] = "ASSIGN"
         optional: dict[str, object] = {
             "components": None if source is not None else (component,),
             "source": source,

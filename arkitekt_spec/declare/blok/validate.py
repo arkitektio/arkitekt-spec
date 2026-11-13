@@ -212,6 +212,15 @@ LITERAL_KINDS = ("BOOL", "INT", "FLOAT")
 SCENE = "SCENE"
 
 
+RUN_KINDS = ("action", "assign")
+"""The kinds that have a run's dependencies: an action's own bloks, for a run and for starting one."""
+
+ASSIGN_KIND = "assign"
+ARGS_COMPONENT = "args"
+"""The form of the run's arguments, placed by an assign blok."""
+START_EFFECT = "assign.start"
+"""Starts the run an assign blok prepares."""
+
 DEPENDENCY_KEY_PROPS = frozenset({("Placed", "dep"), ("Route", "through")})
 """Props whose value is the blok's dependency keys, written out (not paths): each must be a dependency."""
 
@@ -334,6 +343,8 @@ class _Checker:
         if shadow is not None and node.component not in self.shadowed:
             self.shadowed.add(node.component)
             self.add("catalog.shadow", node.id, component=node.component, catalog=shadow.catalog, module=shadow.module, winner=shadow.winner)
+        if node.component == ARGS_COMPONENT and self.scope.kind != ASSIGN_KIND:
+            self.add("assign.kind", node.id, what="<args>", n=_article(self.scope.kind), kind=self.scope.kind)
         for prop in node.props or ():
             self.check_prop(node, prop, spec)
 
@@ -372,7 +383,7 @@ class _Checker:
     def check_dependency_keys(self, node: ComponentNodeInput, prop: ComponentPropInput) -> None:
         """A ``Placed dep`` or ``Route through`` names dependencies of the blok, written out as keys."""
         path = f"{node.component}.{prop.key}"
-        if self.scope.kind != "action":
+        if self.scope.kind not in RUN_KINDS:
             self.add("space.kind", node.id, component=node.component, n=_article(self.scope.kind), kind=self.scope.kind)
             return
         value = prop.static_value
@@ -417,10 +428,12 @@ class _Checker:
                     self.bound_locals.add(root)
                     if prop_spec is not None:
                         self.check_bind_kind(node, prop_spec.kind, path)
+        if prop.util_call is not None and prop.util_call.operation == START_EFFECT and self.scope.kind != ASSIGN_KIND:
+            self.add("assign.kind", node.id, what="assign.start()", n=_article(self.scope.kind), kind=self.scope.kind)
         if (node.component, prop.key) in DEPENDENCY_KEY_PROPS:
             self.check_dependency_keys(node, prop)
-        if (node.component, prop.key) == ("Space", "room") and self.scope.kind != "action":
-            # A Space places the run's dependencies: only an action's own blok has a run.
+        if (node.component, prop.key) == ("Space", "room") and self.scope.kind not in RUN_KINDS:
+            # A Space places the run's dependencies: only an action's own blok (for a run, or for starting one) has them.
             self.add("space.kind", node.id, component=node.component, n=_article(self.scope.kind), kind=self.scope.kind)
         if node.component == TOAST_COMPONENT and prop.key == TOAST_TASK_PROP:
             path = prop.dynamic_value.path if prop.dynamic_value is not None else None
@@ -759,7 +772,7 @@ def dependency_hint(key: str, kind: str) -> str:
     - an action blok's dependencies are its action's: ``add a dependency parameter `laser` to the action``;
     - an agent blok has none: ``agent bloks read only `self```.
     """
-    if kind in ("action", "action_logo"):
+    if kind in ("action", "assign", "action_logo"):
         return f"add a dependency parameter `{key}` to the action"
     if kind == "agent":
         return "agent bloks read only `self`"

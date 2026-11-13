@@ -1023,6 +1023,13 @@ class ActionBlokInput(ActionBlokRules, ActionModel):
         default=ComponentContext.HTML,
         description="Where a client shows the run with it: HTML in a task panel, SCENE as a 3D view (its root a `Scene`, or a `Space` placing the run's dependencies in a room whose layout is shared).",
     )
+    phase: Literal["RUN", "ASSIGN"] = Field(
+        default="RUN",
+        # Never written for a run's blok: it keeps the bytes it had before there were phases,
+        # which an older takt or kabinet (strict readers) accepts.
+        exclude_if=lambda phase: phase == "RUN",
+        description="When a client shows it: RUN for a run of the action (it reads the run as `task`), ASSIGN before one, to start it (no `task`; `<args />` places the argument form, `assign.start()` starts the run). One blok per context and phase. Sent only for ASSIGN.",
+    )
     components: tuple["ComponentNodeInput", ...] | None = Field(
         default=None,
         description="The UI component tree, unless the blok is sent as its `source`.",
@@ -1192,17 +1199,18 @@ class DefinitionInput(DefinitionRules, ActionModel):
         # Never written when empty, like `protocols`: a definition without bloks is the bytes it
         # was before actions had any, which an older takt or kabinet (strict readers) accepts.
         exclude_if=lambda bloks: not bloks,
-        description="The action's own bloks, at most one per context: how a client shows a run of it (HTML in a task panel, SCENE a 3D view, as a `Space` placing the run's dependencies). They name devices only by the action's dependency keys. Stored with the action, never listed on their own, and not part of its hash.",
+        description="The action's own bloks, at most one per context: how a client shows a run of it (HTML in a task panel, SCENE a 3D view, as a `Space` placing the run's dependencies), and one per context for starting one (phase ASSIGN). They name devices only by the action's dependency keys. Stored with the action, never listed on their own, and not part of its hash.",
     )
     "The action's own bloks, one per context. Not part of the hash; never dumped when empty."
 
     @model_validator(mode="after")
     def _one_blok_per_context(self) -> Self:
-        """An action has one blok per context: the one a client picks for where it shows the run."""
-        contexts = [ComponentContext(blok.context).value for blok in self.bloks]
-        twice = next((context for context in contexts if contexts.count(context) > 1), None)
+        """An action has one blok per context and phase: the one a client picks for where it shows the run, or its start."""
+        slots = [(blok.phase, ComponentContext(blok.context).value) for blok in self.bloks]
+        twice = next((slot for slot in slots if slots.count(slot) > 1), None)
         if twice is not None:
-            raise ValueError(f"Definition {self.key}: the {twice.lower()} blok is given twice; an action has one blok per context")
+            phase = "assign " if twice[0] == "ASSIGN" else ""
+            raise ValueError(f"Definition {self.key}: the {phase}{twice[1].lower()} blok is given twice; an action has one {phase}blok per context")
         return self
     port_groups: Annotated[tuple["PortGroupInput", ...], GraphQLDefault("[]")] = Field(
         validation_alias=AliasChoices("port_groups", "portGroups"),
