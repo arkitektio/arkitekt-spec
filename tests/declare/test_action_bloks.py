@@ -1,5 +1,5 @@
 """An action's own bloks: declared inline with the action, one per context (named by the root:
-``<Html>``, ``<Scene>``, ``<Overlay>``), checked at decoration.
+``<Html>``, or ``<Scene>``/``<Space>`` for SCENE), checked at decoration.
 
 They read the run as ``task``, its args as ``args``, the agents the run got as ``deps.<key>`` (the
 action's dependency parameters), and are not part of the action's identity: an action that gains
@@ -40,16 +40,17 @@ class Scope(Protocol):
         ...
 
 
-OVERLAY = """
-<Overlay>
-  <Anchor dep="robot">
+SPACE = """
+<Space room="room:lab">
+  <Placed dep="robot" matrix={[[1, 0, 0, 0.8], [0, 1, 0, 0], [0, 0, 1, 0.15], [0, 0, 0, 1]]}>
     <Glow on={task.running} />
     <Popout open={task.ask}><ask /><Switch bind={show_path} label="Path" /></Popout>
-  </Anchor>
+  </Placed>
+  <Placed dep="frame" />
   <if when={show_path}>
     <Route through={["robot", "frame", "robot"]} progress={task.progress} />
   </if>
-</Overlay>
+</Space>
 """
 
 
@@ -74,17 +75,17 @@ def registered_with(bloks: ActionBloks | None) -> DefinitionInput:
 
 def test_bloks_reach_the_definition_as_written() -> None:
     definition = registered(
-        ActionBlok(OVERLAY, locals={"show_path": Local(True, persist=True)}),
+        ActionBlok(SPACE, locals={"show_path": Local(True, persist=True)}),
         ActionBlok("<Html><Card><Progress value={task.progress} /><ask /></Card></Html>", description="The run"),
     )
-    overlay, panel = definition.bloks
-    assert (overlay.context, overlay.source, overlay.components, overlay.vocab) == ("OVERLAY", OVERLAY, None, 2)
-    assert [(local.key, local.kind, local.default, local.persist) for local in overlay.locals] == [("show_path", "BOOL", True, True)]
-    assert (overlay.catalogs, overlay.module) == (("scene@1", "ui@1"), None)
+    space, panel = definition.bloks
+    assert (space.context, space.source, space.components, space.vocab) == ("SCENE", SPACE, None, 2)
+    assert [(local.key, local.kind, local.default, local.persist) for local in space.locals] == [("show_path", "BOOL", True, True)]
+    assert (space.catalogs, space.module) == (("scene@1", "ui@1"), None)
     assert (panel.context, panel.description) == ("HTML", "The run")
 
     wire = definition.model_dump(mode="json", by_alias=False, exclude_unset=True)
-    assert [blok["context"] for blok in wire["bloks"]] == ["OVERLAY", "HTML"]
+    assert [blok["context"] for blok in wire["bloks"]] == ["SCENE", "HTML"]
     assert "locals" not in wire["bloks"][1], "nothing declared, nothing sent"
 
 
@@ -96,9 +97,12 @@ def test_bloks_are_not_identity() -> None:
     assert "bloks" not in without.model_dump(exclude_unset=True)
 
 
-def test_an_anchor_names_a_dependency_of_the_action() -> None:
-    with pytest.raises(ValueError, match="names 'stage', which is not a dependency"):
-        registered('<Overlay><Anchor dep="stage" /></Overlay>')
+def test_a_placed_names_a_dependency_of_the_action() -> None:
+    with pytest.raises(BlokError, match=r"Placed.dep: 'stage' is not a dependency of the blok .*\[deps.unknown\]") as raised:
+        registered('<Space room="lab"><Placed dep="stage" /></Space>')
+    assert raised.value.node is not None and "Placed" in raised.value.node
+    with pytest.raises(BlokError, match=r"Route.through: 'stage' is not a dependency"):
+        registered('<Space room="lab"><Route through={["robot", "stage"]} /></Space>')
 
 
 def test_a_blok_reads_only_what_the_action_has() -> None:
@@ -114,7 +118,7 @@ def test_a_blok_reads_only_what_the_action_has() -> None:
     [
         ("<Html><Card><ask /></Card></Html>", "HTML"),
         ("<Scene />", "SCENE"),
-        ('<Overlay><Anchor dep="robot" /></Overlay>', "OVERLAY"),
+        ('<Space room="lab"><Placed dep="robot" /></Space>', "SCENE"),
     ],
 )
 def test_a_bloks_root_names_its_context(tree: str, context: str) -> None:
@@ -139,14 +143,17 @@ def test_one_blok_needs_no_list() -> None:
 def test_one_blok_per_context_in_the_contexts_an_action_has() -> None:
     with pytest.raises(ValueError, match="given twice"):
         registered("<Html><Card /></Html>", "<Html><Card /></Html>")
-    with pytest.raises(ValueError, match="<Html>, <Scene> or <Overlay>"):
+    with pytest.raises(ValueError, match="<Html>, <Scene> or <Space>"):
         registered("<AgentLogo />")
 
 
-def test_an_overlay_is_an_actions_blok_only() -> None:
+def test_a_space_is_an_actions_blok_only() -> None:
+    """It places the run's dependencies, which only an action's blok has."""
     registry = AppRegistry()
-    with pytest.raises(ValueError, match="an overlay is an action's own"):
-        registry.register_blok("over", "<Overlay />")
+    with pytest.raises(ValueError, match="'Space' .* reads a run of an action"):
+        registry.register_blok("lab", '<Space room="lab" />')
+    with pytest.raises(ValueError, match="'Placed' .* reads a run of an action"):
+        registry.register_blok("lab", '<Scene><Placed dep="robot" /></Scene>')
 
 
 def test_an_inline_action_logo_is_rooted_in_the_action_logo() -> None:
@@ -174,7 +181,7 @@ def test_only_an_actions_blok_reads_a_run() -> None:
 def test_the_wire_model_checks_as_the_server_does() -> None:
     with pytest.raises(ValidationError, match=r"components or as its BSX source.*\[manifest.sent\]"):
         ActionBlokInput(vocab=2, context="HTML")
-    with pytest.raises(ValidationError, match=r"HTML, SCENE, OVERLAY, not LOGO.*\[context.kind\]"):
+    with pytest.raises(ValidationError, match=r"HTML, SCENE, not LOGO.*\[context.kind\]"):
         ActionBlokInput(vocab=2, context="LOGO", source="<AgentLogo />")
     with pytest.raises(ValidationError, match="vocab"):
         ActionBlokInput.model_validate({"context": "HTML", "source": "<Html><Card /></Html>"})

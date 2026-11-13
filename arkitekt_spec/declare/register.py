@@ -539,7 +539,7 @@ def declare_implementation(
             own (``bsx("<ActionLogo>...</ActionLogo>")``), declared as the
             action logo blok ``<interface>.logo``.
         bloks (ActionBloks | None): The action's own bloks, one per context, which
-            each one's root names (``"<Overlay>...</Overlay>"``, or an ``ActionBlok``
+            each one's root names (``"<Space room=...>...</Space>"``, or an ``ActionBlok``
             for locals and the like; one needs no list): how a client shows a run of it. Checked now against the function's
             dependency parameters and the bloks' catalogs; sent with the definition
             (never when there are none) and not part of its hash.

@@ -865,11 +865,6 @@ class AppRegistry(BaseModel):
             context = blok_context(component)
         except BlokError as error:
             raise error.within(f"Blok {name!r}") from None
-        if context == ComponentContext.OVERLAY:
-            raise ValueError(
-                f"Blok '{name}': an overlay is an action's own; declare it with the action "
-                f"(@app.workflow(bloks=\"<Overlay>...</Overlay>\"))"
-            )
         reading = action_blok_components_in(component)
         if reading:
             raise ValueError(
@@ -1924,7 +1919,7 @@ class AppRegistry(BaseModel):
                 or a tree of its own (``bsx("<ActionLogo>...</ActionLogo>")``).
                 Without one, a client shows the app's default logo.
             bloks: The action's own bloks, one per context, which each one's root names
-                (``"<Overlay>...</Overlay>"``, or an ``ActionBlok`` for locals and the like;
+                (``"<Space room=...>...</Space>"``, or an ``ActionBlok`` for locals and the like;
                 one needs no list): how a client shows a run of it. They name devices only by the function's
                 dependency parameters, are checked now, and are not part of the hash.
             dynamic_asks: Whether a task may also ask through a blok made at ask time

@@ -668,8 +668,6 @@ class BlokRules(BaseModel):
     def _manifest(self) -> Self:
         blok: Any = self
         context = _value(blok.context)
-        if context == "OVERLAY":
-            raise _wrong_context("agent", context)
         check_blok_declarations(blok, "action_logo" if context == "ACTION_LOGO" else "agent")
         _check_blok_args(self)
         return self
@@ -682,7 +680,7 @@ class ActionBlokRules(BaseModel):
     def _manifest(self) -> Self:
         blok: Any = self
         context = _value(blok.context)
-        if context not in ("HTML", "SCENE", "OVERLAY"):
+        if context not in ("HTML", "SCENE"):
             raise _wrong_context("action", context)
         check_blok_declarations(blok, "action")
         return self

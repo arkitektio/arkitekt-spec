@@ -41,12 +41,14 @@ def test_html_keeps_only_containers_that_translate_to_native() -> None:
 def test_the_renames_of_the_design() -> None:
     view = default_view()
 
-    for gone in ("Show", "At", "SVG", "Logo", "TaskAsk", "query", "pending", "ready", "empty", "when", "h1", "ul", "Fragment"):
+    for gone in ("Show", "At", "SVG", "Logo", "TaskAsk", "query", "pending", "ready", "empty", "when", "h1", "ul", "Fragment", "Overlay", "Anchor"):
         assert view.component(gone) is None, gone
-    for new in ("Visible", "Anchor", "Html", "AgentLogo", "ActionLogo", "ask", "Toast", "suspense", "Link", "Image", "Code", "Transform"):
+    for new in ("Visible", "Space", "Placed", "Html", "AgentLogo", "ActionLogo", "ask", "Toast", "suspense", "Link", "Image", "Code", "Transform"):
         assert view.component(new) is not None, new
-    anchor = view.component("Anchor")
-    assert anchor is not None and anchor.prop("dep") is not None
+    placed = view.component("Placed")
+    assert placed is not None and placed.prop("dep") is not None and placed.prop("matrix") is not None
+    space = view.component("Space")
+    assert space is not None and space.prop("room") is not None
 
 
 def test_every_entry_declares_its_events_and_text() -> None:

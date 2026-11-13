@@ -161,8 +161,6 @@ class ComponentContext(str, Enum):
     "An SVG drawing: an agent's logo, which clients render against its demo state."
     ACTION_LOGO = "ACTION_LOGO"
     "An action's logo: an SVG in the viewer's palette, drawn against the task the viewer last ran of it (``@task``, null until then)."
-    OVERLAY = "OVERLAY"
-    "An action's own blok drawn into the space that hosts a run of it (root ``Overlay``), over the agents placed there. A blok context only."
 
 
 class PortKind(str, Enum):
@@ -1014,7 +1012,7 @@ class ComponentPropInput(ActionModel):
 
 
 #: The contexts an action has a blok for, one each.
-ACTION_BLOK_CONTEXTS = frozenset({ComponentContext.HTML.value, ComponentContext.SCENE.value, ComponentContext.OVERLAY.value})
+ACTION_BLOK_CONTEXTS = frozenset({ComponentContext.HTML.value, ComponentContext.SCENE.value})
 
 
 class ActionBlokInput(ActionBlokRules, ActionModel):
@@ -1023,7 +1021,7 @@ class ActionBlokInput(ActionBlokRules, ActionModel):
 
     context: Annotated[ComponentContext, GraphQLDefault("HTML")] = Field(
         default=ComponentContext.HTML,
-        description="Where a client shows the run with it: HTML in a task panel, SCENE as a 3D view of its own, OVERLAY drawn into the space that hosts the run (its root an `Overlay`).",
+        description="Where a client shows the run with it: HTML in a task panel, SCENE as a 3D view (its root a `Scene`, or a `Space` placing the run's dependencies in a room whose layout is shared).",
     )
     components: tuple["ComponentNodeInput", ...] | None = Field(
         default=None,
@@ -1194,7 +1192,7 @@ class DefinitionInput(DefinitionRules, ActionModel):
         # Never written when empty, like `protocols`: a definition without bloks is the bytes it
         # was before actions had any, which an older takt or kabinet (strict readers) accepts.
         exclude_if=lambda bloks: not bloks,
-        description="The action's own bloks, at most one per context: how a client shows a run of it (HTML in a task panel, OVERLAY drawn into the space that hosts the run). They name devices only by the action's dependency keys. Stored with the action, never listed on their own, and not part of its hash.",
+        description="The action's own bloks, at most one per context: how a client shows a run of it (HTML in a task panel, SCENE a 3D view, as a `Space` placing the run's dependencies). They name devices only by the action's dependency keys. Stored with the action, never listed on their own, and not part of its hash.",
     )
     "The action's own bloks, one per context. Not part of the hash; never dumped when empty."
 

@@ -304,9 +304,9 @@ def test_a_new_default_replaces_the_previous_one_of_its_context(registry: AppReg
     assert [name for name, blok in registry.registered_bloks.items() if blok.default] == ["b"]
 
 
-def test_an_overlay_is_an_actions(registry: AppRegistry) -> None:
-    with pytest.raises(ValueError, match="an overlay is an action's own"):
-        registry.register_blok("o", "<Overlay />")
+def test_a_space_is_an_actions(registry: AppRegistry) -> None:
+    with pytest.raises(ValueError, match="reads a run of an action"):
+        registry.register_blok("o", '<Space room="lab" />')
 
 
 def test_a_state_cannot_take_a_segment_of_an_agent() -> None:

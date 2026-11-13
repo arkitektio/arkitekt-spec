@@ -53,7 +53,7 @@ def test_the_root_matrix_is_the_designs() -> None:
     assert "deps" not in kinds["agent"].roots and "self" in kinds["agent"].roots
     assert "self" not in kinds["custom"].roots and "deps" in kinds["custom"].roots
     assert {"self", "deps", "args", "task"} <= kinds["task"].roots
-    assert kinds["action"].contexts == ("HTML", "SCENE", "OVERLAY")
+    assert kinds["action"].contexts == ("HTML", "SCENE")
     assert kinds["action_logo"].roots == frozenset({"task"}) and not kinds["action_logo"].locals
 
 
