@@ -1453,8 +1453,7 @@ class ImplementationInput(ImplementationRules, ActionModel):
         default=(), description="The agent dependencies required by this implementation."
     )
     "The agent dependencies required by this implementation.\nDefault: []"
-    interface: str | None = Field(
-        default=None,
+    interface: str = Field(
         description="The interface of the implementation. This is used to group implementations together in the UI",
     )
     params: Any | None = Field(

@@ -3255,17 +3255,9 @@
           "title": "Instance Id"
         },
         "interface": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
           "description": "The interface of the implementation. This is used to group implementations together in the UI",
-          "title": "Interface"
+          "title": "Interface",
+          "type": "string"
         },
         "locks": {
           "anyOf": [
@@ -3363,7 +3355,8 @@
         }
       },
       "required": [
-        "definition"
+        "definition",
+        "interface"
       ],
       "title": "ImplementationInput",
       "type": "object"
