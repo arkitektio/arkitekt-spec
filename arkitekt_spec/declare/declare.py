@@ -44,6 +44,7 @@ from arkitekt_spec.declare.definition.dependencies import (
     build_state_dependency_input,
 )
 from arkitekt_spec.declare.definition.errors import DefinitionError
+from arkitekt_spec.declare.definition.policy import CallPolicy, get_call_policy, policy
 from arkitekt_spec.declare.definition.utils import interface_name
 from arkitekt_spec.declare.protocol.types import AnyFunction
 from arkitekt_spec.declare.structures.registry import StructureRegistry
@@ -78,6 +79,8 @@ class DeclaredAgentAction(Generic[P, R]):
         self.key = key
         self.app = app
         self.override: ActionDemandOverride | None = get_action_demand_override(func)
+        #: How this app wants its calls of the method treated (``@policy``), if it said.
+        self.policy: CallPolicy | None = get_call_policy(func)
         self.is_async = inspect.iscoroutinefunction(func)
         self.interface = func.__name__
         self.definition: DefinitionInput = prepare_definition(
@@ -306,10 +309,12 @@ class DeclaredAgentProtocol(Generic[Agent]):
 
 __all__ = [
     "ActionDemandOverride",
+    "CallPolicy",
     "DeclaredAgentAction",
     "DeclaredAgentProtocol",
     "DeclaredAgentState",
     "StateDemandOverride",
     "demand",
     "demand_state",
+    "policy",
 ]

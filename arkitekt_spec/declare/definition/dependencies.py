@@ -90,12 +90,20 @@ def build_state_dependency_input(
     :class:`StateDemandInput` describes which agent state must satisfy the slot.
     Pass ``state_key`` (and optionally ``app``) to pin the slot to a specific
     state identity instead of matching it structurally.
+
+    A state is a record: its fields are matched by key, not by position, so a
+    demand may name some of a state's fields, in any order.
     """
+    # Only the fields lose their position; what is below one keeps its own.
+    matches = tuple(
+        match.model_copy(update={"at": None})
+        for match in build_port_matches(definition.ports or ()) or ()
+    )
     demand = StateDemandInput(
         hash=hash,
         key=state_key,
         app=app,
-        matches=build_port_matches(definition.ports or ()) if match_ports else None,
+        matches=(matches or None) if match_ports else None,
         protocols=tuple(protocols) if protocols else None,
     )
 
