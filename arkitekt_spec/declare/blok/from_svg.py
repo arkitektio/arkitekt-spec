@@ -1,6 +1,6 @@
 """Convert an SVG file into a logo blok: :func:`from_svg`.
 
-A logo blok draws with the components of the standard catalog's logo context
+A logo blok draws with the logo components of the base catalog
 (``SVG``/``ActionLogo``, ``G``, ``Path``, ``Circle``, ... ``LinearGradient``,
 ``ClipPath``), which are a subset of SVG under camelCase names. Designers hand over
 ``.svg`` files written by Inkscape, Illustrator or Figma, so this translates what the
@@ -37,7 +37,7 @@ from pathlib import Path
 
 from arkitekt_spec.actions import ComponentContext, ComponentNodeInput, ComponentPropInput
 from arkitekt_spec.blok.bsx import parse_bsx
-from arkitekt_spec.blok.catalogs import standard_catalog
+from arkitekt_spec.blok.catalogs import base_catalog
 from arkitekt_spec.blok.unparse import to_bsx
 from arkitekt_spec.blok.vocabulary import load_vocabulary
 from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
@@ -313,7 +313,8 @@ def _logo_props() -> dict[str, frozenset[str]]:
     """The props each logo component takes, from the logo module."""
     return {
         component.name: frozenset(prop.key for prop in component.props) - NOT_LOGO_PROPS
-        for component in standard_catalog("logo").components
+        for component in base_catalog().components
+        if component.group == "logo"
     }
 
 

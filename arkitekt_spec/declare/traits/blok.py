@@ -35,7 +35,7 @@ class CreateBlokInputTrait(BaseModel):
     @model_validator(mode="after")  # type: ignore[override]
     def validate_components(self) -> Self:
         """Refuse the blok on the first rule of the language its tree breaks: its components, or
-        its BSX ``source`` parsed against the Orkestrator's view."""
+        its BSX ``source`` parsed against the base catalog's view."""
         from arkitekt_spec.blok.bsx import parse_bsx
         from arkitekt_spec.blok.catalogs import default_view
         from arkitekt_spec.declare.blok.validate import BlokScope, validate_blok

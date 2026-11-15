@@ -29,7 +29,7 @@ from arkitekt_spec.actions import (
     StateDependencyInput,
     UtilCallInput,
 )
-from arkitekt_spec.blok.catalogs import BASE_NAME, ORKESTRATOR_MODULE, BlokView
+from arkitekt_spec.blok.catalogs import BlokView, catalogs_checked, known_catalog, known_catalogs
 from arkitekt_spec.blok.vocabulary import JSON, BlokError, Finding, load_vocabulary
 from arkitekt_spec.declare.blok.graphql import check_query, graphql_available
 from arkitekt_spec.declare.blok.infer import ArgPorts, resolve_local, resolve_scope
@@ -154,13 +154,26 @@ def self_dependency(reads: _SelfReads, app_registry: "AppRegistry") -> AgentDepe
     )
 
 
-def check_unknown_module(module: str | None, app_registry: "AppRegistry") -> list[Finding]:
-    """``module.unknown`` when ``module`` is neither declared by this app nor the Orkestrator's:
-    its components are then unknowable, so nothing of them is checked."""
-    if module is None or module == ORKESTRATOR_MODULE or module in app_registry.declared_catalogs:
+def check_catalog_target(catalog: str | None, app_registry: "AppRegistry") -> list[Finding]:
+    """``catalog.unknown`` when the catalog a blok is written for is neither known here nor
+    declared by this app: what it adds to the base is then unknowable, so none of it is checked.
+
+    Said only where catalogs are checked at all
+    (:func:`~arkitekt_spec.blok.catalogs.checking_catalogs`): an app registering its bloks is
+    held to the language alone.
+    """
+    if catalog is None or not catalogs_checked():
         return []
-    declared = ", ".join(sorted({ORKESTRATOR_MODULE, *app_registry.declared_catalogs}))
-    return [Finding.of("module.unknown", f"module {module}", module=module, modules=declared)]
+    if catalog in app_registry.declared_catalogs or known_catalog(catalog) is not None:
+        return []
+    known = ", ".join([*(known.id for known in known_catalogs() if known.id is not None), *sorted(app_registry.declared_catalogs)])
+    return [Finding.of("catalog.unknown", f"catalog {catalog}", catalog=catalog, catalogs=known)]
+
+
+def checked_view(view: BlokView) -> BlokView | None:
+    """What a blok being declared is checked against: its catalog's view where catalogs are
+    checked, None (the language alone, as a server holds it) otherwise."""
+    return view if catalogs_checked() else None
 
 
 def self_arg_ports(app_registry: "AppRegistry") -> ArgPorts:
@@ -246,14 +259,25 @@ def _more_problem(data: PortMatchInput, more: str) -> str | None:
     return None
 
 
-def catalogs_of(tree: ComponentNodeInput, view: BlokView) -> tuple[str, ...]:
-    """The standard catalogs (``ui@1``) whose components the tree uses; base is every renderer's."""
-    found: set[str] = set()
+def minor_needed(tree: ComponentNodeInput, view: BlokView) -> int:
+    """The minor of the catalog the blok is written for that ``tree`` needs: the newest
+    ``since`` among the components and props of that catalog it uses. 0 when the first one
+    does, or the view cannot tell.
+
+    It says how new a renderer has to be, and stays the same until the tree itself changes.
+    """
+    target = view.label.rsplit(" + ", 1)[-1]
+    needed = 0
     for node in iter_nodes(tree):
         spec = view.component(node.component)
-        if spec is not None and spec.catalog is not None and "@" in spec.catalog and not spec.catalog.startswith(f"{BASE_NAME}@"):
-            found.add(spec.catalog)
-    return tuple(sorted(found))
+        if spec is None or spec.catalog != target:
+            continue
+        needed = max(needed, spec.since)
+        for prop in node.props or ():
+            prop_spec = spec.prop(prop.key)
+            if prop_spec is not None:
+                needed = max(needed, prop_spec.since)
+    return needed
 
 
 def build_declared_bloks(app_registry: "AppRegistry") -> dict[str, BlokImplementationInput]:
@@ -275,9 +299,8 @@ def build_declared_bloks(app_registry: "AppRegistry") -> dict[str, BlokImplement
         query_values = type_queries(
             owner, declaration.queries, declaration.subscriptions, app_registry, declaration.mode, declaration.declared_at, blok=key
         )
-        view = app_registry.blok_view(declaration.module)
+        view = app_registry.blok_view(declaration.catalog)
         demo = declaration.demo if declaration.demo is not None else _demo(dependency, app_registry)
-        catalogs = declaration.catalogs or catalogs_of(declaration.component, view)
         scope = BlokScope(
             kind=kind,
             context=context,
@@ -286,14 +309,13 @@ def build_declared_bloks(app_registry: "AppRegistry") -> dict[str, BlokImplement
             queries=declaration.queries,
             subscriptions=declaration.subscriptions,
             args=tuple(port.key for port in declaration.args),
-            catalogs=catalogs,
             demo=demo,
             query_values=query_values,
             assets=frozenset(app_registry.registered_assets),
         )
         scope = resolve_scope(declaration.component, scope, view, arg_ports=self_arg_ports(app_registry))
         # What the declaration already told (registering it) is not told again.
-        for finding in check_blok_tree(declaration.component, scope, view):
+        for finding in check_blok_tree(declaration.component, scope, checked_view(view)):
             _report(owner, finding, declaration.mode, declaration.declared_at, declaration.reported, blok=key)
         # Empty declarations stay unset, so a dump with ``exclude_unset`` (what an agent sends)
         # carries only what the blok declares; ``vocab`` is always there.
@@ -305,12 +327,12 @@ def build_declared_bloks(app_registry: "AppRegistry") -> dict[str, BlokImplement
         }
         optional: dict[str, object] = {
             "description": declaration.description,
-            "module": declaration.module,
+            "catalog": declaration.catalog,
+            "catalog_minor": minor_needed(declaration.component, view) or None,
             "default": declaration.default or None,
             "for_model": declaration.for_model,
             "for_node": declaration.for_node,
             "args": declaration.args or None,
-            "catalogs": catalogs or None,
             "locals": declaration.locals or None,
             "demo": demo,
             "queries": declaration.queries or None,
@@ -331,7 +353,7 @@ def resolved_locals(blok: BlokImplementationInput, app_registry: "AppRegistry") 
     a server stores as the blok's resolved locals. The input itself carries them as written."""
     from arkitekt_spec.blok.bsx import parse_bsx
 
-    view = app_registry.blok_view(blok.module)
+    view = app_registry.blok_view(blok.catalog)
     trees = blok.components or ((parse_bsx(blok.source, view=view),) if blok.source is not None else ())
     scope = BlokScope(locals=tuple(blok.locals or ()), dependencies=tuple(blok.dependencies))
     if not trees:
@@ -375,4 +397,4 @@ def _demo_value(port: ReturnPortInput) -> JSON:
     return _DEMO_SCALARS.get(PortKind(port.kind), None)
 
 
-__all__ = ["SELF_KEY", "build_declared_bloks", "catalogs_of", "check_unknown_module", "resolved_locals", "self_arg_ports", "self_dependency", "self_reads", "type_queries"]
+__all__ = ["SELF_KEY", "build_declared_bloks", "check_catalog_target", "checked_view", "minor_needed", "resolved_locals", "self_arg_ports", "self_dependency", "self_reads", "type_queries"]

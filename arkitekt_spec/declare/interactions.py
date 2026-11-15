@@ -35,7 +35,7 @@ method's parameters, every ``task.answer`` of an ask keyed by its returns, and n
 """
 
 import inspect
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from dataclasses import replace as dataclass_replace
 from typing import (
@@ -75,7 +75,7 @@ from arkitekt_spec.declare.blok.declarations import (
 )
 from arkitekt_spec.declare.blok.infer import resolve_scope
 from arkitekt_spec.declare.blok.origin import declared_at, finding_key, warn_at
-from arkitekt_spec.declare.blok.registry import catalogs_of, check_unknown_module
+from arkitekt_spec.declare.blok.registry import check_catalog_target, checked_view
 from arkitekt_spec.declare.blok.validate import BlokScope, blok_context, check_blok_tree
 from arkitekt_spec.declare.catalogs import BlokCheckMode
 from arkitekt_spec.declare.definition.define import prepare_definition
@@ -108,8 +108,7 @@ class InteractionOptions:
         demo: What a preview renders it with.
         queries: Its declared reads.
         subscriptions: Its declared streams.
-        catalogs: The catalogs it needs; those its components come from when left out.
-        module: The module it renders against; the Orkestrator's when left out.
+        catalog: The catalog it is written for; the base catalog when left out.
         description: What it asks or shows, in a sentence; the method's docstring when left out.
         mode: ``"strict"`` refuses on a catalog finding as well as on an error.
     """
@@ -120,8 +119,7 @@ class InteractionOptions:
     demo: "BlokDemoInput | Mapping[str, JSONSerializable] | None" = None
     queries: "Mapping[str, Query] | None" = None
     subscriptions: "Mapping[str, Subscription] | None" = None
-    catalogs: Sequence[str] | None = None
-    module: str | None = None
+    catalog: str | None = None
     description: str | None = None
     mode: BlokCheckMode = "warning"
 
@@ -178,8 +176,7 @@ def ask(
     demo: "BlokDemoInput | Mapping[str, JSONSerializable] | None" = None,
     queries: "Mapping[str, Query] | None" = None,
     subscriptions: "Mapping[str, Subscription] | None" = None,
-    catalogs: Sequence[str] | None = None,
-    module: str | None = None,
+    catalog: str | None = None,
     description: str | None = None,
     mode: BlokCheckMode = "warning",
 ) -> Callable[[Callable[Concatenate[Any, P], R]], AskMethod[P, R]]:
@@ -197,8 +194,7 @@ def ask(
         demo=demo,
         queries=queries,
         subscriptions=subscriptions,
-        catalogs=catalogs,
-        module=module,
+        catalog=catalog,
         description=description,
         mode=mode,
     )
@@ -217,8 +213,7 @@ def inform(
     demo: "BlokDemoInput | Mapping[str, JSONSerializable] | None" = None,
     queries: "Mapping[str, Query] | None" = None,
     subscriptions: "Mapping[str, Subscription] | None" = None,
-    catalogs: Sequence[str] | None = None,
-    module: str | None = None,
+    catalog: str | None = None,
     description: str | None = None,
     mode: BlokCheckMode = "warning",
 ) -> Callable[[Callable[Concatenate[Any, P], R]], InformMethod[P, R]]:
@@ -235,8 +230,7 @@ def inform(
         demo=demo,
         queries=queries,
         subscriptions=subscriptions,
-        catalogs=catalogs,
-        module=module,
+        catalog=catalog,
         description=description,
         mode=mode,
     )
@@ -324,7 +318,7 @@ class DeclaredInteraction:
             registry.structure_registry.protocol_for(cls).to_dependency_input(key)
             for key, cls in (options.dependencies or {}).items()
         )
-        view = registry.blok_view(options.module)
+        view = registry.blok_view(options.catalog)
         declared = options.component
         source = declared if isinstance(declared, str) else None
         try:
@@ -341,7 +335,6 @@ class DeclaredInteraction:
         queries = query_inputs(options.queries)
         subscriptions = subscription_inputs(options.subscriptions)
         demo = demo_input(options.demo)
-        catalogs = tuple(options.catalogs or ()) or catalogs_of(component, view)
         scope = BlokScope(
             kind="task",
             context=context.value,
@@ -350,17 +343,16 @@ class DeclaredInteraction:
             queries=queries,
             subscriptions=subscriptions,
             args=tuple(port.key for port in self.definition.args or ()),
-            catalogs=catalogs,
             demo=demo,
         )
         scope = resolve_scope(component, scope, view)
         at = declared_at()
         reported: set[str] = set()
-        for finding in check_unknown_module(options.module, registry):
+        for finding in check_catalog_target(options.catalog, registry):
             if options.mode == "strict":
                 raise BlokError.from_finding(finding)
             warn_at(f"{where} ({role}): {finding.message} [{finding.code}]", at, finding=finding, blok=where)
-        for finding in check_blok_tree(component, scope, view):
+        for finding in check_blok_tree(component, scope, checked_view(view)):
             if finding.level == "error" or options.mode == "strict":
                 at_path = f", {finding.path}" if finding.path else ""
                 message = f"{where} ({role}{at_path}): {finding.message}"
@@ -382,9 +374,8 @@ class DeclaredInteraction:
         optional: dict[str, object] = {
             "components": None if source is not None else (component,),
             "source": source,
-            "module": options.module,
+            "catalog": options.catalog,
             "dependencies": self.dependencies or None,
-            "catalogs": catalogs or None,
             "locals": locals_ or None,
             "demo": demo,
             "queries": queries or None,

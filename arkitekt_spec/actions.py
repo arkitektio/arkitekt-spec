@@ -877,9 +877,9 @@ class BlokImplementationInput(BlokRules, ActionModel):
         default=None,
         description="The Blok as BSX, parsed by the server into its component tree: three times fewer bytes than the tree. Exactly one of `components` and `source` is sent.",
     )
-    module: str | None = Field(
+    catalog: str | None = Field(
         default=None,
-        description="The module (an app's own unversioned extras, registered by a UI app such as the Orkestrator) the blok renders against besides its catalogs; the Orkestrator's when absent.",
+        description="The catalog the blok is written for: the address it is published at (`https://arkitekt.live/catalogs/orkestrator/v1`), or the name of one registered in the organization. The base catalog, which every renderer draws, when absent.",
     )
     description: str | None = Field(
         default=None,
@@ -910,7 +910,13 @@ class BlokImplementationInput(BlokRules, ActionModel):
         description="The items this Blok is opened for, declared like an action's args and read under `args.<key>`. A UI offers the Blok on any item its args accept. HTML bloks only.",
     )
     vocab: Literal[2] = Field(description="The blok language version the blok speaks; v2 is the only one.")
-    catalogs: tuple[str, ...] = Field(default=(), description="The catalogs it needs, as name@version ('ui@1', 'scene@1').")
+    catalog_minor: int | None = Field(
+        validation_alias=AliasChoices("catalog_minor", "catalogMinor"),
+        serialization_alias="catalogMinor",
+        default=None,
+        ge=0,
+        description="The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
+    )
     locals: tuple[BlokLocalInput, ...] = Field(default=(), description="Its locals: form state that feeds a call, written only through bind.")
     demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
     queries: tuple[BlokQueryInput, ...] = Field(default=(), description="Its declared reads, as `queries.<key>`.")
@@ -1038,12 +1044,19 @@ class ActionBlokInput(ActionBlokRules, ActionModel):
         default=None,
         description="The blok as BSX, parsed by the server into its component tree. Exactly one of `components` and `source` is sent.",
     )
-    module: str | None = Field(
-        default=None, description="The module the blok renders against besides its catalogs; the Orkestrator's when absent."
+    catalog: str | None = Field(
+        default=None,
+        description="The catalog the blok is written for: the address it is published at (`https://arkitekt.live/catalogs/orkestrator/v1`), or the name of one registered in the organization. The base catalog, which every renderer draws, when absent.",
     )
     description: str | None = Field(default=None, description="What the blok shows of a run.")
     vocab: Literal[2] = Field(description="The blok language version the blok speaks; v2 is the only one.")
-    catalogs: tuple[str, ...] = Field(default=(), description="The catalogs it needs, as name@version.")
+    catalog_minor: int | None = Field(
+        validation_alias=AliasChoices("catalog_minor", "catalogMinor"),
+        serialization_alias="catalogMinor",
+        default=None,
+        ge=0,
+        description="The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
+    )
     locals: tuple[BlokLocalInput, ...] = Field(default=(), description="Its locals: form state that feeds a call, written only through bind.")
     demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
     queries: tuple[BlokQueryInput, ...] = Field(default=(), description="Its declared reads.")
@@ -1070,8 +1083,9 @@ class AskBlokInput(AskBlokRules, ActionModel):
         default=None,
         description="The blok as BSX, parsed by the server into its component tree. Exactly one of `components` and `source` is sent.",
     )
-    module: str | None = Field(
-        default=None, description="The module the blok renders against besides its catalogs; the Orkestrator's when absent."
+    catalog: str | None = Field(
+        default=None,
+        description="The catalog the blok is written for: the address it is published at (`https://arkitekt.live/catalogs/orkestrator/v1`), or the name of one registered in the organization. The base catalog, which every renderer draws, when absent.",
     )
     args: tuple["ArgPortInput", ...] = Field(default=(), description="What it is opened on, read under `args.<key>`: the method's parameters.")
     returns: tuple["ReturnPortInput", ...] = Field(default=(), description="What an answer holds: the method's return.")
@@ -1080,7 +1094,13 @@ class AskBlokInput(AskBlokRules, ActionModel):
         description="The agents it reads or calls besides `self`, as `deps.<key>`: bound when it is shown, to the task's own when they satisfy it.",
     )
     vocab: Literal[2] = Field(description="The blok language version the blok speaks; v2 is the only one.")
-    catalogs: tuple[str, ...] = Field(default=(), description="The catalogs it needs, as name@version.")
+    catalog_minor: int | None = Field(
+        validation_alias=AliasChoices("catalog_minor", "catalogMinor"),
+        serialization_alias="catalogMinor",
+        default=None,
+        ge=0,
+        description="The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
+    )
     locals: tuple[BlokLocalInput, ...] = Field(default=(), description="Its locals: form state that feeds a call, written only through bind.")
     demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
     queries: tuple[BlokQueryInput, ...] = Field(default=(), description="Its declared reads.")
@@ -1107,8 +1127,9 @@ class InformBlokInput(InformBlokRules, ActionModel):
         default=None,
         description="The blok as BSX, parsed by the server into its component tree. Exactly one of `components` and `source` is sent.",
     )
-    module: str | None = Field(
-        default=None, description="The module the blok renders against besides its catalogs; the Orkestrator's when absent."
+    catalog: str | None = Field(
+        default=None,
+        description="The catalog the blok is written for: the address it is published at (`https://arkitekt.live/catalogs/orkestrator/v1`), or the name of one registered in the organization. The base catalog, which every renderer draws, when absent.",
     )
     args: tuple["ArgPortInput", ...] = Field(default=(), description="What it is opened on, read under `args.<key>`: the method's parameters.")
     dependencies: tuple[AgentDependencyInput, ...] = Field(
@@ -1116,7 +1137,13 @@ class InformBlokInput(InformBlokRules, ActionModel):
         description="The agents it reads or calls besides `self`, as `deps.<key>`: bound when it is shown, to the task's own when they satisfy it.",
     )
     vocab: Literal[2] = Field(description="The blok language version the blok speaks; v2 is the only one.")
-    catalogs: tuple[str, ...] = Field(default=(), description="The catalogs it needs, as name@version.")
+    catalog_minor: int | None = Field(
+        validation_alias=AliasChoices("catalog_minor", "catalogMinor"),
+        serialization_alias="catalogMinor",
+        default=None,
+        ge=0,
+        description="The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
+    )
     locals: tuple[BlokLocalInput, ...] = Field(default=(), description="Its locals: form state that feeds a call, written only through bind.")
     demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
     queries: tuple[BlokQueryInput, ...] = Field(default=(), description="Its declared reads.")

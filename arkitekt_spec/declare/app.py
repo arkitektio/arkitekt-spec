@@ -53,7 +53,13 @@ from arkitekt_spec.actions import (
     is_asset_source,
 )
 from arkitekt_spec.blok.bsx import parse_bsx
-from arkitekt_spec.blok.catalogs import BlokView, blok_view, default_view, orkestrator_module
+from arkitekt_spec.blok.catalogs import (
+    BlokView,
+    blok_view,
+    catalog_chain,
+    default_view,
+    known_catalog,
+)
 from arkitekt_spec.blok.vocabulary import VOCAB, BlokError, Finding, load_vocabulary
 from arkitekt_spec.declare.actors.policy import KEEP, DisconnectPolicy
 from arkitekt_spec.declare.actors.types import Actifier, DeclaredImplementation
@@ -83,7 +89,6 @@ from arkitekt_spec.declare.catalogs import (
     Diagnostic,
     OperationSpec,
     check_extension_does_not_shadow_base,
-    is_standard_catalog,
     resolve_catalogs,
 )
 from arkitekt_spec.declare.coercible_types import OptimisticCoercible
@@ -137,8 +142,8 @@ class BlokDeclaration(BaseModel):
     demo: BlokDemoInput | None = None
     queries: tuple[BlokQueryInput, ...] = ()
     subscriptions: tuple[BlokSubscriptionInput, ...] = ()
-    catalogs: tuple[str, ...] = ()
-    module: str | None = None
+    catalog: str | None = None
+    """The catalog it is written for; None: the base catalog."""
     context: ComponentContext = ComponentContext.HTML
     default: bool = False
     for_model: str | None = None
@@ -798,8 +803,7 @@ class AppRegistry(BaseModel):
         demo: "BlokDemoInput | Mapping[str, JSONSerializable] | None" = None,
         queries: "Mapping[str, Query] | None" = None,
         subscriptions: "Mapping[str, Subscription] | None" = None,
-        catalogs: Sequence[str] | None = None,
-        module: str | None = None,
+        catalog: str | None = None,
         default: bool = False,
         for_model: str | None = None,
         for_node: str | None = None,
@@ -831,10 +835,10 @@ class AppRegistry(BaseModel):
                 for the states of ``self`` it reads when left out.
             queries: Its declared reads (``queries.<name>``), each a :class:`Query`.
             subscriptions: Its declared streams (``subscriptions.<name>``).
-            catalogs: The catalogs it needs (``"ui@1"``); those its components come from when
-                left out.
-            module: The module (an app's own extras, such as the Orkestrator's) it renders
-                against besides its catalogs; the Orkestrator's when left out.
+            catalog: The catalog it is written for: the address a frontend publishes its
+                own at (:data:`~arkitekt_spec.blok.catalogs.ORKESTRATOR_CATALOG_ID` for what
+                only the Orkestrator draws), or the name of one this app declared. The base
+                catalog, which every renderer draws, when left out.
             default: Whether this is the app's default blok for its context.
             for_model: The model (``"sha256:..."``) this blok decorates. Html bloks only.
             for_node: The node of ``for_model`` to attach to.
@@ -853,7 +857,7 @@ class AppRegistry(BaseModel):
         if component is None:
             raise ValueError(f"Blok '{name}' must define a component")
         at = declared_at()
-        view = self.blok_view(module)
+        view = self.blok_view(catalog)
         source: str | None = None
         if isinstance(component, str):
             source = component
@@ -898,8 +902,7 @@ class AppRegistry(BaseModel):
             demo=demo_input(demo),
             queries=query_inputs(queries),
             subscriptions=subscription_inputs(subscriptions),
-            catalogs=tuple(catalogs or ()),
-            module=module,
+            catalog=catalog,
             context=context,
             default=default,
             for_model=for_model,
@@ -918,8 +921,7 @@ class AppRegistry(BaseModel):
             demo=declaration.demo,
             queries=declaration.queries,
             subscriptions=declaration.subscriptions,
-            catalogs=declaration.catalogs,
-            module=module,
+            catalog=catalog,
             args=arg_ports or None,
         )
         kind = "action_logo" if context == ComponentContext.ACTION_LOGO else "agent"
@@ -932,18 +934,21 @@ class AppRegistry(BaseModel):
             queries=declaration.queries,
             subscriptions=declaration.subscriptions,
             args=tuple(port.key for port in arg_ports),
-            catalogs=declaration.catalogs,
             demo=declaration.demo,
         )
         from arkitekt_spec.declare.blok.infer import resolve_scope
-        from arkitekt_spec.declare.blok.registry import check_unknown_module, self_arg_ports
+        from arkitekt_spec.declare.blok.registry import (
+            check_catalog_target,
+            checked_view,
+            self_arg_ports,
+        )
 
         # Checked with the kinds the tree tells of its locals now; they are checked again when
         # the agent's input is built, against every action the app registered by then. The
         # input carries them as written: the server resolves and stores them beside.
         scope = resolve_scope(component, scope, view, arg_ports=self_arg_ports(self))
         reported: set[str] = set()
-        for finding in (*check_unknown_module(module, self), *check_blok_tree(component, scope, view)):
+        for finding in (*check_catalog_target(catalog, self), *check_blok_tree(component, scope, checked_view(view))):
             if finding.level == "error" or mode == "strict":
                 where = f" ({finding.path})" if finding.path else ""
                 raise BlokError.from_finding(dataclass_replace(finding, path=None, message=f"Blok {name!r}{where}: {finding.message}"), node=finding.path)
@@ -1103,6 +1108,8 @@ class AppRegistry(BaseModel):
             description=description,
         )
         check_extension_does_not_shadow_base(catalog)
+        # A catalog only adds to the base: redefining one of its components is refused here.
+        catalog_chain(catalog)
 
         existing = self.declared_catalogs.get(name)
         if existing is not None and existing != catalog:
@@ -1160,22 +1167,23 @@ class AppRegistry(BaseModel):
                     blok=interface,
                 )
 
-    def blok_view(self, name: str | None) -> BlokView:
-        """The catalogs and the module a blok naming the module ``name`` is drawn with.
+    def blok_view(self, catalog: str | None) -> BlokView:
+        """What a blok written for ``catalog`` is drawn with.
 
-        Base, the standard catalogs and the Orkestrator's module always; then the one this app
-        declared under ``name`` (:meth:`declare_ui_catalog`), which wins a name the others
-        define too (``catalog.shadow``). A name nobody declared leaves components unknowable, so
-        none is reported unknown.
+        The base catalog when it names none. Else the catalog this app declared under that
+        name (:meth:`declare_ui_catalog`), or the one known here under that id (one that
+        ships with the package, one tooling registered), each on top of what it extends. A
+        catalog nobody knows here leaves what it adds unknowable: the view is the base's, and
+        no component is reported unknown.
         """
-        declared = self.declared_catalogs.get(name) if name is not None else None
-        if declared is not None:
-            # As the server and the clients draw it: the Orkestrator's module under the app's,
-            # which wins a name both define (``catalog.shadow``).
-            return blok_view([orkestrator_module(), declared])
-        if is_standard_catalog(name):
+        if catalog is None:
             return default_view()
-        return blok_view([orkestrator_module()], complete=False)
+        declared = self.declared_catalogs.get(catalog)
+        if declared is not None:
+            return blok_view(declared)
+        if known_catalog(catalog) is not None:
+            return blok_view(catalog)
+        return blok_view(complete=False)
 
     def get_declared_bloks(self) -> dict[str, BlokImplementationInput]:
         """Generate blok inputs from their declarations against this registry."""

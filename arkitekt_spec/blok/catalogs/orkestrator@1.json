@@ -1,6 +1,10 @@
 {
+ "id": "https://arkitekt.live/catalogs/orkestrator/v1",
  "name": "orkestrator",
- "description": "Components rendered by the Orkestrator desktop app",
+ "version": 1,
+ "minor": 0,
+ "extends": "https://arkitekt.live/catalogs/base/v3",
+ "description": "What the Orkestrator draws beyond the base catalog: the components of the services it has modules for (mikro's scene and tables). A blok written for it names it as its catalog.",
  "components": [
   {
    "name": "ColumnHistogram",
@@ -55,7 +59,8 @@
      "required": false,
      "description": "The table, a structure reference ({\"object\", \"__identifier\": \"@mikro/tabledataset\"}): typically `{args.table}`."
     }
-   ]
+   ],
+   "service": "mikro"
   },
   {
    "name": "ColumnStat",
@@ -98,7 +103,8 @@
      "required": false,
      "description": "The table, a structure reference ({\"object\", \"__identifier\": \"@mikro/tabledataset\"}): typically `{args.table}`."
     }
-   ]
+   ],
+   "service": "mikro"
   },
   {
    "name": "MikroScene",
@@ -240,7 +246,8 @@
      "required": false,
      "description": "The scene, a structure reference: typically `{args.scene}`."
     }
-   ]
+   ],
+   "service": "mikro"
   },
   {
    "name": "MikroSceneAnnotations",
@@ -267,7 +274,8 @@
      "required": false,
      "description": "CSS height of the panel."
     }
-   ]
+   ],
+   "service": "mikro"
   },
   {
    "name": "MikroSceneLayers",
@@ -294,7 +302,8 @@
      "required": false,
      "description": "CSS height of the panel."
     }
-   ]
+   ],
+   "service": "mikro"
   },
   {
    "name": "MikroSceneProbe",
@@ -321,7 +330,8 @@
      "required": false,
      "description": "CSS height of the panel."
     }
-   ]
+   ],
+   "service": "mikro"
   },
   {
    "name": "MikroSceneViewport",
@@ -366,7 +376,8 @@
      "required": false,
      "description": "Show the Z and dimension sliders. Defaults to true."
     }
-   ]
+   ],
+   "service": "mikro"
   },
   {
    "name": "TableColumns",
@@ -403,7 +414,8 @@
      "required": false,
      "description": "The table, a structure reference ({\"object\", \"__identifier\": \"@mikro/tabledataset\"}): typically `{args.table}`."
     }
-   ]
+   ],
+   "service": "mikro"
   },
   {
    "name": "TableRows",
@@ -470,7 +482,8 @@
      "required": false,
      "description": "Conditions every row must meet: [{\"column\", \"op\", \"value\"}], op one of eq, ne, gt, gte, lt, lte, in, contains, isNull, notNull (default eq). \"in\" takes a list; \"contains\" matches text, ignoring case."
     }
-   ]
+   ],
+   "service": "mikro"
   }
  ]
 }

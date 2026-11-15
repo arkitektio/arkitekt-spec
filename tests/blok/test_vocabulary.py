@@ -33,8 +33,10 @@ def test_then_replaces_now_in_every_kind_but_the_action_logo() -> None:
 def test_catalogs_are_versioned_and_kinds_compatible() -> None:
     vocabulary = load_vocabulary()
 
-    assert vocabulary.catalogs == {"ui": 1, "scene": 1, "logo": 1, "structure": 1, "html": 1, "shadcn": 1}
-    assert vocabulary.base_version == 2
+    assert (vocabulary.vocab, vocabulary.minor) == (2, 1)
+    assert vocabulary.base_catalog == "https://arkitekt.live/catalogs/base/v3"
+    assert list(vocabulary.bundled_catalogs.values()) == ["catalogs/base@3.json", "catalogs/orkestrator@1.json"]
+    assert vocabulary.host_parts == ("args", "arg", "deps", "dep", "ask", "returns", "status", "timeline")
     assert vocabulary.bind_kinds["FLOAT"] >= {"FLOAT", "INT"} and vocabulary.bind_kinds["BOOL"] == {"BOOL"}
     assert "ANY" not in vocabulary.bind_kinds, "an ANY control writes any local"
     assert "FLOAT" in vocabulary.arg_kinds["INT"] and "INT" not in vocabulary.arg_kinds["FLOAT"]
@@ -63,10 +65,56 @@ def test_one_task_record_shape() -> None:
     record = load_vocabulary().records["task"]
 
     assert [field.key for field in record.fields] == [
-        "id", "status", "running", "done", "failed", "progress", "message", "error", "args", "ask", "answer", "returns",
+        "id", "status", "running", "paused", "done", "failed", "progress", "message", "error", "args", "ask", "answer", "returns",
+        "started_at", "ended_at", "duration", "log", "can",
     ]
-    assert record.field("status").choices == ("idle", "queued", "running", "asking", "done", "failed", "cancelled")  # type: ignore[union-attr]
-    assert load_vocabulary().idle_task["status"] == "idle"
+    assert record.field("status").choices == ("idle", "queued", "running", "asking", "paused", "done", "failed", "cancelled")  # type: ignore[union-attr]
+    assert [field.key for field in record.field("can").children] == ["cancel", "pause", "resume", "step", "interrupt"]  # type: ignore[union-attr]
+    idle = load_vocabulary().idle_task
+    assert idle["status"] == "idle" and set(idle) == {field.key for field in record.fields}
+    assert idle["can"] == dict.fromkeys(("cancel", "pause", "resume", "step", "interrupt"), False)
+
+
+def test_assign_is_a_root_of_the_assign_kind_alone() -> None:
+    vocabulary = load_vocabulary()
+
+    assert "assign" in vocabulary.data_roots and "assign" in vocabulary.reserved
+    assert [name for name, kind in vocabulary.kinds.items() if "assign" in kind.roots] == ["assign"]
+    assert [field.key for field in vocabulary.records["assign"].fields] == ["given", "missing", "ready", "starting", "blocked"]
+
+
+def test_a_roots_operations_are_effects_named_after_it() -> None:
+    functions = load_vocabulary().functions
+
+    operations = [name for name in functions if name.startswith("task.")]
+    assert operations == ["task.answer", "task.cancel", "task.pause", "task.resume", "task.step", "task.interrupt"]
+    assert all(functions[name].effect and functions[name].task_operation for name in operations)
+    assert functions["assign.start"].effect and not functions["assign.start"].task_operation
+
+
+def test_an_effect_is_a_command_or_only_the_viewers() -> None:
+    functions = load_vocabulary().functions.values()
+
+    assert not [function.name for function in functions if function.command and not function.effect]
+    assert sorted(function.name for function in functions if function.command) == [
+        "assign.start", "task.answer", "task.cancel", "task.interrupt", "task.pause", "task.resume", "task.step",
+    ]
+    assert sorted(function.name for function in functions if function.effect and not function.command) == ["query.fetch_more", "query.refetch", "ui.copy"]
+
+
+def test_what_is_not_portable_is_listed() -> None:
+    vocabulary = load_vocabulary()
+
+    assert {"before", "after", "print"} <= vocabulary.unportable_variants
+    assert not {"hover", "dark", "focus-visible"} & vocabulary.unportable_variants, "what a touch renderer has no use for loses nothing"
+    assert {"float", "columns", "blur", "grid-cols"} <= set(vocabulary.unportable_utilities)
+    assert not {"cursor", "space-x", "space-y"} & set(vocabulary.unportable_utilities)
+    from arkitekt_spec.declare.blok.validate import unportable_class
+
+    assert unportable_class("w-[12rem]", vocabulary) is None and unportable_class("md:w-48", vocabulary) is None
+    assert unportable_class("-mt-[4px]", vocabulary) is None and unportable_class("bg-[#1e293b]", vocabulary) is None
+    assert unportable_class("translate-x-[3px]", vocabulary) == "an arbitrary value of translate-x"
+    assert unportable_class("grid-cols-[1fr_2fr]", vocabulary) == "an arbitrary value of grid-cols"
 
 
 def test_functions_live_in_namespaces_with_effects_flagged() -> None:
@@ -160,7 +208,9 @@ def test_a_runtime_code_is_no_checkers() -> None:
 
     assert diagnostics["deps.unbound"].runtime
     assert not any(spec.runtime for code, spec in diagnostics.items() if code != "deps.unbound")
-    assert "catalog.conflict" not in diagnostics and diagnostics["catalog.shadow"].level == "warning"
+    assert not {"catalog.conflict", "catalog.shadow", "catalog.undeclared", "module.unknown", "space.kind"} & set(diagnostics)
+    assert diagnostics["catalog.target"].level == diagnostics["catalog.kind"].level == "error"
+    assert {diagnostics[code].level for code in ("catalog.unknown", "part.conditional", "chrome.no_ask", "class.not_portable")} == {"warning"}
 
 
 def test_a_hint_is_filled_like_its_message() -> None:

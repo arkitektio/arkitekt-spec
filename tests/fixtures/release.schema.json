@@ -124,14 +124,32 @@
       "additionalProperties": false,
       "description": "An action's own blok: how a client shows a run of it in one context. It has no name, is never\nlisted on its own, and names devices only by the action's dependency keys.",
       "properties": {
-        "catalogs": {
-          "default": [],
-          "description": "The catalogs it needs, as name@version.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Catalogs",
-          "type": "array"
+        "catalog": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The catalog the blok is written for: the address it is published at (`https://arkitekt.live/catalogs/orkestrator/v1`), or the name of one registered in the organization. The base catalog, which every renderer draws, when absent.",
+          "title": "Catalog"
+        },
+        "catalog_minor": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
+          "title": "Catalog Minor"
         },
         "components": {
           "anyOf": [
@@ -187,19 +205,6 @@
           },
           "title": "Locals",
           "type": "array"
-        },
-        "module": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The module the blok renders against besides its catalogs; the Orkestrator's when absent.",
-          "title": "Module"
         },
         "phase": {
           "default": "RUN",
@@ -1034,14 +1039,32 @@
           "title": "Args",
           "type": "array"
         },
-        "catalogs": {
-          "default": [],
-          "description": "The catalogs it needs, as name@version.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Catalogs",
-          "type": "array"
+        "catalog": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The catalog the blok is written for: the address it is published at (`https://arkitekt.live/catalogs/orkestrator/v1`), or the name of one registered in the organization. The base catalog, which every renderer draws, when absent.",
+          "title": "Catalog"
+        },
+        "catalog_minor": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
+          "title": "Catalog Minor"
         },
         "components": {
           "anyOf": [
@@ -1106,19 +1129,6 @@
           },
           "title": "Locals",
           "type": "array"
-        },
-        "module": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The module the blok renders against besides its catalogs; the Orkestrator's when absent.",
-          "title": "Module"
         },
         "queries": {
           "default": [],
@@ -1361,14 +1371,32 @@
           "description": "The items this Blok is opened for, declared like an action's args and read under `args.<key>`. A UI offers the Blok on any item its args accept. HTML bloks only.",
           "title": "Args"
         },
-        "catalogs": {
-          "default": [],
-          "description": "The catalogs it needs, as name@version ('ui@1', 'scene@1').",
-          "items": {
-            "type": "string"
-          },
-          "title": "Catalogs",
-          "type": "array"
+        "catalog": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The catalog the blok is written for: the address it is published at (`https://arkitekt.live/catalogs/orkestrator/v1`), or the name of one registered in the organization. The base catalog, which every renderer draws, when absent.",
+          "title": "Catalog"
+        },
+        "catalog_minor": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
+          "title": "Catalog Minor"
         },
         "components": {
           "anyOf": [
@@ -1470,19 +1498,6 @@
           },
           "title": "Locals",
           "type": "array"
-        },
-        "module": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The module (an app's own unversioned extras, registered by a UI app such as the Orkestrator) the blok renders against besides its catalogs; the Orkestrator's when absent.",
-          "title": "Module"
         },
         "queries": {
           "default": [],
@@ -3374,14 +3389,32 @@
           "title": "Args",
           "type": "array"
         },
-        "catalogs": {
-          "default": [],
-          "description": "The catalogs it needs, as name@version.",
-          "items": {
-            "type": "string"
-          },
-          "title": "Catalogs",
-          "type": "array"
+        "catalog": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The catalog the blok is written for: the address it is published at (`https://arkitekt.live/catalogs/orkestrator/v1`), or the name of one registered in the organization. The base catalog, which every renderer draws, when absent.",
+          "title": "Catalog"
+        },
+        "catalog_minor": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
+          "title": "Catalog Minor"
         },
         "components": {
           "anyOf": [
@@ -3446,19 +3479,6 @@
           },
           "title": "Locals",
           "type": "array"
-        },
-        "module": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The module the blok renders against besides its catalogs; the Orkestrator's when absent.",
-          "title": "Module"
         },
         "queries": {
           "default": [],

@@ -172,12 +172,11 @@ class TaskBlok(BaseModel):
         description="Dependency key to agent id. A dependency left out that the sending agent satisfies is bound to it.",
     )
     vocab: Literal[2] | None = Field(default=None, description="The blok language version a `source` blok is written in; 2, the only one, when left out.")
-    catalogs: list[str] | None = Field(default=None, description="The catalogs a `source` blok needs, as `name@version` (`ui@1`).")
+    catalog: str | None = Field(default=None, description="The catalog a `source` blok is written for (its address, or the name of one registered in the organization); the base catalog when left out.")
     locals: list[BlokLocalInput] | None = Field(default=None, description="A `source` blok's locals, each a port (`{key, kind?, default?, ...}`) plus `persist`; a left-out kind is inferred from the tree (ANY when it does not tell).")
     demo: BlokDemoInput | None = Field(default=None, description="What a preview renders a `source` blok with.")
     queries: list[BlokQueryInput] | None = Field(default=None, description="A `source` blok's declared reads.")
     subscriptions: list[BlokSubscriptionInput] | None = Field(default=None, description="A `source` blok's declared streams.")
-    module: str | None = Field(default=None, description="The module a `source` blok renders against besides its catalogs; the server's default when left out.")
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     @model_validator(mode="after")

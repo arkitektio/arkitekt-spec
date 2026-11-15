@@ -176,9 +176,11 @@ TREE_SERVER_HASH = "f30bf99443ae0d7f48a85b851704bf43459fa83511d5c05ed521b3be698e
 TREE = """
 <Html>
   <Slider bind={value} min={0} max={limit} disabled={true} />
-  <p>{value}</p>
+  <p text={value} />
 </Html>
 """
+"""The tree the server hashed: its ``p`` holds ``text`` as a prop. Written as text between the
+tags it is a text node under the ``p``, another tree with another hash."""
 
 
 def _tree_definition(kind: str, widget: AssignWidgetInput) -> DefinitionInput:

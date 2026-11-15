@@ -81,7 +81,7 @@ def test_bloks_reach_the_definition_as_written() -> None:
     space, panel = definition.bloks
     assert (space.context, space.source, space.components, space.vocab) == ("SCENE", SPACE, None, 2)
     assert [(local.key, local.kind, local.default, local.persist) for local in space.locals] == [("show_path", "BOOL", True, True)]
-    assert (space.catalogs, space.module) == (("scene@1", "ui@1"), None)
+    assert (space.catalog, space.catalog_minor) == (None, None), "written for the base catalog: nothing to name"
     assert (panel.context, panel.description) == ("HTML", "The run")
 
     wire = definition.model_dump(mode="json", by_alias=False, exclude_unset=True)
@@ -191,7 +191,7 @@ def test_the_wire_model_checks_as_the_server_does() -> None:
         )
 
 
-def test_a_component_of_shadcn_declares_shadcn() -> None:
+def test_every_family_of_the_base_catalog_is_drawn_without_naming_one() -> None:
     import warnings
 
     from arkitekt_spec.declare.catalogs import CatalogWarning
@@ -199,13 +199,19 @@ def test_a_component_of_shadcn_declares_shadcn() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error", CatalogWarning)
         (blok,) = registered("<Html><Sheet><SheetContent><ask /></SheetContent></Sheet></Html>").bloks
-    assert (blok.catalogs, blok.module) == (("shadcn@1",), None)
+    assert (blok.catalog, blok.catalog_minor) == (None, None)
+    assert "catalog" not in blok.model_dump(exclude_unset=True)
 
 
-def test_an_action_blok_names_its_module_and_catalogs() -> None:
-    (blok,) = registered(ActionBlok("<Html><Card><ask /></Card></Html>", catalogs=["ui@1"], module="orkestrator")).bloks
+def test_an_action_blok_names_the_catalog_it_is_written_for() -> None:
+    from arkitekt_spec.blok.catalogs import ORKESTRATOR_CATALOG_ID
 
-    assert (blok.catalogs, blok.module) == (("ui@1",), "orkestrator")
+    source = "<Html><MikroScene value={task.args.scene}><MikroSceneViewport /></MikroScene><ask /></Html>"
+    (blok,) = registered(ActionBlok(source, catalog=ORKESTRATOR_CATALOG_ID)).bloks
+
+    assert (blok.catalog, blok.catalog_minor) == (ORKESTRATOR_CATALOG_ID, None)
+    with pytest.raises(BlokError, match=r"<MikroScene> is of https://arkitekt.live/catalogs/orkestrator/v1.*\[catalog.target\]"):
+        registered(source)
 
 
 def test_an_action_blok_local_is_typed_by_local_t() -> None:
@@ -294,7 +300,7 @@ def test_starting_and_watching_keep_to_their_own_bloks() -> None:
         registered_to_start("<Html><Text>{task.status}</Text></Html>")
     with pytest.raises(ValueError, match="holds no 'ask'"):
         registered_to_start("<Html><ask /></Html>")
-    with pytest.raises(BlokError, match=r"<args> belongs to starting a run.*\[assign.kind\]"):
+    with pytest.raises(BlokError, match=r"<args> belongs to assign bloks.*\[catalog.kind\]"):
         registered_to_start(None, bloks="<Html><args /></Html>")
     with pytest.raises(BlokError, match=r"assign.start\(\) belongs to starting a run"):
         registered_to_start(None, bloks="<Html><Button onClick={assign.start()}>Go</Button></Html>")

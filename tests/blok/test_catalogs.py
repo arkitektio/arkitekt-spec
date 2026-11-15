@@ -1,40 +1,123 @@
-"""The spec's catalogs (base@2 and the standard catalogs) and the Orkestrator's module."""
+"""The spec's catalogs: the base catalog every renderer draws, and the Orkestrator's on top of it."""
+
+import json
+from collections.abc import Iterator
 
 import pytest
 
 from arkitekt_spec.blok.catalogs import (
+    ORKESTRATOR_CATALOG_ID,
     base_catalog,
     blok_view,
+    catalog_chain,
     catalog_files,
+    catalog_text,
     default_view,
-    orkestrator_module,
-    standard_catalog,
-    standard_catalogs,
+    forget_catalogs,
+    is_catalog_target,
+    known_catalog,
+    orkestrator_catalog,
+    orkestrator_view,
+    parse_catalog,
+    register_catalog,
 )
-from arkitekt_spec.declare.catalogs import CALLBACK_KIND, VALUE_KINDS
+from arkitekt_spec.blok.vocabulary import BlokError, load_vocabulary
+from arkitekt_spec.declare.catalogs import CALLBACK_KIND, VALUE_KINDS, Catalog, ComponentSpec
+
+BASE_ID = "https://arkitekt.live/catalogs/base/v3"
+ACME_ID = "https://acme.example/catalogs/lab/v1"
 
 
-def test_base_is_the_language() -> None:
-    names = {component.name for component in base_catalog().components}
+@pytest.fixture(autouse=True)
+def _no_registered_catalogs() -> Iterator[None]:
+    forget_catalogs()
+    yield
+    forget_catalogs()
 
-    assert names == {"if", "else", "foreach", "match", "case", "default", "fragment", "suspense", "fallback", "error", "ask", "args", "Html"}
+
+def _acme(**overrides: object) -> str:
+    payload: dict[str, object] = {
+        "id": ACME_ID,
+        "name": "lab",
+        "version": 1,
+        "minor": 2,
+        "extends": ORKESTRATOR_CATALOG_ID,
+        "components": [
+            {"name": "Spectrum", "context": "HTML", "props": [{"key": "trace", "kind": "LIST"}, {"key": "bands", "kind": "LIST", "since": 2}]},
+            {"name": "Plate", "context": "HTML", "since": 1, "props": []},
+        ],
+    }
+    payload.update(overrides)
+    return json.dumps(payload)
 
 
-def test_the_catalogs_are_versioned_the_module_not_and_their_names_unique() -> None:
-    seen: dict[str, str] = {}
-    assert orkestrator_module().version is None
-    for catalog in (base_catalog(), *standard_catalogs(), orkestrator_module()):
-        for component in catalog.components:
-            assert component.name not in seen, f"{component.name} in {seen.get(component.name)} and {component.catalog}"
-            seen[component.name] = str(component.catalog)
-    assert seen["Button"] == "ui@1" and seen["Scene"] == "scene@1" and seen["AgentLogo"] == seen["ActionLogo"] == "logo@1" and seen["div"] == "html@1"
-    assert seen["Chart"] == "shadcn@1" and seen["MikroScene"] == "orkestrator"
+# --------------------------------------------------------------------------- the base catalog
+
+
+def test_the_base_catalog_is_one_list_named_by_its_address() -> None:
+    base = base_catalog()
+
+    assert (base.id, base.name, base.version, base.minor, base.extends) == (BASE_ID, "base", 3, 0, None)
+    assert load_vocabulary().base_catalog == BASE_ID
+    names = [component.name for component in base.components]
+    assert len(names) == len(set(names))
+
+
+def test_the_base_catalog_holds_every_family() -> None:
+    groups: dict[str, set[str]] = {}
+    for component in base_catalog().components:
+        groups.setdefault(str(component.group), set()).add(component.name)
+
+    assert set(groups) == {"language", "ui", "html", "shadcn", "structure", "run", "scene", "logo"}
+    assert groups["language"] == {"if", "else", "foreach", "match", "case", "default", "fragment", "suspense", "fallback", "error", "Html", "#text"}
+    assert groups["html"] == {"div", "p", "span"}
+    assert groups["run"] == {"args", "arg", "deps", "dep", "ask", "returns", "status", "timeline"}
+    assert {"Button", "List", "Time"} <= groups["ui"] and {"Chart", "Drawer", "BentoGrid", "Combobox", "DatePicker"} <= groups["shadcn"]
+    assert {"Scene", "Space", "Placed", "Route"} <= groups["scene"] and {"AgentLogo", "ActionLogo"} <= groups["logo"]
+    assert {"StructureDisplay", "StructurePicker", "StructureViewer"} == groups["structure"]
+
+
+def test_the_host_parts_say_the_kinds_they_belong_to() -> None:
+    view = default_view()
+    kinds = {name: view.components[name].kinds for name in load_vocabulary().host_parts}
+
+    assert kinds == {
+        "args": ("assign",), "arg": ("assign",), "deps": ("assign",), "dep": ("assign",),
+        "ask": ("task", "action"), "returns": ("task", "action"), "status": ("task", "action"),
+        "timeline": ("agent", "custom", "task", "action"),
+    }
+    assert {name: view.components[name].kinds for name in ("Space", "Placed", "Route")} == dict.fromkeys(("Space", "Placed", "Route"), ("action", "assign"))
+    assert view.components["Scene"].kinds == () and view.components["Button"].kinds == ()
+
+
+def test_the_host_parts_take_what_narrows_them() -> None:
+    view = default_view()
+
+    def props(name: str) -> dict[str, tuple[str, bool]]:
+        return {prop.key: (prop.kind, prop.required) for prop in view.components[name].props}
+
+    assert props("args") == {"only": ("ANY", False), "omit": ("ANY", False), "given": ("STRING", False)}
+    assert props("arg") == props("dep") == {"key": ("STRING", True)}
+    assert props("returns") == {"only": ("ANY", False), "omit": ("ANY", False)}
+    assert props("deps") == props("status") == props("timeline") == props("ask") == {}
+    for root in ("Html", "Scene", "Space"):
+        chrome = view.components[root].prop("chrome")
+        assert chrome is not None and chrome.values == ("auto", "none"), root
+    given = view.components["args"].prop("given")
+    assert given is not None and given.values == ("hide", "show")
+
+
+def test_what_needs_a_pointer_says_how_it_is_drawn_without_one() -> None:
+    view = default_view()
+
+    for name in ("Menubar", "Resizable", "HoverCard", "ContextMenu", "Tooltip"):
+        assert view.components[name].touch, name
+    assert view.components["Button"].touch is None
 
 
 def test_html_keeps_only_containers_that_translate_to_native() -> None:
-    html = {component.name: component for component in standard_catalog("html").components}
+    html = {component.name: component for component in base_catalog().components if component.group == "html"}
 
-    assert set(html) == {"div", "p", "span"}
     assert html["div"].text_prop is None and html["p"].text_prop == html["span"].text_prop == "text"
 
 
@@ -52,7 +135,7 @@ def test_the_renames_of_the_design() -> None:
 
 
 def test_every_entry_declares_its_events_and_text() -> None:
-    for name, component in default_view().components.items():
+    for name, component in orkestrator_view().components.items():
         assert {prop.kind for prop in component.props} <= set(VALUE_KINDS), name
         for prop in component.props:
             if prop.kind == CALLBACK_KIND:
@@ -66,11 +149,7 @@ def test_every_entry_declares_its_events_and_text() -> None:
 def test_no_entry_declares_persist_or_data_attributes() -> None:
     """A component keeps its own state if it chooses to, and every one sets data-busy and
     data-stale: neither is declared."""
-    from arkitekt_spec.blok.catalogs import catalog_text
-
     for file in catalog_files():
-        import json
-
         for entry in json.loads(catalog_text(file))["components"]:
             assert "persist" not in entry and "data_attributes" not in entry, f"{file}: {entry['name']}"
     scene = default_view().component("Scene")
@@ -84,44 +163,23 @@ def test_a_bind_prop_says_what_the_control_writes() -> None:
     assert kinds == {"Slider": "FLOAT", "Switch": "BOOL", "Checkbox": "BOOL", "Input": "STRING", "Select": "STRING", "ToggleGroup": "ANY"}
 
 
-def test_ui_has_a_time_that_ticks_inside() -> None:
+def test_the_base_has_a_time_that_ticks_inside() -> None:
     time = default_view().component("Time")
 
-    assert time is not None and time.catalog == "ui@1" and not time.accepts_children
+    assert time is not None and time.catalog == "base@3" and not time.accepts_children
     assert {prop.key: (prop.kind, prop.required) for prop in time.props} == {
         "className": ("STRING", False), "format": ("STRING", False), "relative": ("BOOL", False), "value": ("STRING", True),
     }
 
 
-def test_a_module_shadows_a_standard_component_and_wins() -> None:
-    from arkitekt_spec.declare.catalogs import Catalog, ComponentSpec
+def test_a_list_draws_a_foreach_row_by_row() -> None:
+    long_list = default_view().component("List")
 
-    mine = ComponentSpec(name="Button", catalog="mine")
-    view = blok_view([Catalog(name="mine", components=(mine,))])
-
-    assert view.component("Button") == mine
-    shadow = view.shadows["Button"]
-    assert (shadow.catalog, shadow.module, shadow.winner) == ("ui@1", "mine", "mine")
-
-
-def test_a_module_never_shadows_the_language() -> None:
-    from arkitekt_spec.declare.catalogs import Catalog, ComponentSpec
-
-    view = blok_view([Catalog(name="mine", components=(ComponentSpec(name="foreach", catalog="mine"),))])
-
-    assert view.component("foreach") == base_catalog().components[[c.name for c in base_catalog().components].index("foreach")]
-    assert view.shadows["foreach"].winner == "base@2"
-
-
-def test_the_default_view_shadows_nothing() -> None:
-    assert dict(default_view().shadows) == {}
+    assert long_list is not None and long_list.accepts_children and long_list.group == "ui"
 
 
 def test_every_file_ships() -> None:
-    assert catalog_files() == (
-        "catalogs/base@2.json", "catalogs/ui@1.json", "catalogs/scene@1.json", "catalogs/logo@1.json",
-        "catalogs/structure@1.json", "catalogs/html@1.json", "catalogs/shadcn@1.json", "modules/orkestrator.json",
-    )
+    assert catalog_files() == ("catalogs/base@3.json", "catalogs/orkestrator@1.json")
 
 
 def test_failed_is_a_toast_slot_now_not_a_read_slot() -> None:
@@ -132,20 +190,10 @@ def test_failed_is_a_toast_slot_now_not_a_read_slot() -> None:
 
 def test_descriptions_speak_v2() -> None:
     """A callback reads ``event.<field>``, an asset is ``{self.assets.<name>}``: no ``$event``, no ``@``."""
-    for name, component in default_view().components.items():
+    for name, component in orkestrator_view().components.items():
         for prop in component.props:
             text = prop.description or ""
             assert "$event" not in text and '"@self' not in text, f"{name}.{prop.key}: {text}"
-
-
-def test_shadcn_holds_the_bento_grid() -> None:
-    grid = default_view().component("BentoGrid")
-    item = default_view().component("BentoItem")
-    assert grid is not None and item is not None
-    assert grid.catalog == item.catalog == "shadcn@1"
-    assert item.downstream_of == ("BentoGrid",)
-    assert {"columns", "rowHeight"} <= {prop.key for prop in grid.props}
-    assert {"cols", "rows", "priority", "show"} <= {prop.key for prop in item.props}
 
 
 def test_enum_props_hold_their_values() -> None:
@@ -155,14 +203,95 @@ def test_enum_props_hold_their_values() -> None:
 
     assert variant is not None and variant.values is not None and "outline" in variant.values
     assert label is not None and label.values is None
-    for catalog in (base_catalog(), *standard_catalogs(), orkestrator_module()):
-        for component in catalog.components:
-            for prop in component.props:
-                assert prop.values is None or (prop.kind == "STRING" and prop.values), f"{component.name}.{prop.key}"
+    for component in orkestrator_view().components.values():
+        for prop in component.props:
+            assert prop.values is None or (prop.kind == "STRING" and prop.values), f"{component.name}.{prop.key}"
+
+
+# --------------------------------------------------------------------------- an app catalog
+
+
+def test_the_orkestrators_catalog_extends_the_base() -> None:
+    orkestrator = orkestrator_catalog()
+
+    assert (orkestrator.id, orkestrator.name, orkestrator.version, orkestrator.extends) == (ORKESTRATOR_CATALOG_ID, "orkestrator", 1, BASE_ID)
+    assert [catalog.name for catalog in catalog_chain(ORKESTRATOR_CATALOG_ID)] == ["base", "orkestrator"]
+    scene = orkestrator_view().component("MikroScene")
+    assert scene is not None and scene.service == "mikro" and scene.catalog == "orkestrator@1"
+    assert {component.service for component in orkestrator.components} == {"mikro"}
+
+
+def test_a_view_is_of_one_catalog_and_knows_what_is_anothers() -> None:
+    base, orkestrator = default_view(), orkestrator_view()
+
+    assert base.target == BASE_ID and base.label == "base@3"
+    assert base.component("MikroScene") is None and base.foreign["MikroScene"] == ORKESTRATOR_CATALOG_ID
+    assert orkestrator.target == ORKESTRATOR_CATALOG_ID and orkestrator.label == "base@3 + orkestrator@1"
+    assert orkestrator.component("MikroScene") is not None and orkestrator.component("Button") is not None
+    assert dict(orkestrator.foreign) == {}
+
+
+def test_a_published_catalog_is_registered_and_chains_down_to_the_base() -> None:
+    assert known_catalog(ACME_ID) is None
+    with pytest.raises(ValueError, match="not known here"):
+        blok_view(ACME_ID)
+
+    register_catalog(parse_catalog(_acme()))
+
+    assert [catalog.name for catalog in catalog_chain(ACME_ID)] == ["base", "orkestrator", "lab"]
+    view = blok_view(ACME_ID)
+    assert view.component("Spectrum") is not None and view.component("MikroScene") is not None and view.component("Button") is not None
+    assert default_view().foreign["Spectrum"] == ACME_ID
+
+
+def test_a_catalog_only_adds() -> None:
+    redefining = _acme(components=[{"name": "Button", "context": "HTML", "props": []}])
+
+    with pytest.raises(ValueError, match="redefines <Button> of base@3"):
+        register_catalog(parse_catalog(redefining))
+    assert known_catalog(ACME_ID) is None
+    with pytest.raises(ValueError, match="redefines <foreach>"):
+        blok_view(Catalog(name="mine", components=(ComponentSpec(name="foreach"),)))
+
+
+def test_a_catalog_that_extends_one_not_known_is_refused() -> None:
+    with pytest.raises(ValueError, match="which is not known here"):
+        register_catalog(parse_catalog(_acme(extends="https://nowhere.example/catalogs/x/v9")))
+
+
+def test_a_shipped_catalog_is_never_replaced() -> None:
+    register_catalog(parse_catalog(json.dumps({"id": BASE_ID, "name": "base", "version": 3, "components": []})))
+
+    assert default_view().component("Button") is not None
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "[]",
+        json.dumps({"components": []}),
+        json.dumps({"name": "lab", "version": "1", "components": []}),
+        json.dumps({"name": "lab", "id": "http://acme.example/catalogs/lab/v1", "components": []}),
+        json.dumps({"name": "lab", "id": "https://acme.example/catalogs/lab", "components": []}),
+        json.dumps({"name": "lab", "extends": "file:///etc/passwd", "components": []}),
+        json.dumps({"name": "lab", "components": [{"name": "X", "props": [{"key": "a", "kind": "NOPE"}]}]}),
+    ],
+)
+def test_a_payload_that_is_no_catalog_is_refused(payload: str) -> None:
+    with pytest.raises(ValueError):
+        parse_catalog(payload)
+
+
+def test_what_can_name_a_catalog() -> None:
+    assert is_catalog_target(ORKESTRATOR_CATALOG_ID) and is_catalog_target("mine")
+    for wrong in ("ui@1", "http://arkitekt.live/catalogs/base/v3", "https://arkitekt.live/catalogs/base", "two words", ""):
+        assert not is_catalog_target(wrong), wrong
+
+
+# --------------------------------------------------------------------------- checked against one
 
 
 def test_a_literal_outside_the_values_is_a_catalog_warning() -> None:
-    from arkitekt_spec.blok.vocabulary import BlokError
     from arkitekt_spec.declare.blok.validate import validate_bsx
 
     warnings = validate_bsx('<Html><Button variant="loud">Go</Button></Html>')
@@ -171,3 +300,45 @@ def test_a_literal_outside_the_values_is_a_catalog_warning() -> None:
     assert validate_bsx('<Html><Button variant="outline">Go</Button></Html>') == []
     with pytest.raises(BlokError):
         validate_bsx('<Html><Button variant="loud">Go</Button></Html>', mode="strict")
+
+
+def test_what_takes_text_is_the_catalogs_to_say() -> None:
+    from arkitekt_spec.blok.bsx import parse_bsx
+    from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree, validate_bsx
+
+    assert validate_bsx("<Html><Card>plain <Badge>new</Badge></Card><div>text</div><Button>Go</Button><if when={args.x}>shown</if></Html>") == []
+    findings = validate_bsx('<Html><Separator>x</Separator><Button label="a">b</Button></Html>')
+    assert [(finding.code, finding.fields["detail"]) for finding in findings] == [
+        ("catalog.text", "takes no text"),
+        ("catalog.text", "sets label as an attribute and as its text"),
+    ]
+    scene = parse_bsx("<Scene><Model>x</Model></Scene>")
+    assert [finding.code for finding in check_blok_tree(scene, BlokScope(context="SCENE"), default_view()) if finding.path and "#" in finding.path] == ["catalog.placement"]
+    assert check_blok_tree(scene, BlokScope(context="SCENE"), None) == [], "the language alone takes text anywhere"
+
+
+def test_a_component_of_another_catalog_is_refused_and_says_which() -> None:
+    from arkitekt_spec.declare.blok.validate import validate_bsx
+
+    with pytest.raises(BlokError) as refused:
+        validate_bsx("<Html><MikroSceneProbe /></Html>")
+
+    assert refused.value.code == "catalog.target"
+    assert ORKESTRATOR_CATALOG_ID in str(refused.value) and BASE_ID in str(refused.value)
+    assert validate_bsx("<Html><MikroScene value={args.scene}><MikroSceneProbe /></MikroScene></Html>", view=orkestrator_view()) == []
+
+
+def test_the_minor_a_blok_needs_is_the_newest_it_uses() -> None:
+    from arkitekt_spec.blok.bsx import parse_bsx
+    from arkitekt_spec.declare.blok.registry import minor_needed
+
+    register_catalog(parse_catalog(_acme()))
+    view = blok_view(ACME_ID)
+
+    def needed(source: str) -> int:
+        return minor_needed(parse_bsx(source, view=view), view)
+
+    assert needed("<Html><Button>Go</Button></Html>") == 0
+    assert needed("<Html><Spectrum trace={args.trace} /></Html>") == 0
+    assert needed("<Html><Plate /></Html>") == 1
+    assert needed("<Html><Plate /><Spectrum trace={args.trace} bands={args.bands} /></Html>") == 2

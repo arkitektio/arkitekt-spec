@@ -12,7 +12,7 @@ from arkitekt_spec.blok.catalogs import default_view
 from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.blok.infer import resolve_scope
 from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree, dependency_hint
-from arkitekt_spec.declare.catalogs import CatalogWarning, ComponentSpec, PropSpec
+from arkitekt_spec.declare.catalogs import ComponentSpec, PropSpec
 from arkitekt_spec.declare.traits.blok import CreateBlokInputTrait
 
 
@@ -94,24 +94,25 @@ def validate_bsx_findings(source: str):
     return [finding for finding in check_blok_tree(parse_bsx(source), BlokScope(), default_view()) if finding.code == "props.literal_type"]
 
 
-def test_a_module_that_shadows_a_standard_component_wins_with_a_warning() -> None:
+def test_a_catalog_that_redefines_a_base_component_is_refused() -> None:
     registry = AppRegistry()
-    registry.declare_ui_catalog("lab", components=[ComponentSpec(name="Slider", props=(PropSpec(key="bind", kind="STRING", required=False),))])
 
-    with pytest.warns(CatalogWarning, match=r"catalog.shadow"):
-        registry.register_blok("panel", "<Html><Slider bind={label} /></Html>", module="lab", locals={"label": "x"})
+    with pytest.raises(ValueError, match="redefines <Slider> of base@3: a catalog only adds"):
+        registry.declare_ui_catalog("lab", components=[ComponentSpec(name="Slider", props=(PropSpec(key="bind", kind="STRING", required=False),))])
+    assert "lab" not in registry.declared_catalogs
 
 
-def test_a_declared_module_draws_over_the_orkestrators() -> None:
-    """Base, the standard catalogs, the Orkestrator's module, then the app's: as the server and the clients draw it."""
+def test_a_declared_catalog_adds_to_the_base() -> None:
+    """The base catalog, then the app's own: a blok written for it draws both."""
     registry = AppRegistry()
     registry.declare_ui_catalog("lab", components=[ComponentSpec(name="Gauge", text_prop=None)])
     view = registry.blok_view("lab")
 
     assert view.component("AspectRatio") is not None and view.component("Gauge") is not None
+    assert view.component("MikroScene") is None, "it does not extend the Orkestrator's"
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        registry.register_blok("panel", "<Html><AspectRatio><Gauge /></AspectRatio></Html>", module="lab")
+        registry.register_blok("panel", "<Html><AspectRatio><Gauge /></AspectRatio></Html>", catalog="lab")
 
 
 def test_an_enum_local_needs_its_choices() -> None:

@@ -257,10 +257,12 @@ def test_a_logo_paints_with_the_pens(registry: AppRegistry) -> None:
         registry.register_blok("logo", '<AgentLogo><Circle fill="#ff0000" /></AgentLogo>')
 
 
-def test_the_catalogs_are_those_its_components_come_from(registry: AppRegistry) -> None:
+def test_a_blok_of_the_base_catalog_names_none(registry: AppRegistry) -> None:
     registry.register_blok("panel", "<Html><Card><StructurePicker identifier=\"@mikro/image\" /><div /></Card></Html>")
 
-    assert built(registry).catalogs == ("html@1", "structure@1", "ui@1")
+    blok = built(registry)
+    assert (blok.catalog, blok.catalog_minor) == (None, None)
+    assert not {"catalog", "catalog_minor"} & blok.model_fields_set, "nothing to name, nothing sent"
 
 
 def test_a_blok_written_in_bsx_is_sent_as_its_source(registry: AppRegistry) -> None:
@@ -294,7 +296,7 @@ def test_a_declared_catalog_is_drawn_with(registry: AppRegistry) -> None:
     registry.declare_ui_catalog("mine", components=[ComponentSpec(name="Gauge", text_prop=None)])
     with warnings.catch_warnings():
         warnings.simplefilter("error", CatalogWarning)
-        registry.register_blok("panel", "<Html><Card><Gauge /></Card></Html>", module="mine")
+        registry.register_blok("panel", "<Html><Card><Gauge /></Card></Html>", catalog="mine")
 
 
 def test_a_new_default_replaces_the_previous_one_of_its_context(registry: AppRegistry) -> None:
@@ -318,19 +320,31 @@ def test_a_state_cannot_take_a_segment_of_an_agent() -> None:
             count: int
 
 
-def test_a_module_is_named_not_declared_among_the_catalogs(registry: AppRegistry) -> None:
-    """Only the versioned global catalogs are declared (``Resizable`` is ``shadcn@1``'s); an
-    app's own catalog is what ``module`` names."""
+def test_a_blok_names_the_one_catalog_it_is_written_for(registry: AppRegistry) -> None:
+    """The base catalog draws ``Resizable`` itself; what an app catalog adds is named: the app's
+    own by its name, a published one by its address."""
+    from arkitekt_spec.blok.catalogs import ORKESTRATOR_CATALOG_ID
     from arkitekt_spec.declare.catalogs import ComponentSpec
 
     registry.declare_ui_catalog("mine", components=[ComponentSpec(name="Gauge")])
     registry.register_blok("extras", "<Html><Resizable><ResizablePanel><Card /></ResizablePanel></Resizable></Html>", mode="strict")
-    registry.register_blok("mine", "<Html><Card><Gauge /></Card></Html>", module="mine", mode="strict")
+    registry.register_blok("mine", "<Html><Card><Gauge /></Card></Html>", catalog="mine", mode="strict")
+    registry.register_blok("scene", "<Html><MikroScene value={args.scene}><MikroSceneViewport /></MikroScene></Html>", catalog=ORKESTRATOR_CATALOG_ID, args={"scene": str}, mode="strict")
     with warnings.catch_warnings():
         warnings.simplefilter("error", CatalogWarning)
         declared = registry.get_declared_bloks()
-    assert (declared["extras"].catalogs, declared["extras"].module) == (("shadcn@1", "ui@1"), None)
-    assert (declared["mine"].catalogs, declared["mine"].module) == (("ui@1",), "mine")
+    assert {key: blok.catalog for key, blok in declared.items()} == {"extras": None, "mine": "mine", "scene": ORKESTRATOR_CATALOG_ID}
+
+
+def test_a_component_of_a_catalog_the_blok_is_not_written_for_is_refused(registry: AppRegistry) -> None:
+    with pytest.raises(BlokError, match=r"<MikroSceneProbe> is of https://arkitekt.live/catalogs/orkestrator/v1, and this blok is written for https://arkitekt.live/catalogs/base/v3") as refused:
+        registry.register_blok("panel", "<Html><MikroSceneProbe /></Html>")
+    assert refused.value.code == "catalog.target"
+
+
+def test_what_names_no_catalog_at_all_is_refused(registry: AppRegistry) -> None:
+    with pytest.raises(ValueError, match="manifest.catalog"):
+        registry.register_blok("panel", "<Html><Card /></Html>", catalog="ui@1")
 
 
 def _caught(registry: AppRegistry, declare: Callable[[], None]) -> list[warnings.WarningMessage]:

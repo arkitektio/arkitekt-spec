@@ -1,76 +1,79 @@
-"""Sync the blok language between the spec and a checkout of `@arkitektio/bsx`.
+"""Sync the blok language and its catalogs between the spec and the checkouts that implement them.
 
     python scripts/sync_standard_catalog.py ~/Code/typescript/libraries/bsx
     python scripts/sync_standard_catalog.py ~/Code/typescript/libraries/bsx --into packages/bsx/src/spec
+    python scripts/sync_standard_catalog.py --orkestrator ~/Code/standalones/orkestrator-next
 
 Two directions, one owner each:
 
-- The **global catalogs** (``catalogs/ui@1.json``, ``scene@1``, ``logo@1``, ``structure@1``,
-  ``html@1``, ``shadcn@1``) are defined in TypeScript, as the contracts of ``@arkitektio/bsx``
-  (``packages/bsx/src/catalogs``); ``pnpm spec:export`` writes them into the checkout. They are
-  copied **in** from there, byte for byte, so the spec validates bloks against what the UIs draw.
-- The **language** is the spec's: the vocabulary (``vocabulary.json``), base@2
-  (``catalogs/base@2.json``) and the parity corpus (``bsx_v2.json``) are written **out** into the
-  checkout.
-
-The ``orkestrator`` module (``modules/orkestrator.json``: the MikroScene and table parts) is what
-only the Orkestrator draws. Orkestrator writes it (``node scripts/export-blok-catalog.mjs`` →
-``dist/catalog/blok-module.json``); ``--orkestrator <checkout>`` copies it in.
+- The **language and the base catalog** are the spec's: the vocabulary (``vocabulary.json``),
+  the base catalog (``catalogs/base@3.json``: everything every renderer draws) and the parity
+  corpus (``bsx_v2.json``) are written **out** into a checkout of ``@arkitektio/bsx``, whose
+  contracts are held to them.
+- An **app catalog** is its frontend's. The Orkestrator's
+  (``https://arkitekt.live/catalogs/orkestrator/v1``) is written by the Orkestrator
+  (``node scripts/export-blok-catalog.mjs`` -> ``dist/catalog/orkestrator@1.json``, which is
+  also what it publishes at that address); ``--orkestrator <checkout>`` copies it **in** as
+  the snapshot this package ships (``catalogs/orkestrator@1.json``), so a blok written for it
+  is checked offline. The snapshot is written out to the bsx checkout with the rest.
 """
 
 import argparse
-import json
 from pathlib import Path
 
-from arkitekt_spec.blok.catalogs import BASE_NAME, catalog_text
+from arkitekt_spec.blok.catalogs import (
+    ORKESTRATOR_CATALOG_ID,
+    catalog_chain,
+    catalog_files,
+    catalog_text,
+    parse_catalog,
+)
 from arkitekt_spec.blok.corpus import write
 from arkitekt_spec.blok.vocabulary import load_vocabulary, vocabulary_text
 
 DEFAULT_INTO = Path("packages/bsx/src/spec")
 BLOK = Path(__file__).resolve().parent.parent / "arkitekt_spec" / "blok"
-
-
-def global_catalog_files() -> list[str]:
-    """The global catalogs at the versions the vocabulary names, relative to ``arkitekt_spec/blok``."""
-    return [f"catalogs/{name}@{version}.json" for name, version in load_vocabulary().catalogs.items()]
+ORKESTRATOR_EXPORT = Path("dist") / "catalog" / "orkestrator@1.json"
 
 
 def sync(checkout: Path, into: Path = DEFAULT_INTO) -> list[Path]:
-    """Copy the global catalogs in from ``checkout / into``, then write the language out into it."""
-    source = checkout / into
+    """Write the vocabulary, every catalog this package ships and the corpus out into ``checkout / into``."""
+    target = checkout / into
     written: list[Path] = []
-    for file in global_catalog_files():
-        text = (source / file).read_text(encoding="utf-8")
-        json.loads(text)  # refuses a file that is not JSON
-        (BLOK / file).write_text(text, encoding="utf-8")
-        written.append(BLOK / file)
-    base = f"catalogs/{BASE_NAME}@{load_vocabulary().base_version}.json"
-    (source / base).parent.mkdir(parents=True, exist_ok=True)
-    (source / base).write_text(catalog_text(base), encoding="utf-8")
-    (source / "vocabulary.json").write_text(vocabulary_text(), encoding="utf-8")
-    written += [source / base, source / "vocabulary.json", write(source)]
+    for file in catalog_files():
+        (target / file).parent.mkdir(parents=True, exist_ok=True)
+        (target / file).write_text(catalog_text(file), encoding="utf-8")
+        written.append(target / file)
+    (target / "vocabulary.json").write_text(vocabulary_text(), encoding="utf-8")
+    written += [target / "vocabulary.json", write(target)]
     return written
 
 
-def sync_orkestrator_module(checkout: Path) -> Path:
-    """Copy the ``orkestrator`` module in from an Orkestrator checkout's catalog export."""
-    text = (checkout / "dist" / "catalog" / "blok-module.json").read_text(encoding="utf-8")
-    if json.loads(text).get("name") != "orkestrator":
-        raise ValueError("blok-module.json is not the orkestrator module")
-    target = BLOK / "modules" / "orkestrator.json"
+def sync_orkestrator_catalog(checkout: Path) -> Path:
+    """Copy the Orkestrator's catalog in from an Orkestrator checkout's export.
+
+    Raises:
+        ValueError: If the export is not that catalog, or redefines a component of the base.
+    """
+    text = (checkout / ORKESTRATOR_EXPORT).read_text(encoding="utf-8")
+    catalog = parse_catalog(text, str(ORKESTRATOR_EXPORT))
+    if catalog.id != ORKESTRATOR_CATALOG_ID:
+        raise ValueError(f"{ORKESTRATOR_EXPORT} is the catalog {catalog.id!r}, not {ORKESTRATOR_CATALOG_ID!r}")
+    catalog_chain(catalog)
+    target = BLOK / load_vocabulary().bundled_catalogs[ORKESTRATOR_CATALOG_ID]
     target.write_text(text, encoding="utf-8")
     return target
 
 
 def main() -> None:
-    """Sync into a checkout, or copy the orkestrator module in."""
+    """Sync into a bsx checkout, or copy the Orkestrator's catalog in."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("checkout", nargs="?", type=Path, help="a checkout of @arkitektio/bsx (typescript/libraries/bsx): its catalogs are copied in, the language written out")
+    parser.add_argument("checkout", nargs="?", type=Path, help="a checkout of @arkitektio/bsx (typescript/libraries/bsx): the language and the catalogs are written out into it")
     parser.add_argument("--into", type=Path, default=DEFAULT_INTO, help=f"where in the checkout (default {DEFAULT_INTO})")
-    parser.add_argument("--orkestrator", type=Path, metavar="CHECKOUT", help="copy the orkestrator module in from this Orkestrator checkout's dist/catalog/blok-module.json")
+    parser.add_argument("--orkestrator", type=Path, metavar="CHECKOUT", help=f"copy the Orkestrator's catalog in from this Orkestrator checkout's {ORKESTRATOR_EXPORT}")
     args = parser.parse_args()
     if args.orkestrator is not None:
-        print(sync_orkestrator_module(args.orkestrator))
+        print(sync_orkestrator_catalog(args.orkestrator))
     if args.checkout is not None:
         for path in sync(args.checkout, args.into):
             print(path)

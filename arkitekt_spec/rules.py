@@ -533,7 +533,6 @@ class DefinitionRules(BaseModel):
         return self
 
 
-_CATALOG = re.compile(r"[a-z][a-z0-9_-]*@[0-9]+")
 _FIELD_PATH = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*")
 _LOCAL_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _GRAPHQL_COMMENT = re.compile(r"#[^\n]*")
@@ -583,7 +582,7 @@ class _BlokDeclarations(Protocol):
 
     components: object
     source: str | None
-    catalogs: tuple[str, ...]
+    catalog: str | None
     locals: Sequence[_Keyed]
     queries: Sequence[_Query]
     subscriptions: Sequence[_Subscription]
@@ -593,7 +592,7 @@ class _BlokDeclarations(Protocol):
 def check_blok_declarations(blok: _BlokDeclarations, kind: str) -> None:
     """The server's ``check_blok_manifest`` for what a v2 blok declares beside its tree.
 
-    Sent one way; its catalogs spelled ``name@version``; its locals, queries and subscriptions
+    Sent one way; its catalog an address or a name; its locals, queries and subscriptions
     each named once, by a name no root reserves; a query a ``query``, a subscription a
     ``subscription``, neither a mutation; a subscription's history a declared query; and,
     for an action logo, nothing but the task it is drawn against.
@@ -608,9 +607,11 @@ def check_blok_declarations(blok: _BlokDeclarations, kind: str) -> None:
     if blok.components is None and blok.source is None:
         raise BlokError("manifest.sent", problem="and this one has neither")
     reserved = load_vocabulary().reserved
-    for catalog in blok.catalogs or ():
-        if not _CATALOG.fullmatch(catalog):
-            raise BlokError("manifest.catalog", catalog=catalog)
+    if blok.catalog is not None:
+        from arkitekt_spec.blok.catalogs import is_catalog_target
+
+        if not is_catalog_target(blok.catalog):
+            raise BlokError("manifest.catalog", catalog=blok.catalog)
     named: tuple[tuple[str, Sequence[_Keyed]], ...] = (("locals", blok.locals), ("queries", blok.queries), ("subscriptions", blok.subscriptions))
     for what, entries in named:
         keys = [entry.key for entry in entries]

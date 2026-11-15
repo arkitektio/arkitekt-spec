@@ -36,7 +36,7 @@ from arkitekt_spec.declare.blok.declarations import (
 )
 from arkitekt_spec.declare.blok.infer import resolve_scope
 from arkitekt_spec.declare.blok.origin import declared_at, finding_key, warn_at
-from arkitekt_spec.declare.blok.registry import catalogs_of, check_unknown_module
+from arkitekt_spec.declare.blok.registry import check_catalog_target, checked_view, minor_needed
 from arkitekt_spec.declare.blok.validate import BlokScope, blok_context, check_blok_tree
 from arkitekt_spec.declare.catalogs import BlokCheckMode
 from arkitekt_spec.scalars import JSONSerializable
@@ -71,8 +71,8 @@ class ActionBlok:
         demo: What a preview renders it with (``{"task": ..., "args": ..., "deps": ...}``).
         queries: Its declared reads.
         subscriptions: Its declared streams.
-        catalogs: The catalogs it needs (``"ui@1"``); those its components come from when left out.
-        module: The module (an app's own extras) it renders against; the Orkestrator's when left out.
+        catalog: The catalog it is written for (the address it is published at, or the name of
+            one this app declared); the base catalog, which every renderer draws, when left out.
         description: What it shows of a run.
     """
 
@@ -81,8 +81,7 @@ class ActionBlok:
     demo: "BlokDemoInput | Mapping[str, JSONSerializable] | None" = None
     queries: "Mapping[str, Query] | None" = None
     subscriptions: "Mapping[str, Subscription] | None" = None
-    catalogs: Sequence[str] | None = None
-    module: str | None = None
+    catalog: str | None = None
     description: str | None = None
 
 
@@ -127,7 +126,7 @@ def build_action_bloks(
     interface: str | None = None,
     kind: Literal["action", "assign"] = "action",
 ) -> tuple[ActionBlokInput, ...]:
-    """The wire bloks of an action, checked against its dependencies, its args and their catalogs.
+    """The wire bloks of an action, checked against its dependencies and its args.
 
     A warning names the blok :func:`action_blok_id` (``interface`` and the blok's context), so a
     reader can tell an action's html blok from its scene. ``kind="assign"`` builds the bloks that
@@ -142,7 +141,7 @@ def build_action_bloks(
     at = declared_at()
     phase = "assign " if kind == "assign" else ""
     for blok in as_action_bloks(bloks):
-        view = registry.blok_view(blok.module)
+        view = registry.blok_view(blok.catalog)
         source = blok.component if isinstance(blok.component, str) else None
         try:
             component = parse_bsx(blok.component, view=view) if isinstance(blok.component, str) else blok.component
@@ -162,7 +161,6 @@ def build_action_bloks(
         queries = query_inputs(blok.queries)
         subscriptions = subscription_inputs(blok.subscriptions)
         demo = demo_input(blok.demo)
-        catalogs = tuple(blok.catalogs or ()) or catalogs_of(component, view)
         scope = BlokScope(
             kind=kind,
             context=context.value,
@@ -171,17 +169,16 @@ def build_action_bloks(
             queries=queries,
             subscriptions=subscriptions,
             args=tuple(arg_keys) if arg_keys is not None else None,
-            catalogs=catalogs,
             demo=demo,
         )
         scope = resolve_scope(component, scope, view)
         reported: set[str] = set()
         blok_id = action_blok_id(interface, context, kind) if interface is not None else None
-        for finding in check_unknown_module(blok.module, registry):
+        for finding in check_catalog_target(blok.catalog, registry):
             if mode == "strict":
                 raise BlokError.from_finding(finding)
             warn_at(f"{owner} ({phase}{context.value.lower()} blok): {finding.message} [{finding.code}]", at, finding=finding, blok=blok_id)
-        for finding in check_blok_tree(component, scope, view):
+        for finding in check_blok_tree(component, scope, checked_view(view)):
             if finding.level == "error" or mode == "strict":
                 where = f", {finding.path}" if finding.path else ""
                 message = f"{owner} ({phase}{context.value.lower()} blok{where}): {finding.message}"
@@ -196,9 +193,9 @@ def build_action_bloks(
         optional: dict[str, object] = {
             "components": None if source is not None else (component,),
             "source": source,
-            "module": blok.module,
+            "catalog": blok.catalog,
+            "catalog_minor": minor_needed(component, view) or None,
             "description": blok.description,
-            "catalogs": catalogs or None,
             "locals": locals_ or None,
             "demo": demo,
             "queries": queries or None,

@@ -18,6 +18,39 @@ runtime implements. SDKs build on it; apps import the same names from
 [arkitekt](https://github.com/arkitektio/arkitekt). It depends on pydantic, pyyaml and three small
 pure-python helpers, and on no runtime, transport or client.
 
+## Bloks
+
+A blok is UI an app declares, written in BSX. `arkitekt_spec.blok` owns three layers, each
+versioned on its own:
+
+| Layer | What it is | Where |
+| --- | --- | --- |
+| The language | syntax, roots (`self`, `deps`, `args`, `task`, `assign`, ...), records, functions | `blok/vocabulary.json` (`vocab` 2, `minor` for what it gained since) |
+| The base catalog | everything every renderer draws: html, scene and logo components, and the parts of a host's own interface a blok may place (`<args />`, `<ask />`, `<timeline />`) | `blok/catalogs/base@3.json`, `https://arkitekt.live/catalogs/base/v3` |
+| App catalogs | what one frontend draws beyond the base; each extends another and only ever adds | the frontend's to publish. A snapshot of the Orkestrator's ships as `blok/catalogs/orkestrator@1.json` |
+
+A blok names the one catalog it is written for (`catalog=`), the address it is published at;
+left out, it is written for the base catalog and runs in every renderer. Using a component of
+another catalog is refused (`catalog.target`).
+
+Text is a child like any other: `<Button>Go</Button>` is stored as a `Button` with a `#text`
+node under it, and what the `Button` does with it is its renderer's to say. Parsing BSX therefore
+needs no catalog, and a blok is stored the same way whoever parsed it.
+
+Who checks what:
+
+- **An app registering its bloks** is held to the language alone: roots, calls, records, markup.
+- **A server** likewise. It never fetches or checks a catalog.
+- **Whoever draws a blok** checks it against the catalog it has, and shows a placeholder for
+  what it lacks.
+- **An author's tooling** (`arkitekt check`, the language server) checks the catalog too: it
+  loads the app inside `checking_catalogs()`, and resolves a catalog that does not ship with
+  `blok.catalogs.fetch.resolve_catalog` (https only, size and time capped, data never executed,
+  kept for offline use).
+
+`scripts/sync_standard_catalog.py` writes the language and the base catalog out to
+`@arkitektio/bsx`, and copies the Orkestrator's catalog in.
+
 ## Workflows and recovery
 
 An implementation carries two claims the server keeps:

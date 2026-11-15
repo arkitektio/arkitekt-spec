@@ -140,6 +140,8 @@ class PropSpec:
     """For a ``CALLBACK`` prop of a v2 catalog, the payload it is called with; ``()`` when none."""
     values: tuple[str, ...] | None = None
     """For a ``STRING`` prop, the closed set of literals the component draws; None: any string."""
+    since: int = 0
+    """The minor version of its catalog that added the prop; 0: there from the start."""
 
 
 @dataclass(frozen=True)
@@ -162,8 +164,18 @@ class ComponentSpec:
     """Components of which none may be an ancestor."""
     text_prop: str | None = None
     """The prop text children fill (``<Button>Grip</Button>`` sets ``label``); None: it takes no text."""
+    kinds: tuple[str, ...] = ()
+    """The blok kinds it may be placed in (``assign``); empty: any kind."""
+    service: str | None = None
+    """The service it needs where it is drawn (``mikro``); None: none beyond the host's own."""
+    since: int = 0
+    """The minor version of its catalog that added it; 0: there from the start."""
+    group: str | None = dataclass_field(default=None, compare=False)
+    """The family it is listed under (``language``, ``ui``, ``html``, ``run``, ``scene``, ``logo``)."""
+    touch: str | None = dataclass_field(default=None, compare=False)
+    """How it is drawn where there is no pointer, when that differs."""
     catalog: str | None = dataclass_field(default=None, compare=False)
-    """The catalog that provides it, as ``name@version`` (``ui@1``)."""
+    """The catalog that provides it, as ``name@version`` (``base@3``)."""
 
     def prop(self, key: str) -> PropSpec | None:
         """The prop called ``key``, or ``None``."""
@@ -184,6 +196,13 @@ class Catalog:
     version: int | None = None
     description: str | None = None
     registered: bool = True
+    id: str | None = None
+    """What a blok names it by: the address it is published at
+    (``https://arkitekt.live/catalogs/orkestrator/v1``). None for a catalog nothing targets."""
+    minor: int = 0
+    """How far it has grown within its version: a version only ever gains components and props."""
+    extends: str | None = None
+    """The id of the catalog it adds to; None for the base catalog, which adds to none."""
 
 
 # --------------------------------------------------------------------------- the base manifest
@@ -268,10 +287,7 @@ def is_base_component(name: str) -> bool:
     return name in base_components()
 
 
-# --------------------------------------------------------------------------- the standard catalog
-
-STANDARD_CATALOG_NAME = "orkestrator"
-"""The catalog a blok is checked against when it names none: what the Orkestrator app renders."""
+# --------------------------------------------------------------------------- catalog payloads
 
 def _parse_context(raw: dict, component: str, value: object) -> str | None:  # type: ignore[type-arg]
     if value is None:
@@ -324,6 +340,7 @@ def _parse_components(raw: dict, entries: Iterable[dict], *, camel: bool) -> lis
                         else None
                     ),
                     values=tuple(values) if values is not None else None,  # pyright: ignore[reportUnknownArgumentType]
+                    since=int(prop.get("since") or 0),
                 )
             )
         version = raw.get("version")
@@ -339,6 +356,11 @@ def _parse_components(raw: dict, entries: Iterable[dict], *, camel: bool) -> lis
                 downstream_of=tuple(field(entry, "downstream_of") or ()),  # type: ignore[arg-type]
                 not_downstream_of=tuple(field(entry, "not_downstream_of") or ()),  # type: ignore[arg-type]
                 text_prop=field(entry, "text_prop") or None,  # type: ignore[arg-type]
+                kinds=tuple(entry.get("kinds") or ()),
+                service=entry.get("service") or None,
+                since=int(entry.get("since") or 0),
+                group=entry.get("group") or None,
+                touch=entry.get("touch") or None,
                 catalog=f"{raw.get('name')}@{version}" if version is not None else raw.get("name"),
             )
         )
@@ -348,7 +370,7 @@ def _parse_components(raw: dict, entries: Iterable[dict], *, camel: bool) -> lis
 
 def parse_catalog_components(raw: "Mapping[str, object]", *, camel: bool) -> list[ComponentSpec]:
     """Every component of a catalog payload, base ones included: a published catalog spells its
-    keys in camelCase, the spec's own files (base, the v2 catalogs, the orkestrator module) in snake_case.
+    keys in camelCase, the spec's own files (the base catalog, an app catalog) in snake_case.
 
     Raises:
         ValueError: If two components share a name, or a prop has an unknown kind or context.
@@ -397,11 +419,6 @@ def _parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]
         components=tuple(components),
         description=raw.get("description"),
     )
-
-
-def is_standard_catalog(name: str | None) -> bool:
-    """Whether a blok naming ``name`` is checked against the standard catalog: it names it, or none."""
-    return name is None or name == STANDARD_CATALOG_NAME
 
 
 def parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]

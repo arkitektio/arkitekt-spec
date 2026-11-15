@@ -6,14 +6,13 @@ from pydantic import ValidationError
 from arkitekt_spec.declare.task import TaskBlok
 
 
-def test_a_source_blok_says_its_language_catalogs_and_module() -> None:
-    blok = TaskBlok(source="<Html><Card><Button>Go</Button></Card></Html>", vocab=2, catalogs=["ui@1"], module="orkestrator")
-    assert blok.model_dump(exclude_none=True) == {
-        "source": "<Html><Card><Button>Go</Button></Card></Html>", "vocab": 2, "catalogs": ["ui@1"], "module": "orkestrator",
-    }
+def test_a_source_blok_says_its_language_and_the_catalog_it_is_written_for() -> None:
+    catalog = "https://arkitekt.live/catalogs/orkestrator/v1"
+    blok = TaskBlok(source="<Html><Card><Button>Go</Button></Card></Html>", vocab=2, catalog=catalog)
+    assert blok.model_dump(exclude_none=True) == {"source": "<Html><Card><Button>Go</Button></Card></Html>", "vocab": 2, "catalog": catalog}
 
 
-@pytest.mark.parametrize("field", ["modules", "catalog", "now_interval"])
+@pytest.mark.parametrize("field", ["modules", "catalogs", "module", "now_interval"])
 def test_the_names_before_revision_2_are_refused(field: str) -> None:
     with pytest.raises(ValidationError):
         TaskBlok.model_validate({"source": "<Html><Card /></Html>", field: None})

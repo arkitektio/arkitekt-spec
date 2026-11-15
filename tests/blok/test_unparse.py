@@ -28,7 +28,30 @@ def test_derived_ids_are_left_out_and_explicit_ones_kept() -> None:
     assert printed == '<Card>\n  <Button id="go" />\n  <Button />\n</Card>'
 
 
-def test_a_text_prop_that_is_not_last_stays_an_attribute() -> None:
+def test_text_prints_between_the_tags_on_their_line_when_it_is_the_one_child() -> None:
+    assert to_bsx(parse_bsx("<Button>Go</Button>")) == "<Button>Go</Button>"
+    assert to_bsx(parse_bsx("<Card>Hello <Badge>new</Badge></Card>")) == '<Card>\n  {"Hello "}\n  <Badge>new</Badge>\n</Card>'
+    assert to_bsx(parse_bsx("<Foo>of a catalog not known here</Foo>")) == "<Foo>of a catalog not known here</Foo>"
+
+
+def test_a_tree_stored_before_text_was_a_node_still_prints() -> None:
+    """Its text prop stays the attribute it is; its implicit Text prints as the text it was."""
+    label = ComponentNodeInput(id="Button[0]", component="Button", props=(ComponentPropInput(key="label", static_value="Go"),))
+    implicit = ComponentNodeInput(
+        id="Card[0]",
+        component="Card",
+        children=(
+            ComponentNodeInput(id="Card[0]/#0", component="Text", props=(ComponentPropInput(key="text", static_value="Hello"),)),
+            ComponentNodeInput(id="Card[0]/Badge[0]", component="Badge"),
+        ),
+    )
+
+    assert to_bsx(label) == '<Button label="Go" />' and parse_bsx(to_bsx(label)) == label
+    assert to_bsx(implicit) == "<Card>\n  Hello\n  <Badge />\n</Card>"
+    assert [node.component for node in parse_bsx(to_bsx(implicit)).children or ()] == ["#text", "Badge"]
+
+
+def test_a_text_prop_stays_an_attribute() -> None:
     tree = ComponentNodeInput(
         id="Badge[0]",
         component="Badge",

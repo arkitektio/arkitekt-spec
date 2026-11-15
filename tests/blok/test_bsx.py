@@ -68,13 +68,33 @@ def test_an_expression_error_says_where_in_the_source() -> None:
 # -- text
 
 
-def test_text_fills_the_components_text_prop() -> None:
-    assert prop(parse_bsx("<Button>Grip</Button>"), "label").static_value == "Grip"
-    assert prop(parse_bsx("<Badge>{task.status}</Badge>"), "text").dynamic_value.path == "task.status"  # type: ignore[union-attr]
+def text(node: ComponentNodeInput, index: int = 0) -> ComponentPropInput:
+    """The value of the ``index``-th child of ``node``, which is a text node."""
+    node = child(node, index)
+    assert node.component == "#text" and node.children is None and len(node.props or ()) == 1
+    return prop(node, "value")
+
+
+def test_text_is_a_child_node_holding_its_value() -> None:
+    button = parse_bsx("<Button>Grip</Button>")
+
+    assert button.props is None, "what a Button does with its text is its renderer's to say"
+    assert [(node.id, node.component) for node in button.children or ()] == [("Button[0]/#0", "#text")]
+    assert text(button).static_value == "Grip"
+    assert text(parse_bsx("<Badge>{task.status}</Badge>")).dynamic_value.path == "task.status"  # type: ignore[union-attr]
+
+
+def test_parsing_text_needs_no_catalog() -> None:
+    """A component nobody here knows, one that takes children, one in a scene: all the same to the parser."""
+    for source in ("<Foo>x</Foo>", "<Card>x</Card>", "<div>x</div>", "<Scene><Model>x</Model></Scene>", "<AgentLogo><G>x</G></AgentLogo>"):
+        tree = parse_bsx(source)
+        holder = tree if tree.children and tree.children[0].component == "#text" else child(tree)
+        assert text(holder).static_value == "x", source
+    assert parse_bsx('<Button label="a">b</Button>').props is not None, "set twice is the catalog's to refuse"
 
 
 def test_text_with_expressions_is_a_template() -> None:
-    call = prop(parse_bsx('<Text>Arrived at {move.args.position}, {"{"}ok{"}"}</Text>'), "text").util_call
+    call = text(parse_bsx('<Text>Arrived at {move.args.position}, {"{"}ok{"}"}</Text>')).util_call
     assert call is not None and call.operation == "str.template"
     template, values = call.arguments or ()
     assert template.value_literal == "Arrived at {0}, {{ok}}"
@@ -85,26 +105,26 @@ def test_whitespace_follows_jsx() -> None:
     assert jsx_text("\n   Arrived   at\n   the   end  \n  ") == "Arrived at the end"
     assert jsx_text("a ") == "a "
     assert jsx_text("  \n  ") == ""
-    assert prop(parse_bsx('<Text>{a}{" "}{b}</Text>'), "text").util_call is not None
+    assert text(parse_bsx('<Text>{a}{" "}{b}</Text>')).util_call is not None
 
 
-def test_mixed_content_becomes_implicit_text_nodes() -> None:
+def test_each_run_of_text_between_elements_is_a_node() -> None:
     tree = parse_bsx("<p>Hello <span>world</span> and {viewer.user.username}</p>")
 
-    assert [(c.id, c.component) for c in tree.children or ()] == [("p[0]/#0", "span"), ("p[0]/span[0]", "span"), ("p[0]/#1", "span")]
-    assert prop(child(tree, 0), "text").static_value == "Hello "
+    assert [(c.id, c.component) for c in tree.children or ()] == [("p[0]/#0", "#text"), ("p[0]/span[0]", "span"), ("p[0]/#1", "#text")]
+    assert text(tree, 0).static_value == "Hello " and text(child(tree, 1)).static_value == "world"
+    assert text(tree, 2).util_call is not None
+
+
+def test_no_element_can_be_called_a_text_node() -> None:
+    assert refused('<#text value="x" />').code == "bsx.syntax"
 
 
 @pytest.mark.parametrize(
     ("source", "code"),
     [
-        ("<Card>hi</Card>", "bsx.text_not_accepted"),
-        ("<div>hi</div>", "bsx.text_not_accepted"),
-        ("<Scene><Model>x</Model></Scene>", "bsx.text_in_context"),
-        ("<AgentLogo><G>x</G></AgentLogo>", "bsx.text_in_context"),
-        ("<Foo>x</Foo>", "bsx.text_unknown_component"),
-        ('<Button label="a">b</Button>', "bsx.text_and_prop"),
         ("<Text>{self.go()}</Text>", "bsx.text_callback"),
+        ("<Text>{ui.copy(task.id)}</Text>", "bsx.text_callback"),
     ],
 )
 def test_text_where_it_cannot_go_is_refused(source: str, code: str) -> None:
@@ -114,7 +134,7 @@ def test_text_where_it_cannot_go_is_refused(source: str, code: str) -> None:
 def test_text_in_a_popout_is_html_again() -> None:
     tree = parse_bsx('<Scene><Model src={self.assets.m}><Popout node="arm"><Text>hi</Text></Popout></Model></Scene>')
 
-    assert prop(child(child(child(tree))), "text").static_value == "hi"
+    assert text(child(child(child(tree)))).static_value == "hi"
 
 
 # -- expressions

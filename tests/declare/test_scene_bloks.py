@@ -50,7 +50,7 @@ def test_a_scene_blok_registers_and_carries_its_context_and_default() -> None:
 
     declared = build_declared_bloks(registry)
     wire = declared["scope_3d"].model_dump(mode="json", by_alias=True, exclude_none=True)
-    assert (wire["context"], wire["default"], wire["catalogs"]) == ("SCENE", True, ["scene@1", "ui@1"])
+    assert (wire["context"], wire["default"]) == ("SCENE", True) and "catalog" not in wire
     panel = declared["turret_panel"].model_dump(mode="json", by_alias=True, exclude_none=True)
     assert (panel["context"], panel["forModel"], panel["forNode"]) == ("HTML", REF, "turret")
 

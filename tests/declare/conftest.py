@@ -1,3 +1,5 @@
+from collections.abc import Iterator
+
 import pytest
 
 from arkitekt_spec.declare.structures.registry import StructureRegistry
@@ -20,3 +22,17 @@ def simple_registry() -> StructureRegistry:
     # The one model the test functions name; a model is declared on an app.
     registry.model(Karl)
     return registry
+
+
+@pytest.fixture(autouse=True)
+def _catalogs_checked() -> Iterator[None]:
+    """These tests declare bloks as an author's tooling loads them: held to their catalog too.
+
+    An app that merely registers is held to the language alone (``test_catalog_checks.py``).
+    """
+    from arkitekt_spec.blok.catalogs import checking_catalogs, forget_catalogs
+
+    forget_catalogs()
+    with checking_catalogs():
+        yield
+    forget_catalogs()

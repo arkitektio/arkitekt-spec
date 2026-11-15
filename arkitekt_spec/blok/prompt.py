@@ -1,4 +1,4 @@
-"""The blok language as a model reads it: a system prompt made from the vocabulary and the catalogs.
+"""The blok language as a model reads it: a system prompt made from the vocabulary and the catalog the blok is written for.
 
 What a model is told about components, props and their values, records, roots and functions is
 generated from the files the parser, the validator and the renderers load, so it cannot drift from
@@ -32,8 +32,10 @@ A blok is written in BSX (blok language v{vocab}), which reads like JSX:
 - `attr="..."` is always a literal string. `attr={{...}}` is an expression: numbers and \
 booleans are written as expressions (min={{1}}, fullWidth={{true}}). A prop listed with \
 quoted values takes only those.
-- Text goes between tags when the component has a text prop (the `[prop]` after its name \
-below): <Text>Hello</Text>, <Button>Move</Button>, <Text>T = {{deps.stage.environment.temperature}} °C</Text>.
+- Text goes between tags: <Text>Hello</Text>, <Button>Move</Button>, \
+<Text>T = {{deps.stage.environment.temperature}} °C</Text>. A component with a text prop (the \
+`[prop]` after its name below) makes the text that prop; any other that takes children draws \
+it in place. One that takes neither takes no text.
 - Expressions read paths: `deps.<key>.<state>.<field>` (a dependency's state), \
 `deps.<key>.tasks.<action>` (the latest task of one of its actions), a bare local (`x`), \
 `args.<key>` (the item the blok is opened for), and records named with `into`. Operators: \
@@ -128,13 +130,19 @@ def _record_fields(fields: JSON, prefix: str = "") -> list[str]:
     return out
 
 
-def records_text() -> str:
-    """Every record shape (the task record, a query's, ``viewer``, ...), field by field."""
+def records_text(kind: str | None = None) -> str:
+    """Every record shape (the task record, a query's, ``viewer``, ...), field by field; of a
+    ``kind``, without the record of a root that kind does not read (``assign``)."""
+    vocabulary = load_vocabulary()
+    roots = vocabulary.kinds[kind].roots if kind is not None else None
     records = _raw()["records"]
     assert isinstance(records, dict)
     blocks: list[str] = []
     for name, record in records.items():
         assert isinstance(record, dict)
+        # The task record is also every `into` record's, so it is always told.
+        if roots is not None and name != "task" and name in vocabulary.data_roots and name not in roots:
+            continue
         description = record.get("description")
         blocks.append(f"The {name} record" + (f" ({description})" if description else "") + ": " + "; ".join(_record_fields(record["fields"])))
     return "\n".join(blocks)
@@ -182,18 +190,23 @@ def component_signature(component: ComponentSpec, *, skip: Iterable[str] = UNIVE
     return f"{line} — {description}" if description else line
 
 
-def drawn_in(view: BlokView, context: str) -> list[ComponentSpec]:
-    """The components a blok drawn in ``context`` may place at its top level, in catalog order."""
-    return [component for component in view.components.values() if component.inherits_context or component.context == context]
+def drawn_in(view: BlokView, context: str, kind: str | None = None) -> list[ComponentSpec]:
+    """The components a blok drawn in ``context`` may place at its top level, in catalog order;
+    of a ``kind``, without those that belong to other kinds (``<args>`` outside an assign blok)."""
+    return [
+        component
+        for component in view.components.values()
+        if (component.inherits_context or component.context == context) and (kind is None or not component.kinds or kind in component.kinds)
+    ]
 
 
-def components_text(view: BlokView, context: str = "HTML", names: Iterable[str] | None = None) -> str:
+def components_text(view: BlokView, context: str = "HTML", names: Iterable[str] | None = None, kind: str | None = None) -> str:
     """The signature lines of the components ``names`` (default: every one drawn in ``context``),
     and of those their children are drawn in when they bridge contexts (``<Scene>``)."""
     if names is not None:
         chosen = [component for name in names if (component := view.component(name)) is not None]
     else:
-        chosen = drawn_in(view, context)
+        chosen = drawn_in(view, context, kind)
     lines = [
         (
             "Components, as Name[text prop](props) — `!` required, quoted values the only ones a prop takes, "
@@ -230,7 +243,8 @@ def functions_text(view: BlokView, kind: str | None = None) -> str:
     effects = [
         function
         for function in view.functions.values()
-        if function.effect and (roots is None or not function.task_operation or "task" in roots)
+        # An effect named after a root (task.cancel, assign.start) only where the blok reads it.
+        if function.effect and (roots is None or function.name.split(".", 1)[0] not in load_vocabulary().data_roots or function.name.split(".", 1)[0] in roots)
     ]
     lines = ["Functions (call with named arguments, `?` optional):"]
     lines += [f"- {function_signature(function)}" for function in pure]
@@ -251,7 +265,7 @@ def blok_prompt(
     """Everything a model needs to write a blok of ``kind`` drawn in ``context``.
 
     Args:
-        view: The catalogs in force; the Orkestrator's default view when None.
+        view: The catalog the blok is written for; the base catalog's view when None.
         kind: The blok kind (``agent``, ``custom``, ``task``, ``action``): which roots it reads.
         context: Where it is drawn (``HTML``, ``SCENE``, ...): which components are listed.
         components: Only these components' signatures (a short prompt, with a tool that
@@ -259,7 +273,7 @@ def blok_prompt(
         examples: Sources shown as they are; the caller checks they validate.
     """
     resolved = view or default_view()
-    sections = [syntax(), roots_text(kind), records_text(), components_text(resolved, context, components), functions_text(resolved, kind)]
+    sections = [syntax(), roots_text(kind), records_text(kind), components_text(resolved, context, components, kind), functions_text(resolved, kind)]
     for example in examples:
         sections.append(f"An example:\n```xml\n{example}\n```")
     return "\n\n".join(sections)

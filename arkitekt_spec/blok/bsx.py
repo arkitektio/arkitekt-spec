@@ -10,8 +10,10 @@ expression in braces, and text children are content::
 
 - ``attr="..."`` is always a literal string, ``attr={...}`` an expression (:mod:`.expr`), a bare
   ``attr`` is ``true``.
-- Text children fill the component's ``text_prop``; mixed with elements they become implicit
-  ``Text`` nodes. Several parts desugar to ``str.template``. Whitespace follows JSX.
+- Text is a child like any other: each run of text between elements is stored as a ``#text``
+  node holding its ``value``. What a component does with it (a ``Button`` makes it its
+  label) is its renderer's to say, so no catalog is needed to parse. Several parts of one run
+  desugar to ``str.template``. Whitespace follows JSX.
 - ``className={[...]}`` and ``className={{...}}`` desugar to ``str.classes`` (clsx).
 - ``<foreach items={...} let="p" key={...}>``: ``key`` is optional; without it items are keyed
   by their position, and the stored node has no ``key`` prop.
@@ -37,7 +39,7 @@ from arkitekt_spec.actions import (
     DynamicValueInput,
     UtilCallInput,
 )
-from arkitekt_spec.blok.catalogs import BASE_NAME, BlokView, default_view
+from arkitekt_spec.blok.catalogs import BlokView, default_view
 from arkitekt_spec.blok.expr import (
     Call,
     Compare,
@@ -59,11 +61,13 @@ from arkitekt_spec.blok.vocabulary import JSON, BlokError, load_vocabulary
 MAX_SOURCE_BYTES = 256 * 1024
 """The largest source a blok may be."""
 
-IMPLICIT_TEXT = "Text"
-#: Loose text inside an ``html@`` component becomes a ``span``, so an html-only blok stays
-#: inside the catalogs it declares; everywhere else it becomes a ``Text``.
-IMPLICIT_HTML_TEXT = "span"
-IMPLICIT_TEXTS = (IMPLICIT_TEXT, IMPLICIT_HTML_TEXT)
+#: The node a run of text is stored as: no element can be called this, so only text makes one.
+TEXT_NODE = "#text"
+#: The prop of a text node that holds its text: a literal, or an expression.
+TEXT_VALUE = "value"
+#: The components text between elements was stored as before it was a node of its own: a
+#: tree stored then still prints, as text.
+LEGACY_IMPLICIT_TEXTS = ("Text", "span")
 """The component a run of text becomes when it sits among elements."""
 CLASS_NAME = "className"
 CLASSES_FUNCTION = "str.classes"
@@ -347,13 +351,7 @@ class _Lowering:
 
     # -- nodes
 
-    def node(self, element: _Element, node_id: str, context: str, parent: str | None, loose_text: str = IMPLICIT_TEXT) -> ComponentNodeInput:
-        """``loose_text``: the component loose text becomes here, from the nearest non-language ancestor."""
-        spec = self.view.component(element.name)
-        if spec is not None and spec.catalog is not None and spec.catalog.startswith("html@"):
-            loose_text = IMPLICIT_HTML_TEXT
-        elif spec is not None and not (spec.catalog is not None and spec.catalog.startswith(f"{BASE_NAME}@")):
-            loose_text = IMPLICIT_TEXT
+    def node(self, element: _Element, node_id: str, parent: str | None) -> ComponentNodeInput:
         if element.name == ELSE and parent != IF:
             raise self.fail("bsx.else_outside_if", element.offset)
         explicit = next((a for a in element.attributes if a.name == "id"), None)
@@ -370,36 +368,20 @@ class _Lowering:
         if element.name == FOREACH:
             self.check_foreach(element)
 
-        inner = context
-        if spec is not None:
-            inner = context if spec.inherits_context else (spec.children_context or spec.context)
-
         children: list[ComponentNodeInput] = []
         runs = self.runs(element)
-        has_elements = any(isinstance(child, _Element) for child in element.children)
-        text_runs = [run for run in runs if isinstance(run, list)]
-        implicit_text = False
-        if text_runs:
-            text_prop = self.text_target(element, inner, text_runs, has_elements)
-            implicit_text = text_prop is None
-            if text_prop is not None:
-                if any(prop.key == text_prop for prop in props):
-                    raise self.fail("bsx.text_and_prop", element.offset, component=element.name, key=text_prop)
-                props.append(self.text_prop(text_prop, text_runs[0], element.offset))
         implicit = 0
         counts: dict[str, int] = {}
         seen_else = False
         for run in runs:
             if isinstance(run, list):
-                if not implicit_text:
-                    continue
                 if seen_else:
                     raise self.fail("bsx.else_order", element.offset)
                 children.append(
                     ComponentNodeInput(
                         id=f"{node_id}/#{implicit}",
-                        component=loose_text,
-                        props=(self.text_prop("text", run, element.offset),),
+                        component=TEXT_NODE,
+                        props=(self.text_prop(TEXT_VALUE, run, element.offset),),
                     )
                 )
                 implicit += 1
@@ -412,7 +394,7 @@ class _Lowering:
                     raise self.fail("bsx.else_order", child.offset)
             index = counts.get(child.name, 0)
             counts[child.name] = index + 1
-            children.append(self.node(child, f"{node_id}/{child.name}[{index}]", inner, element.name, loose_text))
+            children.append(self.node(child, f"{node_id}/{child.name}[{index}]", element.name))
         if element.name == IF:
             elses = [child for child in element.children if isinstance(child, _Element) and child.name == ELSE]
             for other in elses[:-1]:
@@ -478,34 +460,6 @@ class _Lowering:
                     current.append(expression)
         flush()
         return runs
-
-    def text_target(
-        self,
-        element: _Element,
-        context: str,
-        runs: Sequence[Sequence[Part]],
-        has_elements: bool,
-    ) -> str | None:
-        """Where text goes: the text_prop (returned), implicit Text nodes (None), or refused."""
-        component = self.view.component(element.name)
-        sample = self.sample(runs[0])
-        if component is None:
-            raise self.fail("bsx.text_unknown_component", element.offset, component=element.name, text=sample)
-        draws_text = self.vocabulary.contexts.get(context)
-        if draws_text is not None and not draws_text.text:
-            raise self.fail("bsx.text_in_context", element.offset, component=element.name, context=context, text=sample)
-        language = component.catalog is not None and component.catalog.startswith(f"{BASE_NAME}@") and component.inherits_context and component.accepts_children
-        if component.text_prop is not None and not has_elements:
-            if len(runs) > 1:
-                raise self.fail("bsx.text_not_accepted", element.offset, component=element.name, text=sample)
-            return component.text_prop
-        if component.text_prop is not None or language:
-            return None
-        raise self.fail("bsx.text_not_accepted", element.offset, component=element.name, text=sample)
-
-    @staticmethod
-    def sample(parts: Sequence[Part]) -> str:
-        return "".join(part if isinstance(part, str) else "{...}" for part in parts)[:60]
 
     def text_prop(self, key: str, parts: Sequence[Part], offset: int) -> ComponentPropInput:
         if len(parts) == 1:
@@ -789,8 +743,8 @@ def parse_bsx(source: str, *, view: BlokView | None = None) -> ComponentNodeInpu
 
     Args:
         source: The blok's source: one root element.
-        view: The catalogs that say which prop text children fill; the Orkestrator's
-            (base, the standard catalogs and its module) when left out.
+        view: The view of the catalog the blok is written for, which says which prop text
+            children fill; the base catalog's when left out.
 
     Raises:
         BlokError: With the code of the first problem and where it is (``line``, ``column``).
@@ -813,7 +767,7 @@ def parse_bsx_with_spans(source: str, *, view: BlokView | None = None) -> tuple[
     markup = _Markup(source, locate)
     root = markup.document()
     lowering = _Lowering(view or default_view(), locate, markup)
-    tree = lowering.node(root, f"{root.name}[0]", "HTML", None)
+    tree = lowering.node(root, f"{root.name}[0]", None)
     return tree, lowering.spans
 
 

@@ -9,19 +9,19 @@ and codes, never message text.
 
     python -m arkitekt_spec.blok.corpus OUT_DIR    # writes bsx_v2.json
 
-The file is self-describing: it carries the vocab version, the catalogs and the text table
-(which prop text children fill, and where text cannot be drawn) the spec parsed with. A checked
-case's scope has ``catalog``: whether it is checked against the default view (base, the standard
-catalogs and the ``orkestrator`` module) or against no catalog at all, and ``module``: a module
-(in the catalog file format) the view takes in after the Orkestrator's, or null. A checked case's
+The file is self-describing: it carries the vocab version and the catalogs the spec checked
+with. Parsing needs no catalog: text is stored as nodes. A checked
+case's scope has ``catalog``: whether it is checked against a catalog or held to the language
+alone, and ``target``: the id of the catalog it is written for, or null for the base. A checked case's
 ``resolved`` is its scope after inference (``locals`` each with its kind): what a checker checks
-against, and what a server stores as a blok's resolved locals. Dependencies are never inferred.
+against. ``language`` is the same with no catalog read at all (``resolved`` and ``codes``):
+what a server, which holds a blok to the language alone, finds and stores. Dependencies are never inferred.
 """
 
 import json
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -33,10 +33,9 @@ from arkitekt_spec.actions import (
     ComponentNodeInput,
 )
 from arkitekt_spec.blok.bsx import parse_bsx
-from arkitekt_spec.blok.catalogs import BlokView, blok_view, default_view, orkestrator_module
+from arkitekt_spec.blok.catalogs import ORKESTRATOR_CATALOG_ID, BlokView, blok_view, default_view
 from arkitekt_spec.blok.unparse import to_bsx
 from arkitekt_spec.blok.vocabulary import JSON, BlokError, load_vocabulary
-from arkitekt_spec.declare.catalogs import Catalog, parse_catalog_components
 
 if TYPE_CHECKING:
     from arkitekt_spec.declare.blok.validate import BlokScope
@@ -130,12 +129,6 @@ REFUSED: Sequence[tuple[str, str, str]] = (
     ("an id twice", '<Card><Button id="go" /><Button id="go" /></Card>', "bsx.duplicate_id"),
     ("an id that is no name", '<Card id="a/b" />', "bsx.id"),
     ("an id from an expression", "<Card id={x} />", "bsx.id"),
-    ("text where no text goes", "<Card>hi</Card>", "bsx.text_not_accepted"),
-    ("text in a div", "<div>hi</div>", "bsx.text_not_accepted"),
-    ("text in a scene", "<Scene><Model>x</Model></Scene>", "bsx.text_in_context"),
-    ("text in a logo", "<AgentLogo><G>x</G></AgentLogo>", "bsx.text_in_context"),
-    ("text in an unknown component", "<Foo>x</Foo>", "bsx.text_unknown_component"),
-    ("text and its prop", '<Button label="a">b</Button>', "bsx.text_and_prop"),
     ("a call in text", "<Text>{self.run()}</Text>", "bsx.text_callback"),
     ("else outside if", "<Card><else /></Card>", "bsx.else_outside_if"),
     ("then after else", "<if when={x}><else><A /></else><B /></if>", "bsx.else_order"),
@@ -203,9 +196,9 @@ class Check:
     subscriptions: tuple[Mapping[str, JSON], ...] = ()
     args: tuple[str, ...] | None = None
     catalog: bool = True
-    catalogs: tuple[str, ...] = field(default=())
-    module: Mapping[str, JSON] | None = None
-    """A module (in the catalog file format) the default view takes in besides the Orkestrator's."""
+    """Whether it is checked against a catalog at all, or held to the language alone."""
+    target: str | None = None
+    """The id of the catalog it is written for; None: the base catalog."""
 
 
 _ROBOT: Mapping[str, JSON] = {
@@ -234,10 +227,6 @@ _SHELF: Mapping[str, JSON] = {
 _UNNAMED: Mapping[str, JSON] = {
     "key": "self",
     "action_dependencies": [{"key": "measure", "demand": {"return_matches": [{"key": "return0", "kind": "FLOAT"}]}}],
-}
-_MINE: Mapping[str, JSON] = {
-    "name": "mine",
-    "components": [{"name": "Slider", "context": "HTML", "props": [{"key": "bind", "kind": "STRING"}]}],
 }
 _FORM: Mapping[str, JSON] = {"key": "form", "kind": "DICT", "children": [{"key": "name", "kind": "STRING"}, {"key": "count", "kind": "INT"}]}
 
@@ -310,16 +299,36 @@ CHECKS: Sequence[Check] = (
     Check("a scene blok's root", "<Card />", ("context.root",), context="SCENE"),
     Check("an html blok's root", "<Card />", ("context.root",)),
     Check("an action logo's root", '<AgentLogo><Path d="M0 0" fill="brand" /></AgentLogo>', ("context.root",), kind="action_logo", context="ACTION_LOGO"),
-    Check("a space is an action's", '<Space room="room:lab" />', ("space.kind",), context="SCENE"),
-    Check("a custom blok has no run to place", '<Space room="room:lab"><Placed dep="robot" /></Space>', ("space.kind", "space.kind"), kind="custom", context="SCENE", dependencies=(_ROBOT,)),
+    Check("a space is an action's", '<Space room="room:lab" />', ("catalog.kind",), context="SCENE"),
+    Check("a custom blok has no run to place", '<Space room="room:lab"><Placed dep="robot" /></Space>', ("catalog.kind", "catalog.kind"), kind="custom", context="SCENE", dependencies=(_ROBOT,)),
+    Check("the language alone knows no kind of a component", '<Space room="room:lab" />', (), context="SCENE", catalog=False),
     Check("an assign blok", '<Html><Card><Text>{args.slides}</Text><args /><Button onClick={assign.start()}>Start</Button></Card></Html>', (), kind="assign", dependencies=(_ROBOT,), args=("slides",)),
     Check("an assign blok places the run's dependencies", '<Html><Space room="room:lab"><Placed dep="robot" /></Space></Html>', (), kind="assign", dependencies=(_ROBOT,)),
     Check("an assign blok has no task", "<Html><Text>{task.status}</Text></Html>", ("roots.not_in_kind",), kind="assign"),
-    Check("starting a run is an assign blok's", "<Html><args /><Button onClick={assign.start()}>Start</Button></Html>", ("assign.kind", "assign.kind"), kind="action"),
+    Check("starting a run is an assign blok's", "<Html><args /><Button onClick={assign.start()}>Start</Button></Html>", ("catalog.kind", "assign.kind"), kind="action"),
     Check("an unknown component", "<Html><Frobnicator /></Html>", ("catalog.unknown_component",)),
     Check("an unknown prop", "<Html><Button frob={1} /></Html>", ("catalog.props",)),
     Check("a component outside its context", "<Html><Model /></Html>", ("catalog.props", "catalog.placement", "catalog.placement")),
-    Check("a catalog the blok does not declare", "<Scene />", ("catalog.undeclared",), context="SCENE", catalogs=("ui@1",)),
+    Check("text is a child of whatever takes children", "<Html><Card>hi <Badge>new</Badge> there</Card><div>plain</div></Html>", ()),
+    Check("text where neither text nor children go", "<Html><Separator>x</Separator></Html>", ("catalog.text",)),
+    Check("text and its prop", '<Html><Button label="a">b</Button></Html>', ("catalog.text",)),
+    Check("text in a scene", "<Scene><Model src={self.assets.scope}>x</Model></Scene>", ("catalog.placement",), context="SCENE"),
+    Check("text in a logo", "<AgentLogo><G>x</G></AgentLogo>", ("catalog.placement",), context="LOGO"),
+    Check("the language alone takes text anywhere", "<Scene><Model>x</Model><Foo>y</Foo></Scene>", (), context="SCENE", catalog=False),
+    Check("a component of a catalog the blok is not written for", "<Html><MikroSceneProbe /></Html>", ("catalog.target",)),
+    Check("a blok written for the Orkestrator's catalog", "<Html><MikroScene value={args.scene}><MikroSceneViewport /></MikroScene></Html>", (), target=ORKESTRATOR_CATALOG_ID),
+    Check("the base catalog is under every other", "<Html><Card><MikroSceneProbe /></Card></Html>", ("catalog.placement",), target=ORKESTRATOR_CATALOG_ID),
+    Check("an assign blok reads the run it prepares", '<Html><arg key="slides" /><args omit={["slides"]} given="show" /><deps /><Button disabled={!assign.ready} onClick={assign.start()}>{assign.blocked ?? "Start"}</Button></Html>', (), kind="assign", args=("slides",)),
+    Check("what the caller gave is told per argument", "<Html><if when={assign.given.slides}><Text>{args.slides}</Text></if><Text>{assign.given.nope}</Text><Text>{assign.nope}</Text></Html>", ("args.unknown", "path.unknown"), kind="assign", args=("slides",)),
+    Check("assign is an assign blok's", "<Html><Text>{assign.ready}</Text></Html>", ("roots.not_in_kind",), kind="action"),
+    Check("assign is reserved", "<Html><Text /></Html>", ("roots.reserved",), locals=({"key": "assign", "kind": "STRING"},)),
+    Check("a run's blok places the host's parts", '<Html chrome="none"><status /><ask /><returns only={["image"]} /><timeline /><Button disabled={!task.can.cancel} onClick={task.cancel()}>Stop</Button><Text>{task.paused ? "Paused" : fmt.duration(task.duration)}</Text></Html>', (), kind="action"),
+    Check("a task operation needs a task", "<Html><Button onClick={task.pause()} /></Html>", ("roots.not_in_kind",)),
+    Check("no chrome and no ask", '<Html chrome="none"><status /></Html>', ("chrome.no_ask",), kind="action"),
+    Check("a host part claims its slot even where it does not show", "<Html><if when={task.running}><timeline /></if></Html>", ("part.conditional",), kind="action"),
+    Check("a host part outside its kind", "<Html><returns /></Html>", ("catalog.kind",)),
+    Check("an agent says whether it is connected", '<Html><Text>{deps.robot.connected ? "Online" : "Offline"}</Text></Html>', (), kind="custom", dependencies=(_ROBOT,)),
+    Check("classes outside the portable subset", '<Html><Card className="before:block float-left [&>*]:p-2 grid-cols-3 translate-x-[3px] w-[12rem] -mt-[4px] space-y-2 hover:bg-muted md:flex-row dark:bg-card cursor-pointer w-48 gap-2" /></Html>', ("class.not_portable",) * 5),
     Check("an unknown function in a namespace", "<Html><Text text={str.frobnicate(a)} /></Html>", ("expr.unknown_function", "roots.unknown")),
     Check("an action blok", '<Space room="room:lab"><Placed dep="robot"><Glow on={task.running} /></Placed></Space>', (), kind="action", context="SCENE", dependencies=(_ROBOT,)),
     Check("a placed key that is no dependency", '<Space room="room:lab"><Placed dep="arm" /><Route through={["robot", "arm"]} /></Space>', ("deps.unknown", "deps.unknown"), kind="action", context="SCENE", dependencies=(_ROBOT,)),
@@ -355,7 +364,6 @@ CHECKS: Sequence[Check] = (
     Check("an unnamed return of the task", "<Html><Text text={task.returns.return1} /></Html>", ("returns.unnamed",), kind="task"),
     Check("a named return", "<Html><Text text={deps.robot.tasks.move_to.returns.arrived} /></Html>", (), kind="custom", dependencies=(_ROBOT,)),
     Check("coalesce reads its operands", "<Html><Text text={nothing ?? args.x} /></Html>", ("roots.unknown",)),
-    Check("a module shadows a standard component", "<Html><Slider bind={label} /></Html>", ("catalog.shadow",), locals=({"key": "label", "kind": "STRING"},), module=_MINE),
     Check("spectral roles are scene colours", '<Space room="room:lab"><Placed dep="robot"><Glow on={task.running} color="spectrum-green" /></Placed><Route through={["robot"]} color="spectrum-violet-soft" /></Space>', (), kind="action", context="SCENE", dependencies=(_ROBOT,)),
     Check("spectral roles are classes", '<Html><Badge className="bg-spectrum-red-soft text-spectrum-red border-spectrum-cyan/40" /></Html>', ()),
     Check("spectral pens paint a logo", '<AgentLogo><Path d="M0 0" fill="spectrum-violet" stroke="spectrum-orange" /></AgentLogo>', (), context="LOGO"),
@@ -364,22 +372,6 @@ CHECKS: Sequence[Check] = (
 
 
 # --------------------------------------------------------------------------- building
-
-
-def text_table() -> dict[str, JSON]:
-    """Per component of base and the global catalogs: what the parser needs to place text. A UI's
-    own module (the ``orkestrator`` one) is that UI's to ship, not every parser's."""
-    table: dict[str, JSON] = {}
-    for name, spec in sorted(blok_view([]).components.items()):
-        table[name] = {
-            "text_prop": spec.text_prop,
-            "context": spec.context,
-            "children_context": spec.children_context,
-            "inherits_context": spec.inherits_context,
-            "accepts_children": spec.accepts_children,
-            "catalog": spec.catalog,
-        }
-    return table
 
 
 def _tree(node: ComponentNodeInput) -> JSON:
@@ -396,19 +388,20 @@ def _scope(check: Check) -> dict[str, JSON]:
         "queries": [dict(query) for query in check.queries],
         "subscriptions": [dict(subscription) for subscription in check.subscriptions],
         "args": list(check.args) if check.args is not None else None,
-        "catalogs": list(check.catalogs),
         "catalog": check.catalog,
-        "module": dict(check.module) if check.module is not None else None,
+        "target": check.target,
     }
 
 
 def _view(check: Check) -> BlokView | None:
     if not check.catalog:
         return None
-    if check.module is None:
-        return default_view()
-    module = Catalog(name=str(check.module["name"]), components=tuple(parse_catalog_components(dict(check.module), camel=False)))
-    return blok_view([orkestrator_module(), module])
+    return blok_view(check.target) if check.target is not None else default_view()
+
+
+def _parse(check: Check) -> ComponentNodeInput:
+    """The case's tree, parsed with the view of the catalog it is written for."""
+    return parse_bsx(check.source, view=blok_view(check.target)) if check.target is not None else parse_bsx(check.source)
 
 
 def _check_scope(check: Check) -> "BlokScope":
@@ -422,7 +415,6 @@ def _check_scope(check: Check) -> "BlokScope":
         queries=tuple(BlokQueryInput.model_validate(dict(q)) for q in check.queries),
         subscriptions=tuple(BlokSubscriptionInput.model_validate(dict(s)) for s in check.subscriptions),
         args=check.args,
-        catalogs=check.catalogs,
     )
 
 
@@ -431,16 +423,33 @@ def resolved(check: Check) -> dict[str, JSON]:
     (:func:`~arkitekt_spec.declare.blok.infer.resolve_scope`)."""
     from arkitekt_spec.declare.blok.infer import resolve_scope
 
-    scope = resolve_scope(parse_bsx(check.source), _check_scope(check), _view(check))
+    scope = resolve_scope(_parse(check), _check_scope(check), _view(check))
     locals_: list[JSON] = [local.model_dump(mode="json", exclude_none=True) for local in scope.locals]
     return {"locals": locals_}
+
+
+def language_resolved(check: Check) -> dict[str, JSON]:
+    """What the scope resolves to with no catalog at all: what a server stores as a blok's
+    resolved locals. A local only a control's ``bind`` would type stays ``ANY``."""
+    from arkitekt_spec.declare.blok.infer import resolve_scope
+
+    scope = resolve_scope(_parse(check), _check_scope(check), None)
+    locals_: list[JSON] = [local.model_dump(mode="json", exclude_none=True) for local in scope.locals]
+    return {"locals": locals_}
+
+
+def language_codes(check: Check) -> list[str]:
+    """The codes the language alone finds for ``check``: no catalog is read, as a server checks it."""
+    from arkitekt_spec.declare.blok.validate import check_blok_tree
+
+    return [finding.code for finding in check_blok_tree(_parse(check), _check_scope(check), None)]
 
 
 def check_codes(check: Check) -> list[str]:
     """The codes the validator finds for ``check``."""
     from arkitekt_spec.declare.blok.validate import check_blok_tree
 
-    return [finding.code for finding in check_blok_tree(parse_bsx(check.source), _check_scope(check), _view(check))]
+    return [finding.code for finding in check_blok_tree(_parse(check), _check_scope(check), _view(check))]
 
 
 def build_v2() -> dict[str, JSON]:
@@ -474,15 +483,17 @@ def build_v2() -> dict[str, JSON]:
         cases.append({
             "name": check.name,
             "source": check.source,
-            "tree": _tree(parse_bsx(check.source)),
+            "tree": _tree(_parse(check)),
             "scope": _scope(check),
             "resolved": resolved(check),
             "codes": list[JSON](codes),
+            # What a server makes of it: the language's rules, and no catalog.
+            "language": {"resolved": language_resolved(check), "codes": list[JSON](language_codes(check))},
         })
     return {
         "vocab": vocabulary.vocab,
-        "catalogs": {"base": vocabulary.base_version, **vocabulary.catalogs},
-        "text_table": text_table(),
+        "minor": vocabulary.minor,
+        "catalogs": {"base": vocabulary.base_catalog, "bundled": dict(vocabulary.bundled_catalogs)},
         "cases": cases,
     }
 

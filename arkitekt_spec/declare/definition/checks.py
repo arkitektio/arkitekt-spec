@@ -117,7 +117,6 @@ def check_blok(blok: BlokImplementationInput) -> BlokImplementationInput:
         queries=blok.queries,
         subscriptions=blok.subscriptions,
         args=tuple(port.key for port in blok.args or ()),
-        catalogs=blok.catalogs,
         demo=blok.demo,
     )
     for component in blok.components or ():

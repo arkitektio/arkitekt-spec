@@ -125,13 +125,15 @@ def test_a_kind_name_is_no_type(registry: AppRegistry) -> None:
     assert caught.value.code == "local.kind"
 
 
-def test_an_unknown_module_is_a_warning(registry: AppRegistry) -> None:
-    with pytest.warns(CatalogWarning, match=r"module.unknown"):
-        registry.register_blok("panel", "<Html><Card /></Html>", module="mikro")
+def test_a_catalog_not_known_here_is_a_warning(registry: AppRegistry) -> None:
+    with pytest.warns(CatalogWarning, match=r"catalog.unknown"):
+        registry.register_blok("panel", "<Html><Card /><Spectrum>of a lab</Spectrum></Html>", catalog="https://acme.example/catalogs/lab/v1")
 
 
-def test_the_orkestrator_module_is_known(registry: AppRegistry) -> None:
+def test_the_orkestrators_catalog_is_known(registry: AppRegistry) -> None:
+    from arkitekt_spec.blok.catalogs import ORKESTRATOR_CATALOG_ID
+
     quietly(registry, "<Html><Card /></Html>")
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        registry.register_blok("other", "<Html><Card /></Html>", module="orkestrator")
+        registry.register_blok("other", "<Html><Card /></Html>", catalog=ORKESTRATOR_CATALOG_ID)

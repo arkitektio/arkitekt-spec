@@ -1,4 +1,4 @@
-"""Validate a v2 blok: its tree against what it declares, its kind, and the catalogs that draw it.
+"""Validate a v2 blok: its tree against what it declares and its kind, and, where a view is given, the catalog it is written for.
 
 Every rule is a row of the vocabulary's diagnostic table and is driven by its data: the one
 reserved list, the per-kind root matrix, the record shapes, the function signatures and the
@@ -19,12 +19,18 @@ theme. A finding is an error (the blok is refused) or a warning (it is reported)
 - **Dependencies.** A custom blok's undeclared ``deps.<key>`` are inferred (:mod:`.infer`).
 - **Loops.** A ``foreach`` without ``key`` over items known not to be scalars is a warning.
 - **Returns.** Reading ``<record>.returns.return<N>`` (an unnamed return) is a warning.
-- **Shadowing.** Using a component a module redefines over a standard catalog is a warning,
-  once per name.
+- **Catalog.** With a view only: a component is of the catalog the blok is written for
+  (``catalog.target`` when it is of another one known here), placed in a kind it belongs to
+  (``catalog.kind``), with the props and the placement its catalog lists. Without a view none of
+  this is checked: a server holds a blok to the language alone.
+- **Host parts.** A part of the host's interface (``<args>``, ``<timeline>``) inside an ``<if>``
+  still claims it (``part.conditional``); ``chrome="none"`` without an ``<ask>`` leaves asks
+  unanswerable in the blok (``chrome.no_ask``). Both are warnings.
 - **Records.** Two call sites never share an ``into``.
 - **Literals.** A string literal on a ``BOOL``/``INT``/``FLOAT`` prop is refused.
 - **Theme.** A raw palette colour in a class is a warning naming the role; a logo paints with
-  the pens only; a scene's ``color`` is a colour role (a warning otherwise).
+  the pens only; a scene's ``color`` is a colour role (a warning otherwise). A class outside
+  the portable subset is a warning (``class.not_portable``).
 """
 
 import re
@@ -50,7 +56,7 @@ from arkitekt_spec.actions import (
     StateImplementationInput,
     UtilCallInput,
 )
-from arkitekt_spec.blok.bsx import FETCH_MORE_FUNCTION, QUERY_SUGAR
+from arkitekt_spec.blok.bsx import FETCH_MORE_FUNCTION, QUERY_SUGAR, TEXT_NODE
 from arkitekt_spec.blok.catalogs import BlokView, default_view
 from arkitekt_spec.blok.vocabulary import (
     JSON,
@@ -170,8 +176,6 @@ class BlokScope:
         dependencies: What ``self`` and ``deps.<key>`` resolve against; a ``self`` entry types
             ``self``, which is open without one.
         args: The keys ``args.<key>`` may read; ``None`` reads any.
-        catalogs: The catalogs it declares (``ui@1``); a component of a standard catalog it does
-            not declare is a warning. None declared: not checked.
         query_values: Per declared query, the shape of its value as its service answers it.
         assets: The assets ``self.assets.<name>`` may name; ``None`` names any.
     """
@@ -183,7 +187,6 @@ class BlokScope:
     queries: tuple[BlokQueryInput, ...] = ()
     subscriptions: tuple[BlokSubscriptionInput, ...] = ()
     args: tuple[str, ...] | None = None
-    catalogs: tuple[str, ...] = ()
     demo: BlokDemoInput | None = None
     query_values: Mapping[str, PortMatchInput] = field(default_factory=dict[str, PortMatchInput])
     assets: frozenset[str] | None = None
@@ -216,8 +219,15 @@ RUN_KINDS = ("action", "assign")
 """The kinds that have a run's dependencies: an action's own bloks, for a run and for starting one."""
 
 ASSIGN_KIND = "assign"
-ARGS_COMPONENT = "args"
-"""The form of the run's arguments, placed by an assign blok."""
+GIVEN_FIELD = "given"
+"""The field of ``assign`` that holds one flag per argument the caller decided."""
+CONNECTED_FIELD = "connected"
+"""The one field of an agent that is no string: whether it is connected right now."""
+ASK_COMPONENT = "ask"
+CHROME_PROP = "chrome"
+CHROME_NONE = "none"
+CONDITIONAL_COMPONENTS = frozenset({"if", "else", "match", "case", "default", "foreach", "suspense", "fallback", "error"})
+"""The language's elements whose children do not always show: a host part inside one still claims its slot."""
 START_EFFECT = "assign.start"
 """Starts the run an assign blok prepares."""
 
@@ -239,7 +249,9 @@ class _Checker:
         self.queries = {query.key: query for query in scope.queries}
         self.subscriptions = {subscription.key: subscription for subscription in scope.subscriptions}
         self.bound_locals: set[str] = set()
-        self.shadowed: set[str] = set()
+        self.asks = False
+        self.chromeless: str | None = None
+        """The id of the root that says ``chrome="none"``, when it does."""
         self.into: set[str] = set()
         self.colour = _colour_pattern(self.vocabulary)
 
@@ -330,28 +342,39 @@ class _Checker:
         for local in self.scope.locals:
             if local.persist and local.key not in self.bound_locals:
                 self.add("local.unused_persist", f"locals.{local.key}", name=local.key)
+        if self.chromeless is not None and "task" in self.kind.roots and not self.asks:
+            self.add("chrome.no_ask", self.chromeless)
 
     # -- the visitor
 
     def visit_component(self, node: ComponentNodeInput, ancestors: tuple[ComponentNodeInput, ...], scope: Mapping[str, Match]) -> None:
         spec = self.view.component(node.component) if self.view is not None else None
-        if self.view is not None and spec is None and self.view.complete:
-            self.add("catalog.unknown_component", node.id, component=node.component, catalogs=self.view.label)
+        if self.view is not None and spec is None:
+            foreign = self.view.foreign.get(node.component)
+            if foreign is not None:
+                self.add("catalog.target", node.id, component=node.component, catalog=foreign, target=self.view.target or self.view.label)
+            elif self.view.complete:
+                self.add("catalog.unknown_component", node.id, component=node.component, catalogs=self.view.label)
         if spec is not None:
             self.check_catalog(node, spec, ancestors)
-        shadow = self.view.shadows.get(node.component) if self.view is not None else None
-        if shadow is not None and node.component not in self.shadowed:
-            self.shadowed.add(node.component)
-            self.add("catalog.shadow", node.id, component=node.component, catalog=shadow.catalog, module=shadow.module, winner=shadow.winner)
-        if node.component == ARGS_COMPONENT and self.scope.kind != ASSIGN_KIND:
-            self.add("assign.kind", node.id, what="<args>", n=_article(self.scope.kind), kind=self.scope.kind)
+        self.check_host_part(node, ancestors)
         for prop in node.props or ():
             self.check_prop(node, prop, spec)
 
     def check_catalog(self, node: ComponentNodeInput, spec: ComponentSpec, ancestors: tuple[ComponentNodeInput, ...]) -> None:
         assert self.view is not None
-        if node.children and not spec.accepts_children:
+        texts = [child for child in node.children or () if child.component == TEXT_NODE]
+        elements = len(node.children or ()) - len(texts)
+        if elements and not spec.accepts_children:
             self.add("catalog.children", node.id, component=node.component)
+        if texts:
+            # Text is a child like any other; what takes it is the catalog's to say.
+            if spec.text_prop is None and not spec.accepts_children:
+                self.add("catalog.text", node.id, component=node.component, detail="takes no text")
+            elif spec.text_prop is not None and any(prop.key == spec.text_prop for prop in node.props or ()):
+                self.add("catalog.text", node.id, component=node.component, detail=f"sets {spec.text_prop} as an attribute and as its text")
+            elif spec.text_prop is not None and not spec.accepts_children and (elements or len(texts) > 1):
+                self.add("catalog.text", node.id, component=node.component, detail=f"takes one run of text as its {spec.text_prop}, and no elements beside it")
         present = {prop.key for prop in node.props or ()}
         known = {prop.key for prop in spec.props} | {WHEN_PROP}
         unknown = sorted(present - known)
@@ -373,19 +396,26 @@ class _Checker:
         forbidden = sorted(set(spec.not_downstream_of) & names)
         if forbidden:
             self.add("catalog.placement", node.id, component=node.component, detail=f"must not be inside {forbidden}")
-        # Only the versioned standard catalogs are declared; a module (the Orkestrator's, an
-        # app's) is what the blok's ``module`` names.
-        catalog = spec.catalog
-        standard = catalog is not None and catalog.split("@", 1)[0] in self.vocabulary.catalogs and "@" in catalog
-        if self.scope.catalogs and standard and catalog not in self.scope.catalogs:
-            self.add("catalog.undeclared", node.id, component=node.component, catalog=catalog)
+        if spec.kinds and self.scope.kind not in spec.kinds:
+            self.add("catalog.kind", node.id, component=node.component, kinds=" and ".join(spec.kinds), n=_article(self.scope.kind), kind=self.scope.kind)
+
+    def check_host_part(self, node: ComponentNodeInput, ancestors: tuple[ComponentNodeInput, ...]) -> None:
+        """What the language itself says of the host's parts, whatever catalog draws them: a part
+        placed anywhere claims its slot, and a root without chrome leaves the asks to the blok."""
+        if node.component == ASK_COMPONENT:
+            self.asks = True
+        if not ancestors and any(prop.key == CHROME_PROP and prop.static_value == CHROME_NONE for prop in node.props or ()):
+            self.chromeless = node.id
+        if node.component in self.vocabulary.host_parts:
+            inside = next((ancestor.component for ancestor in reversed(ancestors) if ancestor.component in CONDITIONAL_COMPONENTS), None)
+            if inside is not None:
+                self.add("part.conditional", node.id, component=node.component, inside=inside)
 
     def check_dependency_keys(self, node: ComponentNodeInput, prop: ComponentPropInput) -> None:
         """A ``Placed dep`` or ``Route through`` names dependencies of the blok, written out as keys."""
         path = f"{node.component}.{prop.key}"
         if self.scope.kind not in RUN_KINDS:
-            self.add("space.kind", node.id, component=node.component, n=_article(self.scope.kind), kind=self.scope.kind)
-            return
+            return  # catalog.kind says it: a Space and its parts belong to an action's own blok
         value = prop.static_value
         keys = [value] if isinstance(value, str) else [key for key in value if isinstance(key, str)] if isinstance(value, list) else []
         for key in keys:
@@ -414,8 +444,9 @@ class _Checker:
             agent = parts[1:] if parts[0] == "self" else parts[2:] if parts[0] == "deps" else []
             if len(agent) != 2 or agent[0] != vocabulary.assets_segment:
                 self.add("catalog.asset", node.id, key=prop.key, component=node.component)
-        if prop.util_call is not None and prop.util_call.operation == "task.answer" and "task" not in self.kind.roots:
-            self.add("roots.not_in_kind", node.id, path="task.answer", n=_article(self.scope.kind), kind=self.scope.kind, root="task", roots=", ".join(sorted(self.kind.roots)))
+        operation = vocabulary.functions.get(prop.util_call.operation) if prop.util_call is not None else None
+        if operation is not None and operation.task_operation and "task" not in self.kind.roots:
+            self.add("roots.not_in_kind", node.id, path=operation.name, n=_article(self.scope.kind), kind=self.scope.kind, root="task", roots=", ".join(sorted(self.kind.roots)))
         if prop.key == BIND_PROP:
             path = prop.dynamic_value.path if prop.dynamic_value is not None else None
             if path is None:
@@ -432,9 +463,6 @@ class _Checker:
             self.add("assign.kind", node.id, what="assign.start()", n=_article(self.scope.kind), kind=self.scope.kind)
         if (node.component, prop.key) in DEPENDENCY_KEY_PROPS:
             self.check_dependency_keys(node, prop)
-        if (node.component, prop.key) == ("Space", "room") and self.scope.kind not in RUN_KINDS:
-            # A Space places the run's dependencies: only an action's own blok (for a run, or for starting one) has them.
-            self.add("space.kind", node.id, component=node.component, n=_article(self.scope.kind), kind=self.scope.kind)
         if node.component == TOAST_COMPONENT and prop.key == TOAST_TASK_PROP:
             path = prop.dynamic_value.path if prop.dynamic_value is not None else None
             if path is None or (path != "task" and path not in self.into):
@@ -472,6 +500,11 @@ class _Checker:
             arbitrary = _ARBITRARY_COLOUR.match(base)
             if arbitrary is not None:
                 self.add("palette.raw_colour", owner, token=token, suggestion=f"{arbitrary.group('utility')}-<role> ({', '.join(self.vocabulary.theme.colour_roles[:6])}, ...)")
+                continue
+            # A colour that is no role is told as that; anything else outside the portable subset as this.
+            unportable = unportable_class(token, self.vocabulary)
+            if unportable is not None:
+                self.add("class.not_portable", owner, token=token, what=unportable)
 
     def check_paint(self, node: ComponentNodeInput, key: str, value: str) -> None:
         paint = value.strip()
@@ -667,6 +700,14 @@ class _Checker:
         if root == "task":
             self.check_returns(path, rest, node_id)
             return self.descend(task_record_match("task"), rest, path, node_id)
+        if root == "assign":
+            # ``assign.given.<key>`` is open below ``given``: one flag per argument of the action.
+            if len(rest) > 1 and rest[0] == GIVEN_FIELD:
+                if self.scope.args is not None and rest[1] not in self.scope.args:
+                    self.add("args.unknown", node_id, path=path, key=rest[1], keys=", ".join(self.scope.args) or "none")
+                    return None
+                return PortMatchInput(key=rest[1], kind=PortKind.BOOL)
+            return self.descend(record_match("assign", vocabulary.records["assign"].fields), rest, path, node_id)
         if root == "viewer":
             return self.descend(record_match("viewer", vocabulary.records["viewer"].fields), rest, path, node_id)
         if root == "queries":
@@ -714,7 +755,7 @@ class _Checker:
         if head in vocabulary.agent_fields:
             if tail:
                 self.add("path.unknown", node_id, path=path, detail=f"{head} of an agent has no fields")
-            return PortMatchInput(key=head, kind=PortKind.STRING)
+            return PortMatchInput(key=head, kind=PortKind.BOOL if head == CONNECTED_FIELD else PortKind.STRING)
         if head == vocabulary.tasks_segment:
             if not tail:
                 self.add("roots.whole", node_id, path=path, root=f"{key}.tasks")
@@ -763,6 +804,48 @@ class _Checker:
                 return None
             current = child
         return current
+
+
+def unportable_class(token: str, vocabulary: Vocabulary) -> str | None:
+    """What of the class ``token`` is outside the portable subset (``the hover variant``), or None."""
+    *variants, utility = _split_class(token)
+    for variant in variants:
+        if variant.startswith("["):
+            return "an arbitrary variant"
+        name = variant.split("/", 1)[0]
+        if name in vocabulary.unportable_variants or name.split("-[", 1)[0] in vocabulary.unportable_variants:
+            return f"the {name} variant"
+    utility = utility.lstrip("!-")
+    if utility.startswith("["):
+        return "an arbitrary property"
+    if "[" in utility:
+        prefix = utility.split("-[", 1)[0]
+        if prefix not in vocabulary.arbitrary_values:
+            return f"an arbitrary value of {prefix}"
+        return None
+    for prefix in vocabulary.unportable_utilities:
+        if utility == prefix or utility.startswith(f"{prefix}-"):
+            return f"the {prefix} utility"
+    return None
+
+
+def _split_class(token: str) -> list[str]:
+    """A class at its variant colons, those inside brackets left alone (``[&>*]:p-2``)."""
+    parts: list[str] = []
+    depth = 0
+    current = ""
+    for character in token:
+        if character == "[":
+            depth += 1
+        elif character == "]":
+            depth = max(0, depth - 1)
+        if character == ":" and depth == 0:
+            parts.append(current)
+            current = ""
+        else:
+            current += character
+    parts.append(current)
+    return parts
 
 
 def dependency_hint(key: str, kind: str) -> str:
@@ -951,7 +1034,7 @@ def validate_bsx(
     *,
     mode: BlokCheckMode = "warning",
 ) -> list[Finding]:
-    """Parse ``source`` (if it is BSX) and :func:`validate_blok` it against the Orkestrator's view.
+    """Parse ``source`` (if it is BSX) and :func:`validate_blok` it against ``view``: the base catalog's when left out.
 
     A finding about a node of a parsed source carries its ``line`` and ``column``, a refusal too.
 

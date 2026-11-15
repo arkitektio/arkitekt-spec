@@ -24,13 +24,14 @@ from arkitekt_spec.blok.bsx import (
     CLASSES_FUNCTION,
     FETCH_MORE_FUNCTION,
     FOREACH,
-    IMPLICIT_TEXTS,
+    LEGACY_IMPLICIT_TEXTS,
     REFETCH_FUNCTION,
     TEMPLATE_FUNCTION,
+    TEXT_NODE,
+    TEXT_VALUE,
 )
-from arkitekt_spec.blok.catalogs import BASE_NAME, BlokView, default_view
+from arkitekt_spec.blok.catalogs import BlokView, default_view
 from arkitekt_spec.blok.vocabulary import JSON, load_vocabulary
-from arkitekt_spec.declare.catalogs import ComponentSpec
 
 LINE_WIDTH = 100
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -51,32 +52,19 @@ class _Printer:
 
     # -- nodes
 
-    def node(self, node: ComponentNodeInput, derived: str, depth: int, context: str, lines: list[str]) -> None:
+    def node(self, node: ComponentNodeInput, derived: str, depth: int, lines: list[str]) -> None:
         pad = " " * (self.indent * depth)
-        spec = self.view.component(node.component)
-        inner = context
-        if spec is not None:
-            inner = context if spec.inherits_context else (spec.children_context or spec.context)
         attributes: list[str] = []
         if node.id != derived:
             if not self.vocabulary.is_explicit_id(node.id):
                 raise ValueError(f"<{node.component}>: the id {node.id!r} is neither explicit nor the one its place derives ({derived!r})")
             attributes.append(f"id={_quoted(node.id)}")
         children = list(node.children or ())
-        elements = [child for child in children if not self.is_implicit(child, node.id)]
         text_child: str | None = None
-        text_prop = spec.text_prop if spec is not None else None
-        draws_text = self.vocabulary.contexts[inner].text if inner in self.vocabulary.contexts else True
-        props = node.props or ()
-        for position, prop in enumerate(props):
-            # The parser puts the prop text children fill last, so only the last is spelled as text.
-            last = position == len(props) - 1
-            if text_prop is not None and prop.key == text_prop and last and not children and draws_text:
-                printed = self.text_of(prop, node)
-                if printed is not None:
-                    text_child = printed
-                    continue
-            attributes.append(self.attribute(node, prop))
+        # Its one child a text node: spelled on the line of its tags.
+        if len(children) == 1 and self.is_implicit(children[0], node.id):
+            text_child = self.text_node(children[0], inline=True)
+        attributes += [self.attribute(node, prop) for prop in node.props or ()]
         head = f"<{node.component}{''.join(' ' + a for a in attributes)}"
         wrapped = len(pad) + len(head) > LINE_WIDTH and len(attributes) > 1
         if wrapped:
@@ -92,35 +80,34 @@ class _Printer:
         implicit = 0
         for child in children:
             if self.is_implicit(child, node.id):
-                if not elements and not self.language(spec):
-                    raise ValueError(f"<{node.component}> ({node.id}) holds implicit Text with no element beside it")
                 if child.id != f"{node.id}/#{implicit}":
-                    raise ValueError(f"<{node.component}> ({node.id}): implicit Text {child.id!r} is out of order")
+                    raise ValueError(f"<{node.component}> ({node.id}): the text node {child.id!r} is out of order")
                 implicit += 1
-                text = self.text_of((child.props or ())[0], child, inline=False) if child.props and len(child.props) == 1 else None
-                if text is None:
-                    raise ValueError(f"implicit Text {child.id!r} cannot be spelled as text")
-                lines.append(f"{pad}{' ' * self.indent}{text}")
+                lines.append(f"{pad}{' ' * self.indent}{self.text_node(child, inline=False)}")
                 continue
             index = counts.get(child.component, 0)
             counts[child.component] = index + 1
-            self.node(child, f"{node.id}/{child.component}[{index}]", depth + 1, inner, lines)
+            self.node(child, f"{node.id}/{child.component}[{index}]", depth + 1, lines)
         lines.append(f"{pad}</{node.component}>")
 
     @staticmethod
-    def language(spec: ComponentSpec | None) -> bool:
-        return (
-            spec is not None
-            and spec.catalog is not None
-            and spec.catalog.startswith(f"{BASE_NAME}@")
-            and spec.inherits_context
-            and spec.accepts_children
-        )
-
-    @staticmethod
     def is_implicit(child: ComponentNodeInput, parent: str) -> bool:
+        """Whether ``child`` is a run of text of ``parent``: a text node, or what one was stored as before."""
         match = _IMPLICIT.fullmatch(child.id)
-        return match is not None and match.group("parent") == parent and child.component in IMPLICIT_TEXTS
+        return match is not None and match.group("parent") == parent and child.component in (TEXT_NODE, *LEGACY_IMPLICIT_TEXTS)
+
+    def text_node(self, child: ComponentNodeInput, *, inline: bool) -> str:
+        """A text node as the text it was parsed from.
+
+        Raises:
+            ValueError: If it holds anything but its one value, or a value text cannot spell.
+        """
+        key = TEXT_VALUE if child.component == TEXT_NODE else "text"
+        props = child.props or ()
+        text = self.text_of(props[0], child, inline=inline) if len(props) == 1 and props[0].key == key and not child.children else None
+        if text is None:
+            raise ValueError(f"the text node {child.id!r} cannot be spelled as text")
+        return text
 
     # -- text
 
@@ -130,8 +117,6 @@ class _Printer:
         ``inline``: printed on the line of its tags, where JSX keeps the spaces at its ends;
         on a line of its own they are trimmed, so they are spelled as strings.
         """
-        if prop.key != "text" and node.component in IMPLICIT_TEXTS:
-            return None
         if prop.declares_value or prop.agent_call is not None:
             return None
         if isinstance(prop.static_value, str):
@@ -385,7 +370,7 @@ def to_bsx(node: ComponentNodeInput, *, view: BlokView | None = None, indent: in
             into, implicit Text where the parser would not make it).
     """
     lines: list[str] = []
-    _Printer(view or default_view(), indent).node(node, f"{node.component}[0]", 0, "HTML", lines)
+    _Printer(view or default_view(), indent).node(node, f"{node.component}[0]", 0, lines)
     return "\n".join(lines)
 
 

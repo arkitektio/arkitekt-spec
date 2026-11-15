@@ -17,9 +17,15 @@ def test_the_corpus_says_what_it_was_parsed_with() -> None:
     corpus = build_v2()
 
     assert corpus["vocab"] == 2
-    assert corpus["catalogs"] == {"base": 2, "ui": 1, "scene": 1, "logo": 1, "structure": 1, "html": 1, "shadcn": 1}
-    assert corpus["text_table"]["Button"]["catalog"] == "ui@1"  # type: ignore[index, call-overload]
-    assert corpus["text_table"]["Button"]["text_prop"] == "label"  # type: ignore[index, call-overload]
+    assert corpus["minor"] == 1
+    assert corpus["catalogs"] == {
+        "base": "https://arkitekt.live/catalogs/base/v3",
+        "bundled": {
+            "https://arkitekt.live/catalogs/base/v3": "catalogs/base@3.json",
+            "https://arkitekt.live/catalogs/orkestrator/v1": "catalogs/orkestrator@1.json",
+        },
+    }
+    assert "text_table" not in corpus, "parsing needs no catalog: text is stored as nodes"
 
 
 def test_it_is_written_as_json(tmp_path: Path) -> None:
@@ -49,3 +55,16 @@ def test_a_query_effect_named_by_a_task_call_is_refused() -> None:
     assert [(f.code, f.message) for f in findings if f.code == "query.effect_target"] == [
         ("query.effect_target", "query.refetch names its query by a literal name (queries.<name>.refetch()), not a task call.")
     ]
+
+
+def test_every_checked_case_says_what_the_language_alone_finds() -> None:
+    """A server holds a blok to the language and reads no catalog: its outcome is in the corpus too."""
+    checked = [case for case in build_v2()["cases"] if isinstance(case, dict) and "codes" in case]  # type: ignore[union-attr]
+
+    assert checked
+    for case in checked:
+        language = case["language"]  # type: ignore[index]
+        assert isinstance(language, dict) and set(language) == {"resolved", "codes"}
+        codes = language["codes"]
+        assert isinstance(codes, list)
+        assert not [code for code in codes if isinstance(code, str) and code.startswith("catalog.")], case["name"]  # type: ignore[index]
