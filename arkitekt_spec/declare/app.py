@@ -1663,9 +1663,11 @@ class AppRegistry(BaseModel):
                 It may ask for clients by annotation after the object, like the
                 expander.
             returnwidget: The widget one is shown with.
-            describe: Computes an object's descriptors (``{key: value}``). A run
+            describe: Says an object's descriptors (``{key: value}``). A run
                 tests them against a port's ``Requires`` and ``Provides``; a key
-                it does not return is not tested.
+                it does not return is not tested. It reads what the expander
+                already fetched and never asks the server itself: a second
+                round trip to describe an object is an antipattern.
 
         Returns:
             A decorator returning the expander unchanged, with its declared type.

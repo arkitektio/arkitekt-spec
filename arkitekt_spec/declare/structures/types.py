@@ -79,7 +79,13 @@ class Expander(Protocol):
 
 
 Describer = Callable[[Any], Mapping[str, Any]]
-"""Computes an object's descriptors: a flat ``{key: value}``, locally."""
+"""Says an object's descriptors: a flat ``{key: value}``, from what the object already holds.
+
+It is synchronous on purpose. A describer never asks a server: the descriptors
+are fetched with the object when it is expanded (the service's fragment selects
+them), so testing a port costs no second round trip. One that fetches is an
+antipattern: it doubles every constrained call.
+"""
 
 ExpanderT = TypeVar("ExpanderT", bound=Callable[..., Awaitable[Any]])
 """The expander exactly as declared, clients and all.
