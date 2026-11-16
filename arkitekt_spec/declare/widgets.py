@@ -198,14 +198,14 @@ def BsxWidget(
     port's label and validation message. A tree is pure: it calls no agent and keeps no state.
 
         scale: Annotated[float, BsxWidget('''
-            <Html>
+            <fragment>
               <Slider bind={value} min={0} max={limit} />
               <p>{value}</p>
-            </Html>
+            </fragment>
         ''', dependencies=["limit"])]
 
     Args:
-        source (str): The BSX, with one root. ``<Html>`` is the one the editor highlights.
+        source (str): The BSX, with one root. A widget is a tree of components, not a blok: no ``<Blok>`` around it.
         dependencies (list[str], optional): The other ports the tree reads
         fallback (AssignWidgetInput, optional): Widget for a UI that cannot draw the whole tree
 

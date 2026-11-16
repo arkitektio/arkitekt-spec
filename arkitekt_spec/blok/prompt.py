@@ -26,9 +26,12 @@ UNIVERSAL_PROPS = ("className",)
 
 SYNTAX = """\
 A blok is written in BSX (blok language v{vocab}), which reads like JSX:
+- A blok is one <Blok kind="..." context="..."> element: its kind ({kinds}) says what it reads \
+and where it goes, its context ({contexts}) what draws it. A scene holds one <Scene> (or an \
+action's <Space>), a logo one <Logo>; a panel holds anything. catalog="..." names the catalog it \
+is written for, chrome="none" leaves out the host's own interface around it.
 - An element is a catalog component (names are case-sensitive) or a language element \
-(`if`, `else`, `foreach`, `match`, `suspense`, `fragment`). The root names the blok's context: \
-{roots}.
+(`if`, `else`, `foreach`, `match`, `suspense`, `fragment`).
 - `attr="..."` is always a literal string. `attr={{...}}` is an expression: numbers and \
 booleans are written as expressions (min={{1}}, fullWidth={{true}}). A prop listed with \
 quoted values takes only those.
@@ -42,15 +45,20 @@ it in place. One that takes neither takes no text.
 == != > >= < <=, && || !, `a ?? b` (the first that is not null: \
 {{deps.stage.position.label ?? "unnamed"}}) and the ternary c ? a : b. Literals are JSON \
 ("text", 3, true, null, [..], {{k: ..}}). There is no `?.`, no arithmetic (use math.*), no subscripts.
-- Locals are the blok's form state: declared in `locals`, written only by `bind` on a control \
-(<Slider bind={{x}} />), read bare. Every local you bind or read must be declared, but its kind \
-is usually told by the blok, so leave it out: a default gives it (0 is an INT, 0.5 a FLOAT, "" \
-a STRING, false a BOOL), else the task argument it is passed to whole \
-(deps.stage.move(x: x) gives `x` that argument's port), else the control bound to it (a \
-Switch a BOOL, an Input a STRING, a Slider a FLOAT); nothing tells, it is ANY (an untyped \
-value, never an error). Give a kind only to say more than that \
-({{"kind": "STRUCTURE", "identifier": "@mikro/image", "nullable": true}}). A control writes its \
-own kind and a call argument built from a local must take the local's kind.
+- Locals are form state: declared with <local name="x" default={{0}} />, first among their \
+parent's children, and in scope in that parent's subtree only (inside a foreach, one per item); \
+written only by `bind` on a control (<Slider bind={{x}} />), read bare. Every local you bind or \
+read must be declared, but its kind is usually told by the blok, so leave it out: a default \
+gives it (0 is an INT, 0.5 a FLOAT, "" a STRING, false a BOOL), else the task argument it is \
+passed to whole (deps.stage.move(x: x) gives `x` that argument's port), else the control bound \
+to it (a Switch a BOOL, an Input a STRING, a Slider a FLOAT); nothing tells, it is ANY (an \
+untyped value, never an error). Give a kind only to say more than that \
+(<local name="image" kind="STRUCTURE" identifier="@mikro/image" nullable />), or borrow an \
+argument's port with like="deps.stage.move.x". `persist` keeps the last input on this device. \
+A control writes its own kind and a call argument built from a local must take the local's kind.
+- Queries and subscriptions are children of the <Blok>: <query name="q" service="mikro" \
+document="query (...) {{...}}"><var key="id" value={{args.image.id}} /></query>, read as \
+queries.q.value.
 - A callback does exactly one thing: one task call, or one effect (listed under Functions). \
 A call names every argument: onClick={{deps.stage.move(x: x) into run}}. \
 Inside a callback, `event.<field>` is what triggered it (the fields are listed per callback prop). \
@@ -95,9 +103,10 @@ def _first_sentence(text: str | None) -> str:
 def syntax() -> str:
     """The hand-written part: how BSX reads, with the roots and colour roles filled in."""
     vocabulary = load_vocabulary()
-    roots = ", ".join(f"<{root}> ({context.lower()})" for root, context in vocabulary.blok_roots.items())
+    kinds = ", ".join(vocabulary.kinds)
+    contexts = ", ".join(vocabulary.blok.contexts)
     colours = " ".join(f"bg-{role}" for role in vocabulary.theme.status_roles[:3]) or "bg-muted"
-    return SYNTAX.format(vocab=vocabulary.vocab, roots=roots, colours=f"bg-muted, text-muted-foreground, {colours}")
+    return SYNTAX.format(vocab=vocabulary.vocab, kinds=kinds, contexts=contexts, colours=f"bg-muted, text-muted-foreground, {colours}")
 
 
 def roots_text(kind: str) -> str:
@@ -200,7 +209,7 @@ def drawn_in(view: BlokView, context: str, kind: str | None = None) -> list[Comp
     ]
 
 
-def components_text(view: BlokView, context: str = "HTML", names: Iterable[str] | None = None, kind: str | None = None) -> str:
+def components_text(view: BlokView, context: str = "PANEL", names: Iterable[str] | None = None, kind: str | None = None) -> str:
     """The signature lines of the components ``names`` (default: every one drawn in ``context``),
     and of those their children are drawn in when they bridge contexts (``<Scene>``)."""
     if names is not None:
@@ -258,7 +267,7 @@ def blok_prompt(
     view: BlokView | None = None,
     *,
     kind: str = "custom",
-    context: str = "HTML",
+    context: str = "PANEL",
     components: Iterable[str] | None = None,
     examples: Sequence[str] = (),
 ) -> str:
@@ -267,7 +276,7 @@ def blok_prompt(
     Args:
         view: The catalog the blok is written for; the base catalog's view when None.
         kind: The blok kind (``agent``, ``custom``, ``task``, ``action``): which roots it reads.
-        context: Where it is drawn (``HTML``, ``SCENE``, ...): which components are listed.
+        context: Where it is drawn (``PANEL``, ``SCENE``, ``LOGO``): which components are listed.
         components: Only these components' signatures (a short prompt, with a tool that
             describes the rest on request); every one drawn in ``context`` when None.
         examples: Sources shown as they are; the caller checks they validate.

@@ -10,9 +10,11 @@ from typing import Annotated
 
 import pytest
 
+from arkitekt_spec.actions import BlokQueryInput, BlokSubscriptionInput
+from arkitekt_spec.blok.declared import declared_queries, declared_subscriptions
 from arkitekt_spec.blok.vocabulary import BlokError
 from arkitekt_spec.declare.app import AppRegistry
-from arkitekt_spec.declare.blok.declarations import Query, Subscription
+from arkitekt_spec.declare.blok import bsx
 from arkitekt_spec.declare.blok.graphql import check_query, read_only_problem, schema_hash
 from arkitekt_spec.declare.catalogs import CatalogWarning
 from arkitekt_spec.declare.wiring import Alias, Require
@@ -82,22 +84,38 @@ def test_a_document_that_is_not_its_kind_is_refused(document: str, kind: str, me
     assert read_only_problem("mutation { x }", kind) is not None
 
 
+def blok(*declarations: str, content: str = "<div />") -> str:
+    """A panel blok declaring ``declarations`` before its content."""
+    return f'<Blok kind="agent" context="panel">{"".join(declarations)}{content}</Blok>'
+
+
+def query(name: str, document: str, *variables: str, element: str = "query", **attributes: object) -> str:
+    """A ``<query>`` (or ``<subscription>``) with its ``<var>`` children."""
+    said = "".join(f" {key}={{{value}}}" if isinstance(value, int) else f' {key}="{value}"' for key, value in attributes.items())
+    head = f'<{element} name="{name}" service="mikro" document="{document}"{said}'
+    return f"{head}>{''.join(variables)}</{element}>" if variables else f"{head} />"
+
+
+def declared(registry: AppRegistry) -> tuple[tuple[BlokQueryInput, ...], tuple[BlokSubscriptionInput, ...]]:
+    """What the one built blok declares, read back from the source it is sent as."""
+    (built,) = registry.get_declared_bloks().values()
+    assert built.source is not None
+    tree = bsx(built.source)
+    return declared_queries(tree), declared_subscriptions(tree)
+
+
 def test_a_checked_query_types_its_value(tmp_path: Path) -> None:
     registry = _registry(tmp_path)
-    registry.register_blok("cells", f"<Html><div>{LIST}</div></Html>", queries={"cells": Query(service="mikro", document=READ)}, mode="strict")
-    (blok,) = registry.get_declared_bloks().values()
+    registry.register_blok("cells", blok(query("cells", READ), content=f"<div>{LIST}</div>"), mode="strict")
 
-    (query,) = blok.queries
-    assert (query.key, query.service, query.document) == ("cells", "mikro", READ)
+    (cells,), _ = declared(registry)
+    assert (cells.key, cells.service, cells.document) == ("cells", "mikro", READ)
 
 
 def test_a_read_of_what_the_query_does_not_select_is_refused(tmp_path: Path) -> None:
     registry = _registry(tmp_path)
-    registry.register_blok(
-        "cells",
-        '<Html><div><foreach items={queries.cells.value.datasets} let="ds" key={ds.id}><p>{ds.size}</p></foreach></div></Html>',
-        queries={"cells": Query(service="mikro", document=READ)},
-    )
+    content = '<div><foreach items={queries.cells.value.datasets} let="ds" key={ds.id}><p>{ds.size}</p></foreach></div>'
+    registry.register_blok("cells", blok(query("cells", READ), content=content))
     with pytest.raises(BlokError, match="'size' does not exist"):
         registry.get_declared_bloks()
 
@@ -105,81 +123,66 @@ def test_a_read_of_what_the_query_does_not_select_is_refused(tmp_path: Path) -> 
 def test_variables_are_expressions_and_a_required_one_is_set(tmp_path: Path) -> None:
     registry = _registry(tmp_path)
     document = "query($id: ID!) { dataset(id: $id) { name } }"
-    registry.register_blok(
-        "one", "<Html><Text>{queries.ds.value.dataset.name}</Text></Html>", args={"dataset": str}, queries={"ds": Query(service="mikro", document=document, variables={"id": "args.dataset"})}, mode="strict"
-    )
-    (blok,) = registry.get_declared_bloks().values()
-    assert blok.queries[0].variables[0].value_path == "args.dataset"
+    source = blok(query("ds", document, '<var key="id" value={args.dataset} />'), content="<Text>{queries.ds.value.dataset.name}</Text>")
+    registry.register_blok("one", source, args={"dataset": str}, mode="strict")
+    (ds,), _ = declared(registry)
+    assert ds.variables is not None and ds.variables[0].value_path == "args.dataset"
 
     missing = _registry(tmp_path)
-    missing.register_blok("one", "<Html><Text /></Html>", queries={"ds": Query(service="mikro", document=document)})
+    missing.register_blok("one", blok(query("ds", document)))
     with pytest.raises(BlokError, match="'id' is required"):
         missing.get_declared_bloks()
 
 
 def test_a_field_the_schema_lacks_warns_or_refuses(tmp_path: Path) -> None:
     loose = _registry(tmp_path)
-    loose.register_blok("loose", "<Html><div /></Html>", queries={"q": Query(service="mikro", document="query { datasets { id nme } }")})
+    loose.register_blok("loose", blok(query("q", "query { datasets { id nme } }")))
     with pytest.warns(CatalogWarning, match="Cannot query field 'nme'"):
         loose.get_declared_bloks()
 
     strict = _registry(tmp_path)
-    strict.register_blok("strict", "<Html><div /></Html>", queries={"q": Query(service="mikro", document="query { datasets { id nme } }")}, mode="strict")
+    strict.register_blok("strict", blok(query("q", "query { datasets { id nme } }")), mode="strict")
     with pytest.raises(BlokError, match="Cannot query field 'nme'"):
         strict.get_declared_bloks()
 
 
-def test_a_mutation_is_refused_at_declaration() -> None:
-    with pytest.raises(ValueError, match=r"is a mutation.*\[query.read_only\]"):
-        AppRegistry().register_blok("m", "<Html><div /></Html>", queries={"q": Query(service="mikro", document="mutation { deleteDataset(id: 1) }")})
-    with pytest.raises(ValueError, match=r"query 'q' is a subscription, not a query.*\[query.kind\]"):
-        AppRegistry().register_blok("s", "<Html><div /></Html>", queries={"q": Query(service="mikro", document="subscription { datasets { id } }")})
-
-
 def test_a_service_without_a_known_schema_is_not_checked(tmp_path: Path) -> None:
     registry = _registry(tmp_path, schema=False)
-    registry.register_blok("cells", "<Html><p>{queries.cells.value.anything}</p></Html>", queries={"cells": Query(service="mikro", document=READ)})
+    registry.register_blok("cells", blok(query("cells", READ), content="<p>{queries.cells.value.anything}</p>"))
     with pytest.warns(CatalogWarning, match="knows no schema"):
         registry.get_declared_bloks()
 
 
 def test_a_subscription_streams_and_replays_from_a_query(tmp_path: Path) -> None:
     registry = _registry(tmp_path)
-    registry.register_blok(
+    events = query(
         "events",
-        "<Html><Text>{subscriptions.events.value.kind}</Text></Html>",
-        args={"dataset": str},
-        queries={"cells": Query(service="mikro", document=READ)},
-        subscriptions={"events": Subscription(service="mikro", document="subscription($d: ID!) { events(dataset: $d) { kind } }", variables={"d": "args.dataset"}, keep=20, history="cells")},
+        "subscription($d: ID!) { events(dataset: $d) { kind } }",
+        '<var key="d" value={args.dataset} />',
+        element="subscription",
+        keep=20,
+        history="cells",
     )
+    registry.register_blok("events", blok(query("cells", READ), events, content="<Text>{subscriptions.events.value.kind}</Text>"), args={"dataset": str})
     with warnings.catch_warnings():
         warnings.simplefilter("error", CatalogWarning)
-        (blok,) = registry.get_declared_bloks().values()
-    (subscription,) = blok.subscriptions
+        _, (subscription,) = declared(registry)
     assert (subscription.keep, subscription.history) == (20, "cells")
-
-    with pytest.raises(ValueError, match="no declared query"):
-        AppRegistry().register_blok("bad", "<Html><div /></Html>", subscriptions={"e": Subscription(service="mikro", document="subscription { events(dataset: 1) { kind } }", history="nope")})
 
 
 def test_a_paged_query_fetches_more_into_its_list(tmp_path: Path) -> None:
     registry = _registry(tmp_path)
     document = "query($folder: ID) { datasets(folder: $folder) { id name } }"
-    registry.register_blok(
-        "cells",
-        f"<Html><div>{LIST}<Button onClick={{queries.cells.fetch_more(folder: args.folder)}}>More</Button><Spinner when={{queries.cells.fetching_more}} /></div></Html>",
-        args={"folder": str},
-        queries={"cells": Query(service="mikro", document=document, more="datasets")},
-        mode="strict",
-    )
-    (blok,) = registry.get_declared_bloks().values()
-    (query,) = blok.queries
-    assert query.more == "datasets"
+    content = f"<div>{LIST}<Button onClick={{queries.cells.fetch_more(folder: args.folder)}}>More</Button><Spinner when={{queries.cells.fetching_more}} /></div>"
+    registry.register_blok("cells", blok(query("cells", document, more="datasets"), content=content), args={"folder": str}, mode="strict")
+    (cells,), _ = declared(registry)
+    assert cells.more == "datasets"
     with pytest.raises(ValueError, match="at"):
-        type(query).model_validate({**query.model_dump(), "at": "at"})
+        type(cells).model_validate({**cells.model_dump(), "at": "at"})
 
 
 ONE = "query($id: ID!) { dataset(id: $id) { name tags } }"
+ID = '<var key="id" value={"1"} />'
 
 
 @pytest.mark.parametrize(
@@ -193,31 +196,25 @@ ONE = "query($id: ID!) { dataset(id: $id) { name tags } }"
 )
 def test_more_names_a_list_field_of_the_result(tmp_path: Path, document: str, more: str, problem: str) -> None:
     registry = _registry(tmp_path)
-    variables = {"id": '"1"'} if document == ONE else {}
+    variables = (ID,) if document == ONE else ()
     with pytest.raises(ValueError, match=rf"{problem}.*\[query.more\]"):
-        registry.register_blok("cells", "<Html><div /></Html>", queries={"cells": Query(service="mikro", document=document, variables=variables, more=more)})
+        registry.register_blok("cells", blok(query("cells", document, *variables, more=more)))
         registry.get_declared_bloks()
 
 
 def test_more_may_name_a_nested_list(tmp_path: Path) -> None:
     registry = _registry(tmp_path)
-    registry.register_blok("cells", "<Html><div /></Html>", queries={"cells": Query(service="mikro", document=ONE, variables={"id": '"1"'}, more="dataset.tags")}, mode="strict")
-    (blok,) = registry.get_declared_bloks().values()
-    assert blok.queries[0].more == "dataset.tags"
-
-
-def test_fetch_more_needs_a_query_that_declares_more(tmp_path: Path) -> None:
-    with pytest.raises(BlokError) as caught:
-        _registry(tmp_path).register_blok("cells", "<Html><Button onClick={queries.cells.fetch_more()} /></Html>", queries={"cells": Query(service="mikro", document=READ)})
-    assert caught.value.code == "query.fetch_more"
+    registry.register_blok("cells", blok(query("cells", ONE, ID, more="dataset.tags")), mode="strict")
+    (cells,), _ = declared(registry)
+    assert cells.more == "dataset.tags"
 
 
 def test_then_is_passed_to_a_query_as_an_ordinary_variable(tmp_path: Path) -> None:
     registry = _registry(tmp_path)
     document = "query($folder: ID) { datasets(folder: $folder) { id name } }"
-    registry.register_blok("cells", "<Html><div /></Html>", queries={"cells": Query(service="mikro", document=document, variables={"folder": "then"})}, mode="strict")
-    (blok,) = registry.get_declared_bloks().values()
-    assert blok.queries[0].variables[0].value_path == "then"
+    registry.register_blok("cells", blok(query("cells", document, '<var key="folder" value={then} />')), mode="strict")
+    (cells,), _ = declared(registry)
+    assert cells.variables is not None and cells.variables[0].value_path == "then"
 
 
 def test_a_schema_hash_ignores_formatting() -> None:

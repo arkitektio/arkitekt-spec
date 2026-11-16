@@ -30,15 +30,15 @@ from arkitekt_spec.actions import (
     UtilCallInput,
 )
 from arkitekt_spec.blok.catalogs import BlokView, catalogs_checked, known_catalog, known_catalogs
+from arkitekt_spec.blok.declared import declared_queries, declared_subscriptions, local_like
 from arkitekt_spec.blok.vocabulary import JSON, BlokError, Finding, load_vocabulary
 from arkitekt_spec.declare.blok.graphql import check_query, graphql_available
-from arkitekt_spec.declare.blok.infer import ArgPorts, resolve_local, resolve_scope
+from arkitekt_spec.declare.blok.infer import ArgPorts, resolve_locals
 from arkitekt_spec.declare.blok.origin import DeclaredAt, finding_key, warn_at
 from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
 from arkitekt_spec.declare.blok.walk import (
     Where,
     action_key_for,
-    argument_paths,
     iter_nodes,
     walk_tree,
 )
@@ -101,18 +101,18 @@ class _SelfReads:
     def bind_into(self, name: str, call: AgentProbeInput) -> None:
         return None
 
+    def bind_local(self, name: str, node: ComponentNodeInput, scope: Mapping[str, None]) -> None:
+        # A local that borrows an action's argument (`like="self.<action>.<arg>"`) demands that action.
+        like = local_like(node)
+        parts = like.split(".") if like is not None else []
+        if len(parts) == 3 and parts[0] == SELF_KEY:
+            self.actions.add(parts[1])
 
-def self_reads(
-    tree: ComponentNodeInput,
-    queries: Sequence[BlokQueryInput] = (),
-    subscriptions: Sequence[BlokSubscriptionInput] = (),
-) -> _SelfReads:
-    """What ``tree`` and the variables of its queries read of ``self``."""
+
+def self_reads(tree: ComponentNodeInput) -> _SelfReads:
+    """What ``tree`` reads of ``self``, the variables of its queries (``<var>`` nodes) included."""
     reads = _SelfReads()
     walk_tree(tree, reads)
-    for declared in (*queries, *subscriptions):
-        for path in argument_paths(declared.variables):
-            reads.read(path)
     return reads
 
 
@@ -290,30 +290,31 @@ def build_declared_bloks(app_registry: "AppRegistry") -> dict[str, BlokImplement
     declared: dict[str, BlokImplementationInput] = {}
     for key, declaration in app_registry.registered_bloks.items():
         owner = f"Blok {key!r}"
-        context = ComponentContext(declaration.context).value
-        kind = "action_logo" if context == ComponentContext.ACTION_LOGO.value else "agent"
         dependency = None
-        if kind == "agent":
-            dependency = self_dependency(self_reads(declaration.component, declaration.queries, declaration.subscriptions), app_registry)
+        if declaration.kind == "agent":
+            dependency = self_dependency(self_reads(declaration.component), app_registry)
         dependencies = (dependency,) if dependency is not None else ()
         query_values = type_queries(
-            owner, declaration.queries, declaration.subscriptions, app_registry, declaration.mode, declaration.declared_at, blok=key
+            owner,
+            declared_queries(declaration.component),
+            declared_subscriptions(declaration.component),
+            app_registry,
+            declaration.mode,
+            declaration.declared_at,
+            blok=key,
         )
         view = app_registry.blok_view(declaration.catalog)
         demo = declaration.demo if declaration.demo is not None else _demo(dependency, app_registry)
         scope = BlokScope(
-            kind=kind,
-            context=context,
+            kinds=("agent", "action") if declaration.context == ComponentContext.LOGO else ("agent",),
+            mount="app.blok",
             dependencies=dependencies,
-            locals=declaration.locals,
-            queries=declaration.queries,
-            subscriptions=declaration.subscriptions,
             args=tuple(port.key for port in declaration.args),
             demo=demo,
             query_values=query_values,
             assets=frozenset(app_registry.registered_assets),
+            arg_ports=self_arg_ports(app_registry),
         )
-        scope = resolve_scope(declaration.component, scope, view, arg_ports=self_arg_ports(app_registry))
         # What the declaration already told (registering it) is not told again.
         for finding in check_blok_tree(declaration.component, scope, checked_view(view)):
             _report(owner, finding, declaration.mode, declaration.declared_at, declaration.reported, blok=key)
@@ -333,10 +334,7 @@ def build_declared_bloks(app_registry: "AppRegistry") -> dict[str, BlokImplement
             "for_model": declaration.for_model,
             "for_node": declaration.for_node,
             "args": declaration.args or None,
-            "locals": declaration.locals or None,
             "demo": demo,
-            "queries": declaration.queries or None,
-            "subscriptions": declaration.subscriptions or None,
         }
         fields.update({name: value for name, value in optional.items() if value is not None})
         checked = check_blok(BlokImplementationInput.model_validate({**fields, "components": (declaration.component,)}))
@@ -348,17 +346,17 @@ def build_declared_bloks(app_registry: "AppRegistry") -> dict[str, BlokImplement
     return declared
 
 
-def resolved_locals(blok: BlokImplementationInput, app_registry: "AppRegistry") -> tuple[BlokLocalInput, ...]:
-    """The locals of a built blok as its tree resolves them, with this app's full arg ports: what
-    a server stores as the blok's resolved locals. The input itself carries them as written."""
-    from arkitekt_spec.blok.bsx import parse_bsx
+def resolved_locals(blok: BlokImplementationInput, app_registry: "AppRegistry") -> dict[str, BlokLocalInput]:
+    """The ``<local>`` declarations of a built blok as its tree resolves them, by node id, with this
+    app's full arg ports: what a server resolves them to. The tree itself carries them as written."""
+    from arkitekt_spec.blok.bsx import parse_bsx, source_catalog
 
-    view = app_registry.blok_view(blok.catalog)
-    trees = blok.components or ((parse_bsx(blok.source, view=view),) if blok.source is not None else ())
-    scope = BlokScope(locals=tuple(blok.locals or ()), dependencies=tuple(blok.dependencies))
+    trees = blok.components or ((parse_bsx(blok.source, view=app_registry.blok_view(source_catalog(blok.source))),) if blok.source is not None else ())
     if not trees:
-        return tuple(resolve_local(local, (), ()) for local in scope.locals)
-    return resolve_scope(trees[0], scope, view, arg_ports=self_arg_ports(app_registry)).locals
+        return {}
+    view = app_registry.blok_view(blok.catalog)
+    resolved = resolve_locals(trees[0], tuple(blok.dependencies), view, arg_ports=self_arg_ports(app_registry))
+    return {node: each.local for node, each in resolved.items()}
 
 
 _DEMO_SCALARS: dict[PortKind, JSON] = {

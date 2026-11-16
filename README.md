@@ -26,7 +26,7 @@ versioned on its own:
 | Layer | What it is | Where |
 | --- | --- | --- |
 | The language | syntax, roots (`self`, `deps`, `args`, `task`, `assign`, ...), records, functions | `blok/vocabulary.json` (`vocab` 2, `minor` for what it gained since) |
-| The base catalog | everything every renderer draws: html, scene and logo components, and the parts of a host's own interface a blok may place (`<args />`, `<ask />`, `<timeline />`) | `blok/catalogs/base@3.json`, `https://arkitekt.live/catalogs/base/v3` |
+| The base catalog | everything every renderer draws: html, scene and logo components, and the parts of a host's own interface a blok may place (`<args />`, `<ask />`, `<timeline />`) | `blok/catalogs/base@4.json`, `https://arkitekt.live/catalogs/base/v3` |
 | App catalogs | what one frontend draws beyond the base; each extends another and only ever adds | the frontend's to publish. A snapshot of the Orkestrator's ships as `blok/catalogs/orkestrator@1.json` |
 
 A blok names the one catalog it is written for (`catalog=`), the address it is published at;

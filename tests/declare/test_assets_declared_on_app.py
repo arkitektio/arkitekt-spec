@@ -11,6 +11,8 @@ from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.blok import bsx
 from arkitekt_spec.declare.errors import RegistryFrozenError
 
+SCENE = '<Blok kind="agent" context="scene">'
+
 GLB = b"glTF" + b"\x02\x00\x00\x00" + b"rest"
 PNG = b"\x89PNG\r\n\x1a\n" + b"rest"
 WEBP = b"RIFF\x00\x00\x00\x00WEBPVP8 "
@@ -86,12 +88,18 @@ def test_assets_travel_into_a_merge_and_a_frozen_registry_takes_no_new_one(regis
 def test_a_blok_names_an_asset_of_its_own_app(registry: AppRegistry) -> None:
     registry.register_asset("scope", "models/scope.glb")
     registry.register_asset("logo", "logo.png")
-    registry.register_blok("view", "<Scene><Model src={self.assets.scope} /></Scene>")
-    registry.register_blok("panel", "<Html><Image src={self.assets.logo} /></Html>")
+    registry.register_blok("view", f"{SCENE}<Scene><Model src={{self.assets.scope}} /></Scene></Blok>")
+    registry.register_blok("panel", '<Blok kind="agent" context="panel"><Image src={self.assets.logo} /></Blok>')
 
     bloks = {blok.key: blok for blok in registry.to_implement_agent_input(name="app").bloks}
     # Sent as the BSX it was written in, which the server parses into this tree.
-    (model,) = bsx(bloks["view"].source).children or ()
+    view = bloks["view"].source
+    assert view is not None
+    children = bsx(view).children
+    assert children is not None
+    (scene,) = children
+    assert scene.children is not None
+    (model,) = scene.children
     assert model.props[0].dynamic_value.path == "self.assets.scope"
     # The key is one the server maps to this agent, though nothing else of it is used.
     assert [(dependency.key, dependency.state_dependencies) for dependency in bloks["view"].dependencies] == [("self", None)]
@@ -100,10 +108,10 @@ def test_a_blok_names_an_asset_of_its_own_app(registry: AppRegistry) -> None:
 @pytest.mark.parametrize(
     ("tree", "code"),
     [
-        ("<Scene><Model src={self.assets.absent} /></Scene>", "deps.asset"),
-        ("<Scene><Model src={self.assets} /></Scene>", "catalog.asset"),
-        ("<Scene><Model src={self.assets.scope.glb} /></Scene>", "catalog.asset"),
-        ('<Scene><Model src="sha256:abc" /></Scene>', "catalog.asset"),
+        (f"{SCENE}<Scene><Model src={{self.assets.absent}} /></Scene></Blok>", "deps.asset"),
+        (f"{SCENE}<Scene><Model src={{self.assets}} /></Scene></Blok>", "catalog.asset"),
+        (f"{SCENE}<Scene><Model src={{self.assets.scope.glb}} /></Scene></Blok>", "catalog.asset"),
+        (f'{SCENE}<Scene><Model src="sha256:abc" /></Scene></Blok>', "catalog.asset"),
     ],
 )
 def test_a_blok_naming_no_asset_of_the_app_is_refused(registry: AppRegistry, tree: str, code: str) -> None:
@@ -166,7 +174,7 @@ def test_a_file_the_app_does_not_hold_is_named_by_its_source_and_hash(registry: 
     assert (badge.kind, badge.size) == ("IMAGE", None)
     assert registry.registered_assets["robot"].path is None
 
-    registry.register_blok("view", '<Scene><Model src="@self.assets.robot" /></Scene>')
+    registry.register_blok("view", f'{SCENE}<Scene><Model src="@self.assets.robot" /></Scene></Blok>')
     inspected = {asset.name: asset for asset in registry.get_inspected_assets()}
     assert inspected["robot"].path is None and inspected["robot"].source == SOURCE + "?download=1"
 

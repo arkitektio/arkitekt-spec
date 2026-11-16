@@ -61,15 +61,11 @@ def asset_path_parts(path: str) -> tuple[str, str] | None:
         raise ValueError(f"an asset is named '<dependency>.assets.<name>', not {path!r}")
     return parts[0], parts[2]
 
-HTML_CONTEXT = "HTML"
+PANEL_CONTEXT = "PANEL"
 SCENE_CONTEXT = "SCENE"
 LOGO_CONTEXT = "LOGO"
-COMPONENT_CONTEXTS = (HTML_CONTEXT, SCENE_CONTEXT, LOGO_CONTEXT)
-"""The renderers a component can live in. A blok's tree starts in the html context."""
-ACTION_LOGO_CONTEXT = "ACTION_LOGO"
-"""A blok context only, never a component's: an action logo draws the same shapes as a logo."""
-LOGO_CONTEXTS = (LOGO_CONTEXT, ACTION_LOGO_CONTEXT)
-"""The blok contexts held to the size of an icon."""
+COMPONENT_CONTEXTS = (PANEL_CONTEXT, SCENE_CONTEXT, LOGO_CONTEXT)
+"""The renderers a component can live in. A blok's tree starts in the panel context (its <Blok>)."""
 BLOK_ARGS_ROOT = "args"
 """The path root a blok reads the items it is opened for at (``@args.image``): null until it is opened for one."""
 
@@ -152,7 +148,7 @@ class ComponentSpec:
     accepts_children: bool = False
     props: tuple[PropSpec, ...] = ()
     description: str | None = None
-    context: str = HTML_CONTEXT
+    context: str = PANEL_CONTEXT
     """The context the component may be placed in."""
     children_context: str | None = None
     """The context of its children when it differs from its own: it bridges two renderers."""
@@ -175,7 +171,7 @@ class ComponentSpec:
     touch: str | None = dataclass_field(default=None, compare=False)
     """How it is drawn where there is no pointer, when that differs."""
     catalog: str | None = dataclass_field(default=None, compare=False)
-    """The catalog that provides it, as ``name@version`` (``base@3``)."""
+    """The catalog that provides it, as ``name@version`` (``base@4``)."""
 
     def prop(self, key: str) -> PropSpec | None:
         """The prop called ``key``, or ``None``."""
@@ -350,7 +346,7 @@ def _parse_components(raw: dict, entries: Iterable[dict], *, camel: bool) -> lis
                 accepts_children=bool(field(entry, "accepts_children") or False),
                 props=tuple(props),
                 description=entry.get("description"),
-                context=_parse_context(raw, name, entry.get("context")) or HTML_CONTEXT,
+                context=_parse_context(raw, name, entry.get("context")) or PANEL_CONTEXT,
                 children_context=_parse_context(raw, name, field(entry, "children_context")),
                 inherits_context=bool(field(entry, "inherits_context") or False),
                 downstream_of=tuple(field(entry, "downstream_of") or ()),  # type: ignore[arg-type]

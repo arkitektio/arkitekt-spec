@@ -3,7 +3,7 @@
     cd ~/Code/typescript/libraries/bsx/packages/bsx && pnpm build && pnpm spec:export
     python scripts/build_base_catalog.py ~/Code/typescript/libraries/bsx/packages/bsx/dist/spec-export
 
-The base catalog (``catalogs/base@3.json``) is the spec's, and it is made of two things:
+The base catalog (``catalogs/base@4.json``) is the spec's, and it is made of two things:
 
 - What the spec alone says: the language's own elements and the parts of a host's interface
   (the ``language`` and ``run`` families), the family every component is listed under, and what

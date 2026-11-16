@@ -7,7 +7,7 @@
 Two directions, one owner each:
 
 - The **language and the base catalog** are the spec's: the vocabulary (``vocabulary.json``),
-  the base catalog (``catalogs/base@3.json``: everything every renderer draws) and the parity
+  the base catalog (``catalogs/base@4.json``: everything every renderer draws) and the parity
   corpus (``bsx_v2.json``) are written **out** into a checkout of ``@arkitektio/bsx``, whose
   contracts are held to them.
 - An **app catalog** is its frontend's. The Orkestrator's

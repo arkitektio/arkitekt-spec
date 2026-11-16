@@ -1,5 +1,5 @@
-"""An action's own bloks: declared inline with the action, one per context (named by the root:
-``<Html>``, or ``<Scene>``/``<Space>`` for SCENE), checked at decoration.
+"""An action's own bloks: declared inline with the action, one per kind and context (a
+``<Blok kind="action|assign" context="panel|scene">``), checked at decoration.
 
 They read the run as ``task``, its args as ``args``, the agents the run got as ``deps.<key>`` (the
 action's dependency parameters), and are not part of the action's identity: an action that gains
@@ -13,15 +13,16 @@ from pydantic import ValidationError
 
 from arkitekt_spec.actions import ActionBlokInput, DefinitionInput, definition_hash
 from arkitekt_spec.blok.bsx import parse_bsx
-from arkitekt_spec.blok.catalogs import default_view
 from arkitekt_spec.blok.vocabulary import BlokError
 from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.blok.action import ActionBlok, ActionBloks
-from arkitekt_spec.declare.blok.declarations import Local
-from arkitekt_spec.declare.blok.infer import resolve_scope
+from arkitekt_spec.declare.blok.infer import resolve_locals
 from arkitekt_spec.declare.blok.parser import bsx
-from arkitekt_spec.declare.blok.validate import BlokScope
 from arkitekt_spec.declare.definition.errors import DefinitionError
+
+PANEL = '<Blok kind="action" context="panel">'
+SCENE = '<Blok kind="action" context="scene">'
+ASSIGN = '<Blok kind="assign" context="panel">'
 
 
 class Arm(Protocol):
@@ -40,7 +41,8 @@ class Scope(Protocol):
         ...
 
 
-SPACE = """
+SPACE = """<Blok kind="action" context="scene">
+<local name="show_path" default={true} persist />
 <Space room="room:lab">
   <Placed dep="robot" matrix={[[1, 0, 0, 0.8], [0, 1, 0, 0], [0, 0, 1, 0.15], [0, 0, 0, 1]]}>
     <Glow on={task.running} />
@@ -51,6 +53,7 @@ SPACE = """
     <Route through={["robot", "frame", "robot"]} progress={task.progress} />
   </if>
 </Space>
+</Blok>
 """
 
 
@@ -75,22 +78,23 @@ def registered_with(bloks: ActionBloks | None) -> DefinitionInput:
 
 def test_bloks_reach_the_definition_as_written() -> None:
     definition = registered(
-        ActionBlok(SPACE, locals={"show_path": Local(True, persist=True)}),
-        ActionBlok("<Html><Card><Progress value={task.progress} /><ask /></Card></Html>", description="The run"),
+        SPACE,
+        ActionBlok(PANEL + "<Card><Progress value={task.progress} /><ask /></Card></Blok>", description="The run"),
     )
     space, panel = definition.bloks
     assert (space.context, space.source, space.components, space.vocab) == ("SCENE", SPACE, None, 2)
-    assert [(local.key, local.kind, local.default, local.persist) for local in space.locals] == [("show_path", "BOOL", True, True)]
+    assert space.source is not None
+    (show_path,) = resolve_locals(parse_bsx(space.source)).values()
+    assert (show_path.local.key, show_path.local.kind, show_path.local.default, show_path.local.persist) == ("show_path", "BOOL", True, True)
     assert (space.catalog, space.catalog_minor) == (None, None), "written for the base catalog: nothing to name"
-    assert (panel.context, panel.description) == ("HTML", "The run")
+    assert (panel.context, panel.description) == ("PANEL", "The run")
 
     wire = definition.model_dump(mode="json", by_alias=False, exclude_unset=True)
-    assert [blok["context"] for blok in wire["bloks"]] == ["SCENE", "HTML"]
-    assert "locals" not in wire["bloks"][1], "nothing declared, nothing sent"
+    assert [blok["context"] for blok in wire["bloks"]] == ["SCENE", "PANEL"]
 
 
 def test_bloks_are_not_identity() -> None:
-    with_bloks = registered("<Html><Card><ask /></Card></Html>")
+    with_bloks = registered(PANEL + "<Card><ask /></Card></Blok>")
     without = registered()
 
     assert definition_hash(with_bloks) == definition_hash(without)
@@ -99,96 +103,85 @@ def test_bloks_are_not_identity() -> None:
 
 def test_a_placed_names_a_dependency_of_the_action() -> None:
     with pytest.raises(BlokError, match=r"Placed.dep: 'stage' is not a dependency of the blok .*\[deps.unknown\]") as raised:
-        registered('<Space room="lab"><Placed dep="stage" /></Space>')
+        registered(SCENE + '<Space room="lab"><Placed dep="stage" /></Space></Blok>')
     assert raised.value.node is not None and "Placed" in raised.value.node
     with pytest.raises(BlokError, match=r"Route.through: 'stage' is not a dependency"):
-        registered('<Space room="lab"><Route through={["robot", "stage"]} /></Space>')
+        registered(SCENE + '<Space room="lab"><Route through={["robot", "stage"]} /></Space></Blok>')
 
 
 def test_a_blok_reads_only_what_the_action_has() -> None:
     with pytest.raises(BlokError, match=r"'nowhere' is not a dependency of the blok .*\[deps.unknown\]"):
-        registered("<Html><Card><Text text={deps.nowhere.x} /></Card></Html>")
+        registered(PANEL + "<Card><Text text={deps.nowhere.x} /></Card></Blok>")
     with pytest.raises(BlokError, match=r"reads args.image, which the blok does not declare"):
-        registered("<Html><Card><Text text={args.image} /></Card></Html>")
-    registered("<Html><Card><Text text={args.slots} /><Button onClick={deps.robot.pick(slot: 1)} /></Card></Html>")
+        registered(PANEL + "<Card><Text text={args.image} /></Card></Blok>")
+    registered(PANEL + "<Card><Text text={args.slots} /><Button onClick={deps.robot.pick(slot: 1)} /></Card></Blok>")
 
 
 @pytest.mark.parametrize(
     ("tree", "context"),
     [
-        ("<Html><Card><ask /></Card></Html>", "HTML"),
-        ("<Scene />", "SCENE"),
-        ('<Space room="lab"><Placed dep="robot" /></Space>', "SCENE"),
+        (PANEL + "<Card><ask /></Card></Blok>", "PANEL"),
+        (SCENE + "<Scene /></Blok>", "SCENE"),
+        (SCENE + '<Space room="lab"><Placed dep="robot" /></Space></Blok>', "SCENE"),
     ],
 )
-def test_a_bloks_root_names_its_context(tree: str, context: str) -> None:
+def test_a_blok_says_its_context(tree: str, context: str) -> None:
     (blok,) = registered(tree).bloks or ()
     assert blok.context == context
 
 
-def test_a_root_that_names_no_context_is_refused() -> None:
-    with pytest.raises(BlokError, match="context.root_unknown") as raised:
-        registered("<Card><ask /></Card>")
-    assert raised.value.code == "context.root_unknown"
-
-
 def test_one_blok_needs_no_list() -> None:
     """A bare BSX string is one blok (not iterated char by char), as is a lone ActionBlok."""
-    (from_string,) = registered_with("<Html><Card><ask /></Card></Html>").bloks or ()
-    assert from_string.context == "HTML"
-    (from_blok,) = registered_with(ActionBlok("<Html><Card><ask /></Card></Html>", description="The run")).bloks or ()
-    assert (from_blok.context, from_blok.description) == ("HTML", "The run")
+    (from_string,) = registered_with(PANEL + "<Card><ask /></Card></Blok>").bloks or ()
+    assert from_string.context == "PANEL"
+    (from_blok,) = registered_with(ActionBlok(PANEL + "<Card><ask /></Card></Blok>", description="The run")).bloks or ()
+    assert (from_blok.context, from_blok.description) == ("PANEL", "The run")
 
 
 def test_one_blok_per_context_in_the_contexts_an_action_has() -> None:
     with pytest.raises(ValueError, match="given twice"):
-        registered("<Html><Card /></Html>", "<Html><Card /></Html>")
-    with pytest.raises(ValueError, match="<Html>, <Scene> or <Space>"):
-        registered("<AgentLogo />")
+        registered(PANEL + "<Card /></Blok>", PANEL + "<Card /></Blok>")
+    with pytest.raises(ValueError, match="a panel or a scene, not a logo"):
+        registered('<Blok kind="action" context="logo"><Logo /></Blok>')
+    with pytest.raises(BlokError, match="kind.placement"):
+        registered('<Blok kind="agent" context="panel"><Card /></Blok>')
 
 
 def test_a_space_is_an_actions_blok_only() -> None:
     """It places the run's dependencies, which only an action's blok has."""
     registry = AppRegistry()
     with pytest.raises(ValueError, match="'Space' .* reads a run of an action"):
-        registry.register_blok("lab", '<Space room="lab" />')
+        registry.register_blok("lab", '<Blok kind="agent" context="scene"><Space room="lab" /></Blok>')
     with pytest.raises(ValueError, match="'Placed' .* reads a run of an action"):
-        registry.register_blok("lab", '<Scene><Placed dep="robot" /></Scene>')
+        registry.register_blok("lab", '<Blok kind="agent" context="scene"><Scene><Placed dep="robot" /></Scene></Blok>')
+    with pytest.raises(ValueError, match="goes with its action"):
+        registry.register_blok("lab", SCENE + '<Space room="lab" /></Blok>')
 
 
-def test_an_inline_action_logo_is_rooted_in_the_action_logo() -> None:
+def test_an_inline_action_logo_is_an_action_logo_blok() -> None:
     registry = AppRegistry()
 
     def crop(slot: int) -> int:
         """Crop."""
         return slot
 
-    with pytest.raises(DefinitionError, match="an inline logo is an <ActionLogo>, not <AgentLogo>"):
-        registry.register_action(crop, key="crop", logo=bsx('<AgentLogo><Path d="M0 0" fill="brand" /></AgentLogo>'))
-
-
-def test_a_local_is_no_root_the_renderer_fills() -> None:
-    with pytest.raises(BlokError, match="roots.reserved"):
-        registered(ActionBlok("<Html><Card /></Html>", locals={"task": 1}))
+    with pytest.raises(DefinitionError, match='an inline logo is a <Blok kind="action" context="logo">, not an agent blok in logo'):
+        registry.register_action(crop, key="crop", logo=bsx('<Blok kind="agent" context="logo"><Logo><Path d="M0 0" fill="brand" /></Logo></Blok>'))
 
 
 def test_only_an_actions_blok_reads_a_run() -> None:
     registry = AppRegistry()
     with pytest.raises(ValueError, match="'ask' .* reads a run of an action"):
-        registry.register_blok("panel", "<Html><Card><ask /></Card></Html>")
+        registry.register_blok("panel", '<Blok kind="agent" context="panel"><Card><ask /></Card></Blok>')
 
 
 def test_the_wire_model_checks_as_the_server_does() -> None:
     with pytest.raises(ValidationError, match=r"components or as its BSX source.*\[manifest.sent\]"):
-        ActionBlokInput(vocab=2, context="HTML")
-    with pytest.raises(ValidationError, match=r"HTML, SCENE, not LOGO.*\[context.kind\]"):
-        ActionBlokInput(vocab=2, context="LOGO", source="<AgentLogo />")
+        ActionBlokInput(vocab=2, context="PANEL")
+    with pytest.raises(ValidationError, match=r"not LOGO.*\[context.kind\]"):
+        ActionBlokInput(vocab=2, context="LOGO", source='<Blok kind="action" context="logo"><Logo /></Blok>')
     with pytest.raises(ValidationError, match="vocab"):
-        ActionBlokInput.model_validate({"context": "HTML", "source": "<Html><Card /></Html>"})
-    with pytest.raises(ValidationError, match="mutation"):
-        ActionBlokInput.model_validate(
-            {"vocab": 2, "source": "<Html><Card /></Html>", "queries": [{"key": "q", "service": "mikro", "document": "mutation { x }"}]}
-        )
+        ActionBlokInput.model_validate({"context": "PANEL", "source": PANEL + "<Card /></Blok>"})
 
 
 def test_every_family_of_the_base_catalog_is_drawn_without_naming_one() -> None:
@@ -198,7 +191,7 @@ def test_every_family_of_the_base_catalog_is_drawn_without_naming_one() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("error", CatalogWarning)
-        (blok,) = registered("<Html><Sheet><SheetContent><ask /></SheetContent></Sheet></Html>").bloks
+        (blok,) = registered(PANEL + "<Sheet><SheetContent><ask /></SheetContent></Sheet></Blok>").bloks
     assert (blok.catalog, blok.catalog_minor) == (None, None)
     assert "catalog" not in blok.model_dump(exclude_unset=True)
 
@@ -206,61 +199,36 @@ def test_every_family_of_the_base_catalog_is_drawn_without_naming_one() -> None:
 def test_an_action_blok_names_the_catalog_it_is_written_for() -> None:
     from arkitekt_spec.blok.catalogs import ORKESTRATOR_CATALOG_ID
 
-    source = "<Html><MikroScene value={task.args.scene}><MikroSceneViewport /></MikroScene><ask /></Html>"
-    (blok,) = registered(ActionBlok(source, catalog=ORKESTRATOR_CATALOG_ID)).bloks
+    content = "<MikroScene value={task.args.scene}><MikroSceneViewport /></MikroScene><ask /></Blok>"
+    (blok,) = registered(f'<Blok kind="action" context="panel" catalog="{ORKESTRATOR_CATALOG_ID}">' + content).bloks
 
     assert (blok.catalog, blok.catalog_minor) == (ORKESTRATOR_CATALOG_ID, None)
     with pytest.raises(BlokError, match=r"<MikroScene> is of https://arkitekt.live/catalogs/orkestrator/v1.*\[catalog.target\]"):
-        registered(source)
-
-
-def test_an_action_blok_local_is_typed_by_local_t() -> None:
-    (blok,) = registered(ActionBlok("<Html><Card><Slider bind={n} /><ask /></Card></Html>", locals={"n": Local[float]()})).bloks
-
-    (local,) = blok.locals
-    assert (local.key, local.kind, local.default) == ("n", "FLOAT", None)
-
-
-def test_an_action_blok_local_nothing_types_is_any() -> None:
-    definition = registered(ActionBlok("<Html><Card><ask /></Card></Html>", locals={"x": None}))
-    (blok,) = definition.bloks or ()
-    (local,) = blok.locals
-    assert (local.key, local.kind) == ("x", "ANY")
-
-
-def test_an_action_blok_local_takes_the_kind_of_the_control_bound_to_it() -> None:
-    """It is sent as written; the tree resolves it as a server stores it."""
-    definition = registered(ActionBlok("<Html><Card><Slider bind={x} /></Card></Html>", locals={"x": None}))
-    (blok,) = definition.bloks or ()
-    (local,) = blok.locals
-    assert "kind" not in local.model_fields_set
-    assert blok.source is not None
-    (resolved,) = resolve_scope(parse_bsx(blok.source), BlokScope(kind="action", locals=tuple(blok.locals)), default_view()).locals
-    assert resolved.kind == "FLOAT"
+        registered(PANEL + content)
 
 
 def test_a_refused_action_blok_keeps_its_code_node_and_hint() -> None:
     with pytest.raises(BlokError) as raised:
-        registered("<Html><Card><Text text={deps.nowhere.x} /></Card></Html>")
+        registered(PANEL + "<Card><Text text={deps.nowhere.x} /></Card></Blok>")
 
     assert raised.value.code == "deps.unknown"
     assert raised.value.node is not None and "Text" in raised.value.node
-    assert "Action 'process' (html blok" in str(raised.value)
+    assert "Action 'process' (panel blok" in str(raised.value)
 
 
 def test_an_action_blok_warning_names_the_action_and_context() -> None:
     from arkitekt_spec.declare.catalogs import CatalogWarning
 
     with pytest.warns(CatalogWarning) as caught:
-        registered("<Html><Card><Frobnicator /><ask /></Card></Html>")
+        registered(PANEL + "<Card><Frobnicator /><ask /></Card></Blok>")
 
     warnings = [record.message for record in caught if isinstance(record.message, CatalogWarning)]
-    assert {warning.blok for warning in warnings} == {"process:html"}
+    assert {warning.blok for warning in warnings} == {"process:panel"}
     assert {warning.finding.code for warning in warnings if warning.finding is not None} == {"catalog.unknown_component"}
 
 
 PREPARE = """
-<Html>
+<Blok kind="assign" context="panel">
   <Row>
     <Space room="room:lab" height="24rem"><Placed dep="robot" /></Space>
     <Card>
@@ -270,11 +238,11 @@ PREPARE = """
       <Button onClick={assign.start()}>Start</Button>
     </Card>
   </Row>
-</Html>
+</Blok>
 """
 
 
-def registered_to_start(assign_bloks: ActionBloks | None, bloks: ActionBloks | None = None) -> DefinitionInput:
+def registered_to_start(bloks: ActionBloks | None) -> DefinitionInput:
     registry = AppRegistry()
     registry.declare(app="arm")(Arm)
 
@@ -282,14 +250,14 @@ def registered_to_start(assign_bloks: ActionBloks | None, bloks: ActionBloks | N
         """Process slides."""
         robot.pick(slots[0])
 
-    registry.register_workflow(process, bloks=bloks, assign_bloks=assign_bloks)
+    registry.register_workflow(process, bloks=bloks)
     return registry.implementations["process"].definition
 
 
 def test_an_assign_blok_is_the_actions_own_for_starting_a_run() -> None:
-    definition = registered_to_start(PREPARE, bloks="<Html><Card><ask /></Card></Html>")
+    definition = registered_to_start([PANEL + "<Card><ask /></Card></Blok>", PREPARE])
 
-    assert [(blok.phase, blok.context) for blok in definition.bloks] == [("RUN", "HTML"), ("ASSIGN", "HTML")]
+    assert [(blok.phase, blok.context) for blok in definition.bloks] == [("RUN", "PANEL"), ("ASSIGN", "PANEL")]
     wire = definition.model_dump(mode="json", by_alias=False, exclude_unset=True)
     assert [blok.get("phase") for blok in wire["bloks"]] == [None, "ASSIGN"], "a run's blok keeps its bytes"
     assert definition_hash(definition) == definition_hash(registered_to_start(None))
@@ -297,12 +265,12 @@ def test_an_assign_blok_is_the_actions_own_for_starting_a_run() -> None:
 
 def test_starting_and_watching_keep_to_their_own_bloks() -> None:
     with pytest.raises(BlokError, match=r"an assign blok has no 'task'"):
-        registered_to_start("<Html><Text>{task.status}</Text></Html>")
+        registered_to_start(ASSIGN + "<Text>{task.status}</Text></Blok>")
     with pytest.raises(ValueError, match="holds no 'ask'"):
-        registered_to_start("<Html><ask /></Html>")
+        registered_to_start(ASSIGN + "<ask /></Blok>")
     with pytest.raises(BlokError, match=r"<args> belongs to assign bloks.*\[catalog.kind\]"):
-        registered_to_start(None, bloks="<Html><args /></Html>")
+        registered_to_start(PANEL + "<args /></Blok>")
     with pytest.raises(BlokError, match=r"assign.start\(\) belongs to starting a run"):
-        registered_to_start(None, bloks="<Html><Button onClick={assign.start()}>Go</Button></Html>")
+        registered_to_start(PANEL + "<Button onClick={assign.start()}>Go</Button></Blok>")
     with pytest.raises(ValueError, match="one assign blok per context"):
-        registered_to_start(["<Html><args /></Html>", "<Html><args /></Html>"])
+        registered_to_start([ASSIGN + "<args /></Blok>", ASSIGN + "<args /></Blok>"])

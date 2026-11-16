@@ -34,10 +34,10 @@ def test_a_placement_rule_is_spelled_out() -> None:
 def test_the_prompt_lists_every_component_drawn_in_its_context_and_every_function() -> None:
     view = default_view()
 
-    prompt = blok_prompt(view, kind="custom", context="HTML")
+    prompt = blok_prompt(view, kind="custom", context="PANEL")
 
     listed = {line[2:].split("(")[0].split("[")[0] for line in prompt.splitlines() if line.startswith("- ")}
-    for component in drawn_in(view, "HTML", "custom"):
+    for component in drawn_in(view, "PANEL", "custom"):
         assert component.name in listed, component.name
     assert view.component("Model") is not None and "Model" not in listed
     assert "timeline" in listed and not {"args", "arg", "deps", "dep", "ask", "returns", "status"} & listed

@@ -7,6 +7,9 @@ tree under the same scoping rules, so the traversal lives here and they supply a
   that shows it are rarely nested), each written by one call site;
 - a ``foreach``'s ``let`` is in scope in its children and in its own ``key``, not in its
   ``items``;
+- a ``<local>`` is in scope in its parent's subtree: its siblings and their children (every
+  local of a parent is bound before any of its children is walked, in order, so a second local
+  of one name sees the first);
 - ``event`` is in scope in a callback prop (one that holds a task call or an effect, a
   query's refetch or fetch_more included), ``error`` inside the ``<error>`` slot of a
   ``<suspense>``.
@@ -23,6 +26,7 @@ from arkitekt_spec.actions import (
     ComponentPropInput,
     UtilCallInput,
 )
+from arkitekt_spec.blok.declared import LOCAL_COMPONENT, NAME_PROP
 from arkitekt_spec.blok.vocabulary import load_vocabulary
 
 FOREACH_COMPONENT = "foreach"
@@ -103,6 +107,16 @@ def foreach_let(node: ComponentNodeInput) -> str | None:
     )
 
 
+def local_declared(node: ComponentNodeInput) -> str | None:
+    """The name a ``<local>`` declares (its ``name`` prop's ``declares_value``), or None."""
+    if node.component != LOCAL_COMPONENT:
+        return None
+    return next(
+        (prop.declares_value for prop in node.props or () if prop.key == NAME_PROP and prop.declares_value),
+        None,
+    )
+
+
 def iter_nodes(node: ComponentNodeInput) -> list[ComponentNodeInput]:
     """``node`` and every node below it, depth first."""
     nodes = [node]
@@ -146,6 +160,13 @@ class TreeVisitor(Protocol[Binding]):
         """What an ``into`` name is bound to: the record of ``call``."""
         ...
 
+    def bind_local(
+        self, name: str, node: ComponentNodeInput, scope: Mapping[str, Binding]
+    ) -> Binding:  # pragma: no cover - protocol
+        """What a ``<local>`` named ``name`` (the node ``node``) is bound to in its parent's
+        subtree; ``scope`` is what is in scope where it is declared."""
+        ...
+
 
 def walk_tree(node: ComponentNodeInput, visitor: TreeVisitor[Binding]) -> None:
     """Walk ``node`` with ``visitor``: every node, then every value of its props, in scope."""
@@ -176,7 +197,12 @@ def _walk_node(
     in_slot = in_error or (
         node.component == ERROR_SLOT and bool(ancestors) and ancestors[-1].component == SUSPENSE_COMPONENT
     )
-    for child in node.children or ():
+    children = node.children or ()
+    for child in children:
+        name = local_declared(child)
+        if name is not None:
+            inner[name] = visitor.bind_local(name, child, dict(inner))
+    for child in children:
         _walk_node(child, visitor, inner, (*ancestors, node), in_slot)
 
 
@@ -259,6 +285,7 @@ __all__ = [
     "is_callback_value",
     "is_effect",
     "iter_nodes",
+    "local_declared",
     "node_context",
     "walk_tree",
 ]

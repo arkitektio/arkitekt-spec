@@ -1,7 +1,7 @@
 """Convert an SVG file into a logo blok: :func:`from_svg`.
 
-A logo blok draws with the logo components of the base catalog
-(``SVG``/``ActionLogo``, ``G``, ``Path``, ``Circle``, ... ``LinearGradient``,
+A logo blok is a ``<Blok kind=... context="logo">`` holding one ``Logo``, drawn with the logo
+components of the base catalog (``G``, ``Path``, ``Circle``, ... ``LinearGradient``,
 ``ClipPath``), which are a subset of SVG under camelCase names. Designers hand over
 ``.svg`` files written by Inkscape, Illustrator or Figma, so this translates what the
 subset can draw and drops the rest, saying what it dropped:
@@ -34,18 +34,19 @@ import xml.etree.ElementTree as ET
 from collections.abc import Callable, Collection, Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
-from arkitekt_spec.actions import ComponentContext, ComponentNodeInput, ComponentPropInput
+from arkitekt_spec.actions import ComponentNodeInput, ComponentPropInput
 from arkitekt_spec.blok.bsx import parse_bsx
 from arkitekt_spec.blok.catalogs import base_catalog
 from arkitekt_spec.blok.unparse import to_bsx
 from arkitekt_spec.blok.vocabulary import load_vocabulary
 from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
 
-LOGO_CONTEXTS = ("LOGO", "ACTION_LOGO")
-"""The blok contexts a logo is drawn in: an agent's logo and an action's."""
-LOGO_ROOTS = {context: root for root, context in load_vocabulary().blok_roots.items() if context in LOGO_CONTEXTS}
-"""The root of each logo blok: ``AgentLogo`` for an agent's, ``ActionLogo`` for an action's."""
+LOGO_KINDS = ("agent", "action")
+"""The kinds a logo is: an agent's logo and an action's."""
+LOGO_COMPONENT = "Logo"
+"""The one element of a logo blok: the drawing."""
 LOGO_PAINT_TOKENS = load_vocabulary().theme.logo_pens
 """The pens a logo paints with: colours of the viewer's theme, never of the logo's own."""
 
@@ -61,7 +62,7 @@ class SvgConversionError(ValueError):
 def from_svg(
     svg: str | bytes | os.PathLike[str],
     *,
-    context: ComponentContext | str = ComponentContext.LOGO,
+    kind: Literal["agent", "action"] = "agent",
     title: str | None = None,
     palette: Mapping[str, str] | None = None,
     precision: int | None = None,
@@ -72,8 +73,8 @@ def from_svg(
     Args:
         svg: The SVG document as text (``str`` or ``bytes``), or the path of a file.
             Text and path are told apart by type: a ``str`` is never read as a path.
-        context: ``logo`` (an agent's logo, rooted at ``AgentLogo``) or ``action_logo``
-            (an action's, rooted at ``ActionLogo``). Both paint with the pens only.
+        kind: ``agent`` (an agent's logo) or ``action`` (an action's): the ``<Blok kind>``.
+            Both paint with the pens only.
         title: The logo's title; the SVG's own ``<title>`` when left out.
         palette: Colours to paint with a pen, e.g. ``{"#0f172a": "ink"}``. Keys are
             any CSS colour, values ``LOGO_PAINT_TOKENS``; a colour it does not name goes
@@ -86,18 +87,15 @@ def from_svg(
     Returns:
         BSX source. Pass it to ``app.blok(name, ...)``. For an inline
         ``@app.action(logo=...)``, which reads a string as a blok *name*, parse it
-        first: ``logo=bsx(from_svg(path, context="action_logo"))``.
+        first: ``logo=bsx(from_svg(path, kind="action"))``.
 
     Raises:
         SvgConversionError: If the SVG cannot be read, or the logo it converts to
             breaks a logo limit (components, depth, path data), or -- under
             ``strict`` -- anything is lost.
     """
-    context_name = str(getattr(context, "value", context)).upper()
-    if context_name not in LOGO_CONTEXTS:
-        raise ValueError(
-            f"from_svg makes logo bloks: context is one of {LOGO_CONTEXTS}, not {context!r}"
-        )
+    if kind not in LOGO_KINDS:
+        raise ValueError(f"from_svg makes logo bloks: kind is one of {LOGO_KINDS}, not {kind!r}")
     if precision is not None and precision < 0:
         raise ValueError(f"precision is a number of decimals, not {precision!r}")
 
@@ -109,16 +107,20 @@ def from_svg(
         precision=precision,
         strict=strict,
     )
-    root_name = LOGO_ROOTS[context_name]
-    tree = _finish(converter.convert(root_name, title), f"{root_name}[0]")
+    drawing = _finish(converter.convert(LOGO_COMPONENT, title), f"Blok[0]/{LOGO_COMPONENT}[0]")
+    tree = ComponentNodeInput(
+        id="Blok[0]",
+        component="Blok",
+        props=(ComponentPropInput(key="kind", static_value=kind), ComponentPropInput(key="context", static_value="logo")),
+        children=(drawing,),
+    )
 
     source = to_bsx(tree)
     if parse_bsx(source) != tree:  # pragma: no cover - a converter bug, not an input error
         raise SvgConversionError(
             "the converted logo does not parse back into the tree it was printed from"
         )
-    kind = "action_logo" if context_name == "ACTION_LOGO" else "agent"
-    errors = [finding for finding in check_blok_tree(tree, BlokScope(kind=kind, context=context_name)) if finding.level == "error"]
+    errors = [finding for finding in check_blok_tree(tree, BlokScope(kinds=(kind,), dependencies=())) if finding.level == "error"]
     if errors:
         hint = ""
         if "path data" in errors[0].message and precision is None:

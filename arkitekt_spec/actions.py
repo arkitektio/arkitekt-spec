@@ -151,16 +151,14 @@ class OptionKey(str, Enum):
 
 
 class ComponentContext(str, Enum):
-    """The renderer a blok component lives in. A blok's tree starts in HTML."""
+    """What draws a blok, as its ``<Blok context=...>`` says. A blok's tree starts in PANEL."""
 
-    HTML = "HTML"
-    "Panels, dashboards and popouts."
+    PANEL = "PANEL"
+    "Panels, dashboards and popouts: a flat rectangle the host lays out."
     SCENE = "SCENE"
     "A 3D view."
     LOGO = "LOGO"
-    "An SVG drawing: an agent's logo, which clients render against its demo state."
-    ACTION_LOGO = "ACTION_LOGO"
-    "An action's logo: an SVG in the viewer's palette, drawn against the task the viewer last ran of it (``@task``, null until then)."
+    "An SVG drawing: an agent's logo (kind agent), drawn against its demo state, or an action's (kind action), drawn against the task the viewer last ran of it."
 
 
 class PortKind(str, Enum):
@@ -885,9 +883,9 @@ class BlokImplementationInput(BlokRules, ActionModel):
         default=None,
         description="A human-readable description about this Blok's purpose and functionality.",
     )
-    context: Annotated[ComponentContext, GraphQLDefault("HTML")] = Field(
-        default=ComponentContext.HTML,
-        description="The renderer for this Blok's root: HTML for panels and dashboards, SCENE for a full 3D view whose one root is the Scene component.",
+    context: Annotated[ComponentContext, GraphQLDefault("PANEL")] = Field(
+        default=ComponentContext.PANEL,
+        description="What draws it, as its `<Blok context=...>` says (the server holds the two to agree): PANEL for panels and dashboards, SCENE for a 3D view (one Scene), LOGO for a logo (one Logo).",
     )
     default: Annotated[bool, GraphQLDefault("false")] = Field(
         default=False,
@@ -897,7 +895,7 @@ class BlokImplementationInput(BlokRules, ActionModel):
         validation_alias=AliasChoices("for_model", "forModel"),
         serialization_alias="forModel",
         default=None,
-        description="The model ('sha256:...') this Blok decorates: viewers showing that model offer this Blok at `for_node`. HTML bloks only.",
+        description="The model ('sha256:...') this Blok decorates: viewers showing that model offer this Blok at `for_node`. PANEL bloks only.",
     )
     for_node: str | None = Field(
         validation_alias=AliasChoices("for_node", "forNode"),
@@ -907,7 +905,7 @@ class BlokImplementationInput(BlokRules, ActionModel):
     )
     args: tuple["ArgPortInput", ...] | None = Field(
         default=None,
-        description="The items this Blok is opened for, declared like an action's args and read under `args.<key>`. A UI offers the Blok on any item its args accept. HTML bloks only.",
+        description="The items this Blok is opened for, declared like an action's args and read under `args.<key>`. A UI offers the Blok on any item its args accept. PANEL bloks only.",
     )
     vocab: Literal[2] = Field(description="The blok language version the blok speaks; v2 is the only one.")
     catalog_minor: int | None = Field(
@@ -917,10 +915,7 @@ class BlokImplementationInput(BlokRules, ActionModel):
         ge=0,
         description="The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
     )
-    locals: tuple[BlokLocalInput, ...] = Field(default=(), description="Its locals: form state that feeds a call, written only through bind.")
     demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
-    queries: tuple[BlokQueryInput, ...] = Field(default=(), description="Its declared reads, as `queries.<key>`.")
-    subscriptions: tuple[BlokSubscriptionInput, ...] = Field(default=(), description="Its declared streams, as `subscriptions.<key>`.")
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )
@@ -1018,23 +1013,23 @@ class ComponentPropInput(ActionModel):
 
 
 #: The contexts an action has a blok for, one each.
-ACTION_BLOK_CONTEXTS = frozenset({ComponentContext.HTML.value, ComponentContext.SCENE.value})
+ACTION_BLOK_CONTEXTS = frozenset({ComponentContext.PANEL.value, ComponentContext.SCENE.value})
 
 
 class ActionBlokInput(ActionBlokRules, ActionModel):
     """An action's own blok: how a client shows a run of it in one context. It has no name, is never
     listed on its own, and names devices only by the action's dependency keys."""
 
-    context: Annotated[ComponentContext, GraphQLDefault("HTML")] = Field(
-        default=ComponentContext.HTML,
-        description="Where a client shows the run with it: HTML in a task panel, SCENE as a 3D view (its root a `Scene`, or a `Space` placing the run's dependencies in a room whose layout is shared).",
+    context: Annotated[ComponentContext, GraphQLDefault("PANEL")] = Field(
+        default=ComponentContext.PANEL,
+        description="Where a client shows the run with it, as its `<Blok context=...>` says: PANEL in a task panel, SCENE as a 3D view (a `Scene`, or a `Space` placing the run's dependencies in a room whose layout is shared).",
     )
     phase: Literal["RUN", "ASSIGN"] = Field(
         default="RUN",
         # Never written for a run's blok: it keeps the bytes it had before there were phases,
         # which an older takt or kabinet (strict readers) accepts.
         exclude_if=lambda phase: phase == "RUN",
-        description="When a client shows it: RUN for a run of the action (it reads the run as `task`), ASSIGN before one, to start it (no `task`; `<args />` places the argument form, `assign.start()` starts the run). One blok per context and phase. Sent only for ASSIGN.",
+        description="When a client shows it, as its `<Blok kind=...>` says: RUN for a run of the action (kind action; it reads the run as `task`), ASSIGN before one, to start it (kind assign; no `task`; `<args />` places the argument form, `assign.start()` starts the run). One blok per context and phase. Sent only for ASSIGN.",
     )
     components: tuple["ComponentNodeInput", ...] | None = Field(
         default=None,
@@ -1057,10 +1052,7 @@ class ActionBlokInput(ActionBlokRules, ActionModel):
         ge=0,
         description="The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
     )
-    locals: tuple[BlokLocalInput, ...] = Field(default=(), description="Its locals: form state that feeds a call, written only through bind.")
     demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
-    queries: tuple[BlokQueryInput, ...] = Field(default=(), description="Its declared reads.")
-    subscriptions: tuple[BlokSubscriptionInput, ...] = Field(default=(), description="Its declared streams.")
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )
@@ -1101,10 +1093,7 @@ class AskBlokInput(AskBlokRules, ActionModel):
         ge=0,
         description="The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
     )
-    locals: tuple[BlokLocalInput, ...] = Field(default=(), description="Its locals: form state that feeds a call, written only through bind.")
     demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
-    queries: tuple[BlokQueryInput, ...] = Field(default=(), description="Its declared reads.")
-    subscriptions: tuple[BlokSubscriptionInput, ...] = Field(default=(), description="Its declared streams.")
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )
@@ -1144,10 +1133,7 @@ class InformBlokInput(InformBlokRules, ActionModel):
         ge=0,
         description="The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
     )
-    locals: tuple[BlokLocalInput, ...] = Field(default=(), description="Its locals: form state that feeds a call, written only through bind.")
     demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
-    queries: tuple[BlokQueryInput, ...] = Field(default=(), description="Its declared reads.")
-    subscriptions: tuple[BlokSubscriptionInput, ...] = Field(default=(), description="Its declared streams.")
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )
@@ -1226,7 +1212,7 @@ class DefinitionInput(DefinitionRules, ActionModel):
         # Never written when empty, like `protocols`: a definition without bloks is the bytes it
         # was before actions had any, which an older takt or kabinet (strict readers) accepts.
         exclude_if=lambda bloks: not bloks,
-        description="The action's own bloks, at most one per context: how a client shows a run of it (HTML in a task panel, SCENE a 3D view, as a `Space` placing the run's dependencies), and one per context for starting one (phase ASSIGN). They name devices only by the action's dependency keys. Stored with the action, never listed on their own, and not part of its hash.",
+        description="The action's own bloks, at most one per context: how a client shows a run of it (PANEL in a task panel, SCENE a 3D view, as a `Space` placing the run's dependencies), and one per context for starting one (phase ASSIGN). They name devices only by the action's dependency keys. Stored with the action, never listed on their own, and not part of its hash.",
     )
     "The action's own bloks, one per context. Not part of the hash; never dumped when empty."
 
@@ -1536,7 +1522,7 @@ class ImplementationInput(ImplementationRules, ActionModel):
     )
     logo: str | None = Field(
         default=None,
-        description="The key of the agent's action logo blok (context ACTION_LOGO) that draws this action.",
+        description="The key of the agent's action logo blok (`<Blok kind=\"action\" context=\"logo\">`) that draws this action.",
     )
     asks: tuple[AskBlokInput, ...] | None = Field(
         default=None,

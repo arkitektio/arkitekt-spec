@@ -4,9 +4,19 @@ Every rule is a row of the vocabulary's diagnostic table and is driven by its da
 reserved list, the per-kind root matrix, the record shapes, the function signatures and the
 theme. A finding is an error (the blok is refused) or a warning (it is reported).
 
+- **The blok.** Its root is one ``<Blok kind context>``; the kind is drawn in the context, a
+  scene holds one ``Scene`` or ``Space`` and a logo one ``Logo`` beside its declarations, and
+  ``chrome`` is a panel's or a scene's. Mounted somewhere (``BlokScope.kinds``), the kind is
+  the one the mount takes (``kind.placement``).
+- **Mounted or not.** ``BlokScope.dependencies`` None is a blok checked on its own (an editor,
+  ``validate_bsx``): what its mount provides (``deps.<key>``, ``self``'s actions and states,
+  ``args.<key>``, a local's ``like``) is taken as written. Mounted, all of it is checked.
 - **Roots.** A path starts at a root its kind reads (``self``, ``deps``, ``args``, ``task``,
-  ``queries``, ``subscriptions``, ``viewer``, ``then``), at a declared local, a ``let`` or an
+  ``queries``, ``subscriptions``, ``viewer``, ``then``), at a local in scope, a ``let`` or an
   ``into`` name; ``event`` only in a callback, ``error`` only in an ``<error>`` slot.
+- **Declarations.** A ``<local>`` comes first among its parent's children, inside an element
+  that takes children, and is in scope in its parent's subtree; it shadows nothing. Queries and
+  subscriptions are children of the ``<Blok>``, each name declared once.
 - **Agents.** ``self`` / ``deps.<key>``: ``.<state>.<field>``, ``.tasks.<action>`` (a task
   record), ``.assets.<name>``, ``.id``/``.name``; calls ``.<action>(...)``.
 - **Callbacks.** A callback prop holds one task call or one effect (``ui.copy``,
@@ -47,7 +57,6 @@ from arkitekt_spec.actions import (
     BlokLocalInput,
     BlokQueryInput,
     BlokSubscriptionInput,
-    ComponentContext,
     ComponentNodeInput,
     ComponentPropInput,
     PortKind,
@@ -56,8 +65,25 @@ from arkitekt_spec.actions import (
     StateImplementationInput,
     UtilCallInput,
 )
-from arkitekt_spec.blok.bsx import FETCH_MORE_FUNCTION, QUERY_SUGAR, TEXT_NODE
-from arkitekt_spec.blok.catalogs import BlokView, default_view
+from arkitekt_spec.blok.bsx import FETCH_MORE_FUNCTION, QUERY_SUGAR, TEXT_NODE, source_catalog
+from arkitekt_spec.blok.catalogs import BlokView, blok_view, default_view, known_catalog
+from arkitekt_spec.blok.declared import (
+    LOCAL_COMPONENT,
+    QUERY_COMPONENT,
+    SUBSCRIPTION_COMPONENT,
+    VAR_COMPONENT,
+    BlokHeader,
+    blok_header,
+    content,
+    declaration_problem,
+    declared_queries,
+    declared_subscriptions,
+    header_problem,
+    is_declaration,
+    iter_with_parents,
+    local_name,
+    local_problem,
+)
 from arkitekt_spec.blok.vocabulary import (
     JSON,
     BlokError,
@@ -66,22 +92,22 @@ from arkitekt_spec.blok.vocabulary import (
     Vocabulary,
     load_vocabulary,
 )
+from arkitekt_spec.declare.blok.infer import ArgPorts, ResolvedLocal, resolve_locals
 from arkitekt_spec.declare.blok.walk import (
     BIND_PROP,
+    FOREACH_COMPONENT,
     FOREACH_ITEMS_PROP,
     FOREACH_KEY_PROP,
     WHEN_PROP,
     Where,
     action_key_for,
-    argument_paths,
-    foreach_let,
     into_sites,
     is_callback_value,
-    iter_nodes,
     walk_tree,
 )
 from arkitekt_spec.declare.catalogs import ASSET_KIND, CALLBACK_KIND, BlokCheckMode, ComponentSpec
 from arkitekt_spec.declare.definition.match import build_port_match, build_port_matches
+from arkitekt_spec.rules import declared_name_problem, field_path_problem, operation_keyword
 
 OPEN_IDENTIFIER = "*"
 """Marks a value nothing declares the shape of: any path below it is taken as written."""
@@ -89,8 +115,8 @@ ITEM = "..."
 TOAST_COMPONENT = "Toast"
 TOAST_TASK_PROP = "task"
 CLASS_NAME = "className"
-ACTION_LOGO = "ACTION_LOGO"
 LOGO = "LOGO"
+PANEL = "PANEL"
 
 Match = PortMatchInput | None
 
@@ -149,52 +175,53 @@ def task_record_match(key: str, returns: Sequence[PortMatchInput] | None = None)
     return record_match(key, record.fields, overrides)
 
 
-def blok_context(tree: ComponentNodeInput) -> ComponentContext:
-    """The context a blok's root names (``<Html>`` -> HTML, ``<Space>`` -> SCENE, ...).
-
-    Raises:
-        BlokError: ``context.root_unknown`` if the root names no context.
-    """
-    roots = load_vocabulary().blok_roots
-    if tree.component not in roots:
-        raise BlokError.from_finding(
-            Finding.of("context.root_unknown", tree.id, roots=", ".join(f"<{root}>" for root in roots), component=tree.component)
-        )
-    return ComponentContext(roots[tree.component])
-
-
 # --------------------------------------------------------------------------- the scope
 
 
 @dataclass(frozen=True)
 class BlokScope:
-    """What a blok declares beside its tree: what its reads and calls resolve against.
+    """Where a blok is mounted: what its mount provides, which its reads and calls resolve
+    against. The default is a blok checked on its own, mounted nowhere.
 
     Args:
-        kind: ``agent``, ``custom``, ``task``, ``action`` or ``action_logo`` (the root matrix).
-        context: The blok's context (``HTML``, ``SCENE``, ``LOGO``, ``ACTION_LOGO``).
+        kinds: The kinds the mount takes (``app.blok``: agent; an action's ``bloks=``: action or
+            assign); empty takes any.
+        mount: What the mount is, for a message (``bloks= of process_slides``).
         dependencies: What ``self`` and ``deps.<key>`` resolve against; a ``self`` entry types
-            ``self``, which is open without one.
+            ``self``, which is open without one. None: not mounted, every agent is taken as
+            written.
         args: The keys ``args.<key>`` may read; ``None`` reads any.
         query_values: Per declared query, the shape of its value as its service answers it.
         assets: The assets ``self.assets.<name>`` may name; ``None`` names any.
+        arg_ports: The full arg ports of the actions this side knows (the SDK's own): what a
+            local passed to one whole, or borrowing one (``like``), takes its port from.
     """
 
-    kind: str = "agent"
-    context: str = "HTML"
-    dependencies: tuple[AgentDependencyInput, ...] = ()
-    locals: tuple[BlokLocalInput, ...] = ()
-    queries: tuple[BlokQueryInput, ...] = ()
-    subscriptions: tuple[BlokSubscriptionInput, ...] = ()
+    kinds: tuple[str, ...] = ()
+    mount: str = ""
+    dependencies: tuple[AgentDependencyInput, ...] | None = None
     args: tuple[str, ...] | None = None
     demo: BlokDemoInput | None = None
     query_values: Mapping[str, PortMatchInput] = field(default_factory=dict[str, PortMatchInput])
     assets: frozenset[str] | None = None
+    arg_ports: "ArgPorts" = field(default_factory=dict[str, "Mapping[str, Sequence[ArgPortInput]]"])
 
     @property
-    def drawn_in(self) -> str:
-        """The context its components are drawn in: an action logo's is a logo's."""
-        return LOGO if self.context == ACTION_LOGO else self.context
+    def mounted(self) -> bool:
+        """Whether the blok is checked where it is mounted (its dependencies are known)."""
+        return self.dependencies is not None
+
+
+@dataclass(frozen=True)
+class LocalBinding:
+    """A ``<local>`` in scope: its node and the port it resolved to."""
+
+    node: str
+    name: str
+    local: BlokLocalInput
+
+
+Binding = PortMatchInput | LocalBinding | None
 
 
 # --------------------------------------------------------------------------- the checker
@@ -238,19 +265,25 @@ DEPENDENCY_KEY_PROPS = frozenset({("Placed", "dep"), ("Route", "through")})
 class _Checker:
     """Walks a tree with a :class:`BlokScope` and collects findings."""
 
-    def __init__(self, scope: BlokScope, view: BlokView | None) -> None:
+    def __init__(self, header: BlokHeader, scope: BlokScope, view: BlokView | None, locals_: "Mapping[str, ResolvedLocal]") -> None:
+        self.header = header
         self.scope = scope
         self.view = view
         self.vocabulary = load_vocabulary()
-        self.kind = self.vocabulary.kind(scope.kind)
+        self.kind_name = header.kind
+        self.context = header.context
+        self.kind = self.vocabulary.kind(header.kind).drawn_in(header.context)
         self.findings: list[Finding] = []
-        self.dependencies = {dependency.key: dependency for dependency in scope.dependencies}
-        self.locals = {local.key: local for local in scope.locals}
-        self.queries = {query.key: query for query in scope.queries}
-        self.subscriptions = {subscription.key: subscription for subscription in scope.subscriptions}
+        self.mounted = scope.dependencies is not None
+        self.dependencies = {dependency.key: dependency for dependency in scope.dependencies or ()}
+        self.resolved = locals_
+        """Per ``<local>`` node id, its port with its kind resolved."""
+        self.queries: dict[str, BlokQueryInput] = {}
+        self.subscriptions: dict[str, BlokSubscriptionInput] = {}
         self.bound_locals: set[str] = set()
+        """The node ids of the locals a control binds."""
         self.asks = False
-        self.chromeless: str | None = None
+        self.chromeless: str | None = header.node if header.chrome == CHROME_NONE else None
         """The id of the root that says ``chrome="none"``, when it does."""
         self.into: set[str] = set()
         self.colour = _colour_pattern(self.vocabulary)
@@ -262,48 +295,119 @@ class _Checker:
 
     def check_declarations(self, tree: ComponentNodeInput) -> None:
         vocabulary = self.vocabulary
-        scope = self.scope
-        wrong_logo = (scope.context == ACTION_LOGO) != (scope.kind == "action_logo")
-        if wrong_logo or scope.drawn_in not in self.kind.contexts:
-            self.add("context.kind", None, n=_article(scope.kind), kind=scope.kind, contexts=", ".join(self.kind.contexts), context=scope.context)
-        # A context may have several roots (a SCENE blok is a <Scene> or a <Space>).
-        roots: dict[str, list[str]] = {}
-        for root, context in vocabulary.blok_roots.items():
-            roots.setdefault(context, []).append(root)
-        if scope.context in roots and tree.component not in roots[scope.context]:
-            self.add("context.root", tree.id, context=scope.context.lower(), root="> or <".join(roots[scope.context]), component=tree.component)
-        if scope.locals and not self.kind.locals:
-            self.add("roots.not_in_kind", None, path="locals", n=_article(scope.kind), kind=scope.kind, root="locals", roots=", ".join(sorted(self.kind.roots)))
-        for local in scope.locals:
-            if local.key in vocabulary.reserved:
-                self.add("roots.reserved", f"locals.{local.key}", name=local.key)
-            self.check_local_default(local)
+        header = self.header
+        kind = self.kind_name
+        row = vocabulary.kind(kind)
+        context_name = _spelled(header.context)
+        if header.context not in row.contexts:
+            self.add("context.kind", tree.id, n=_article(kind), kind=kind, contexts=", ".join(_spelled(c) for c in row.contexts), context=context_name)
+        if self.scope.kinds and kind not in self.scope.kinds:
+            expected = " or ".join(self.scope.kinds)
+            self.add("kind.placement", tree.id, n=_article(kind), kind=kind, m=_article(self.scope.kinds[0]), expected=expected, where=self.scope.mount or "here")
+        if header.chrome is not None and header.context not in vocabulary.blok.chrome:
+            self.add("chrome.context", tree.id, context=context_name)
+        allowed = vocabulary.blok.content.get(header.context)
+        if allowed is not None:
+            drawn = content(tree)
+            if len(drawn) != 1 or drawn[0].component not in allowed:
+                found = ", ".join(f"<{node.component}>" if node.component != TEXT_NODE else "text" for node in drawn) or "nothing"
+                self.add("blok.content", tree.id, context=context_name, expected=" or ".join(f"one <{name}>" for name in allowed), found=found)
+        self.check_local_positions(tree)
+        self.check_queries(tree)
         for name, sites in into_sites(tree).items():
             self.into.add(name)
             if name in vocabulary.reserved:
                 self.add("roots.reserved", sites[0][1], name=name)
-            if name in self.locals:
-                self.add("roots.shadow", sites[0][1], name=name, first="a local", second=f"the record of {sites[0][1]}")
             if len(sites) > 1:
                 self.add("into.twice", sites[1][1], name=name, first=sites[0][1], second=sites[1][1])
-        for node in iter_nodes(tree):
-            let = foreach_let(node)
-            if let is None:
+
+    def check_local_positions(self, tree: ComponentNodeInput) -> None:
+        """Each ``<local>`` reads, comes first among its parent's children, inside an element that
+        takes children, in a kind that has locals; a persisted one inside a keyless foreach is a warning."""
+        for node, ancestors in iter_with_parents(tree):
+            if node.component == VAR_COMPONENT and (not ancestors or ancestors[-1].component not in (QUERY_COMPONENT, SUBSCRIPTION_COMPONENT)):
+                self.add("query.declaration", node.id, component="var", problem="belongs inside a <query> or <subscription>")
+            if node.component != LOCAL_COMPONENT:
                 continue
-            if let in vocabulary.reserved:
-                self.add("roots.reserved", node.id, name=let)
-            elif let in self.locals or let in self.into:
-                self.add("roots.shadow", node.id, name=let, first="a local" if let in self.locals else "a call's record", second=f"the let of <foreach> ({node.id})")
-        for query in scope.queries:
-            for path in argument_paths(query.variables):
-                self.resolve(path, None, {}, owner=f"query {query.key}")
-        for subscription in scope.subscriptions:
-            for path in argument_paths(subscription.variables):
-                self.resolve(path, None, {}, owner=f"subscription {subscription.key}")
+            name = local_name(node) or "?"
+            problem = local_problem(node)
+            if problem is not None:
+                self.findings.append(problem)
+                continue
+            if not self.kind.locals:
+                self.add("roots.not_in_kind", node.id, path=f"<local name={name!r}>", n=_article(self.kind_name), kind=self.kind_name, root="locals", roots=", ".join(sorted(self.kind.roots)))
+            if name in self.vocabulary.reserved:
+                self.add("roots.reserved", node.id, name=name)
+            parent = ancestors[-1] if ancestors else None
+            if parent is None:
+                self.add("local.position", node.id, name=name, problem="is a blok's root; a blok is a <Blok>")
+                continue
+            siblings = parent.children or ()
+            before = siblings[: siblings.index(node)]
+            other = next((sibling for sibling in before if sibling.component != LOCAL_COMPONENT), None)
+            if other is not None:
+                shown = "text" if other.component == TEXT_NODE else f"<{other.component}>"
+                self.add("local.position", node.id, name=name, problem=f"comes after {shown} ({other.id}); locals come first among their parent's children")
+            if parent.component in (QUERY_COMPONENT, SUBSCRIPTION_COMPONENT, LOCAL_COMPONENT, VAR_COMPONENT):
+                self.add("local.position", node.id, name=name, problem=f"is inside <{parent.component}>, which declares, and draws nothing")
+            elif self.view is not None:
+                spec = self.view.component(parent.component)
+                if spec is not None and not spec.accepts_children:
+                    self.add("local.position", node.id, name=name, problem=f"is inside <{parent.component}>, which takes no children")
+            resolved = self.resolved.get(node.id)
+            if resolved is None:
+                continue
+            if resolved.like_problem is not None:
+                like = next((prop.static_value for prop in node.props or () if prop.key == "like"), None)
+                self.add("local.like", node.id, name=name, like=like, problem=resolved.like_problem)
+            self.check_local_default(node.id, resolved.local)
+            if resolved.local.persist:
+                loop = next((ancestor for ancestor in reversed(ancestors) if ancestor.component == FOREACH_COMPONENT), None)
+                if loop is not None and not any(prop.key == FOREACH_KEY_PROP for prop in loop.props or ()):
+                    self.add("local.persist_id", node.id, name=name)
+
+    def check_queries(self, tree: ComponentNodeInput) -> None:
+        """Queries and subscriptions are children of the ``<Blok>``, each declared once and readable."""
+        first: dict[tuple[str, str], str] = {}
+        for node, ancestors in iter_with_parents(tree):
+            if node.component not in (QUERY_COMPONENT, SUBSCRIPTION_COMPONENT):
+                continue
+            name = next((prop.static_value for prop in node.props or () if prop.key == "name" and isinstance(prop.static_value, str)), "?")
+            if len(ancestors) != 1:
+                at = ancestors[-1].id if ancestors else "the root"
+                self.add("query.position", node.id, component=node.component, name=name, at=at)
+            problem = declaration_problem(node)
+            if problem is not None:
+                self.findings.append(problem)
+                continue
+            seen = first.get((node.component, name))
+            if seen is not None:
+                self.add("query.duplicate", node.id, what=node.component, name=name, first=seen, second=node.id)
+            first.setdefault((node.component, name), node.id)
+        self.queries = {query.key: query for query in declared_queries(tree)}
+        self.subscriptions = {subscription.key: subscription for subscription in declared_subscriptions(tree)}
+        for what, declared in (("query", self.queries.values()), ("subscription", self.subscriptions.values())):
+            for each in declared:
+                at = f"{'queries' if what == 'query' else 'subscriptions'}.{each.key}"
+                if declared_name_problem(each.key):
+                    self.add("manifest.name", at, what=what, key=each.key)
+                if each.key in self.vocabulary.reserved:
+                    self.add("roots.reserved", at, name=each.key)
+                operation = operation_keyword(each.document)
+                if operation == "mutation":
+                    self.add("query.read_only", at, kind=what, name=each.key, problem="is a mutation: a blok reads, and writes only through a task")
+                elif operation != what:
+                    self.add("query.kind", at, kind=what, name=each.key, operation=operation or "document without an operation")
+        for query in self.queries.values():
+            if query.more is not None and field_path_problem(query.more):
+                self.add("query.more", f"queries.{query.key}", name=query.key, more=query.more, problem="is not a field path into its data (positions, images.items)")
+        if self.kind_name == "action" and self.context == LOGO and self.dependencies:
+            self.add("manifest.action_logo", self.header.node)
+        for subscription in self.subscriptions.values():
             if subscription.history is not None and subscription.history not in self.queries:
                 self.add("query.history", f"subscriptions.{subscription.key}", name=subscription.key, history=subscription.history)
 
-    def check_local_default(self, local: BlokLocalInput) -> None:
+    def check_local_default(self, node_id: str, local: BlokLocalInput) -> None:
         """A local's default fits its port: a number for a number, a list for a list, one of its choices."""
         kind = kind_name(local.kind)
         if kind == LOCAL_ANY:
@@ -320,15 +424,13 @@ class _Checker:
         if kind == "ENUM" and local.choices is not None:
             wrong = value not in [choice.value for choice in local.choices]
         if wrong:
-            self.add("local.default", f"locals.{local.key}", name=local.key, default=value, kind=kind)
+            self.add("local.default", node_id, name=local.key, default=value, kind=kind)
 
-    def local_port(self, path: str) -> ArgPortInput | None:
+    def local_port(self, binding: LocalBinding, path: str) -> ArgPortInput | None:
         """The port a path into a local names (the local, or a field of it), or None when its
         shape does not say (an ``ANY`` local)."""
-        parts = path.split(".")
-        local = self.locals.get(parts[0])
-        port: ArgPortInput | None = local_arg_port(local) if local is not None else None
-        for part in parts[1:]:
+        port: ArgPortInput | None = local_arg_port(binding.local)
+        for part in path.split(".")[1:]:
             if port is None:
                 return None
             children = port.children or ()
@@ -339,15 +441,15 @@ class _Checker:
         return port
 
     def finish(self) -> None:
-        for local in self.scope.locals:
-            if local.persist and local.key not in self.bound_locals:
-                self.add("local.unused_persist", f"locals.{local.key}", name=local.key)
+        for node_id, resolved in self.resolved.items():
+            if resolved.local.persist and node_id not in self.bound_locals:
+                self.add("local.unused_persist", node_id, name=resolved.local.key)
         if self.chromeless is not None and "task" in self.kind.roots and not self.asks:
             self.add("chrome.no_ask", self.chromeless)
 
     # -- the visitor
 
-    def visit_component(self, node: ComponentNodeInput, ancestors: tuple[ComponentNodeInput, ...], scope: Mapping[str, Match]) -> None:
+    def visit_component(self, node: ComponentNodeInput, ancestors: tuple[ComponentNodeInput, ...], scope: Mapping[str, Binding]) -> None:
         spec = self.view.component(node.component) if self.view is not None else None
         if self.view is not None and spec is None:
             foreign = self.view.foreign.get(node.component)
@@ -359,12 +461,12 @@ class _Checker:
             self.check_catalog(node, spec, ancestors)
         self.check_host_part(node, ancestors)
         for prop in node.props or ():
-            self.check_prop(node, prop, spec)
+            self.check_prop(node, prop, spec, scope)
 
     def check_catalog(self, node: ComponentNodeInput, spec: ComponentSpec, ancestors: tuple[ComponentNodeInput, ...]) -> None:
         assert self.view is not None
         texts = [child for child in node.children or () if child.component == TEXT_NODE]
-        elements = len(node.children or ()) - len(texts)
+        elements = len([child for child in node.children or () if child.component != TEXT_NODE and not is_declaration(child)])
         if elements and not spec.accepts_children:
             self.add("catalog.children", node.id, component=node.component)
         if texts:
@@ -383,7 +485,7 @@ class _Checker:
         missing = sorted(prop.key for prop in spec.props if prop.required and prop.key not in present)
         if missing:
             self.add("catalog.props", node.id, component=node.component, detail=f"requires props {missing}")
-        context = "HTML"
+        context = PANEL
         for ancestor in ancestors:
             above = self.view.component(ancestor.component)
             if above is not None and not above.inherits_context:
@@ -396,16 +498,14 @@ class _Checker:
         forbidden = sorted(set(spec.not_downstream_of) & names)
         if forbidden:
             self.add("catalog.placement", node.id, component=node.component, detail=f"must not be inside {forbidden}")
-        if spec.kinds and self.scope.kind not in spec.kinds:
-            self.add("catalog.kind", node.id, component=node.component, kinds=" and ".join(spec.kinds), n=_article(self.scope.kind), kind=self.scope.kind)
+        if spec.kinds and self.kind_name not in spec.kinds:
+            self.add("catalog.kind", node.id, component=node.component, kinds=" and ".join(spec.kinds), n=_article(self.kind_name), kind=self.kind_name)
 
     def check_host_part(self, node: ComponentNodeInput, ancestors: tuple[ComponentNodeInput, ...]) -> None:
         """What the language itself says of the host's parts, whatever catalog draws them: a part
         placed anywhere claims its slot, and a root without chrome leaves the asks to the blok."""
         if node.component == ASK_COMPONENT:
             self.asks = True
-        if not ancestors and any(prop.key == CHROME_PROP and prop.static_value == CHROME_NONE for prop in node.props or ()):
-            self.chromeless = node.id
         if node.component in self.vocabulary.host_parts:
             inside = next((ancestor.component for ancestor in reversed(ancestors) if ancestor.component in CONDITIONAL_COMPONENTS), None)
             if inside is not None:
@@ -414,15 +514,15 @@ class _Checker:
     def check_dependency_keys(self, node: ComponentNodeInput, prop: ComponentPropInput) -> None:
         """A ``Placed dep`` or ``Route through`` names dependencies of the blok, written out as keys."""
         path = f"{node.component}.{prop.key}"
-        if self.scope.kind not in RUN_KINDS:
+        if self.kind_name not in RUN_KINDS or not self.mounted:
             return  # catalog.kind says it: a Space and its parts belong to an action's own blok
         value = prop.static_value
         keys = [value] if isinstance(value, str) else [key for key in value if isinstance(key, str)] if isinstance(value, list) else []
         for key in keys:
             if key not in self.dependencies:
-                self.add("deps.unknown", node.id, path=path, key=key, keys=", ".join(sorted(self.dependencies)) or "none", hint=dependency_hint(key, self.scope.kind))
+                self.add("deps.unknown", node.id, path=path, key=key, keys=", ".join(sorted(self.dependencies)) or "none", hint=dependency_hint(key, self.kind_name))
 
-    def check_prop(self, node: ComponentNodeInput, prop: ComponentPropInput, spec: ComponentSpec | None) -> None:
+    def check_prop(self, node: ComponentNodeInput, prop: ComponentPropInput, spec: ComponentSpec | None, scope: Mapping[str, Binding]) -> None:
         vocabulary = self.vocabulary
         prop_spec = spec.prop(prop.key) if spec is not None else None
         holds = is_callback_value(prop)
@@ -446,21 +546,22 @@ class _Checker:
                 self.add("catalog.asset", node.id, key=prop.key, component=node.component)
         operation = vocabulary.functions.get(prop.util_call.operation) if prop.util_call is not None else None
         if operation is not None and operation.task_operation and "task" not in self.kind.roots:
-            self.add("roots.not_in_kind", node.id, path=operation.name, n=_article(self.scope.kind), kind=self.scope.kind, root="task", roots=", ".join(sorted(self.kind.roots)))
+            self.add("roots.not_in_kind", node.id, path=operation.name, n=_article(self.kind_name), kind=self.kind_name, root="task", roots=", ".join(sorted(self.kind.roots)))
         if prop.key == BIND_PROP:
             path = prop.dynamic_value.path if prop.dynamic_value is not None else None
             if path is None:
                 self.add("local.bind", node.id, what=_what(prop))
             else:
                 root = path.split(".")[0]
-                if root not in self.locals:
+                binding = scope.get(root)
+                if not isinstance(binding, LocalBinding):
                     self.add("local.unknown", node.id, path=path, root=root)
                 else:
-                    self.bound_locals.add(root)
+                    self.bound_locals.add(binding.node)
                     if prop_spec is not None:
-                        self.check_bind_kind(node, prop_spec.kind, path)
-        if prop.util_call is not None and prop.util_call.operation == START_EFFECT and self.scope.kind != ASSIGN_KIND:
-            self.add("assign.kind", node.id, what="assign.start()", n=_article(self.scope.kind), kind=self.scope.kind)
+                        self.check_bind_kind(node, prop_spec.kind, binding, path)
+        if prop.util_call is not None and prop.util_call.operation == START_EFFECT and self.kind_name != ASSIGN_KIND:
+            self.add("assign.kind", node.id, what="assign.start()", n=_article(self.kind_name), kind=self.kind_name)
         if (node.component, prop.key) in DEPENDENCY_KEY_PROPS:
             self.check_dependency_keys(node, prop)
         if node.component == TOAST_COMPONENT and prop.key == TOAST_TASK_PROP:
@@ -470,7 +571,7 @@ class _Checker:
         if isinstance(prop.static_value, str):
             if prop.key == CLASS_NAME:
                 self.check_classes(prop.static_value, node.id)
-            if self.scope.drawn_in == LOGO and prop.key in vocabulary.theme.logo_paint_props:
+            if self.context == LOGO and prop.key in vocabulary.theme.logo_paint_props:
                 self.check_paint(node, prop.key, prop.static_value)
             if spec is not None and spec.context == SCENE and prop.key in vocabulary.theme.scene_paint_props:
                 self.check_scene_colour(node, prop.key, prop.static_value)
@@ -478,10 +579,10 @@ class _Checker:
             for literal in _class_literals(prop.util_call):
                 self.check_classes(literal, node.id)
 
-    def check_bind_kind(self, node: ComponentNodeInput, prop_kind: str, path: str) -> None:
+    def check_bind_kind(self, node: ComponentNodeInput, prop_kind: str, binding: LocalBinding, path: str) -> None:
         """The local a control writes is of a kind the control writes (``Slider``: FLOAT or INT)."""
         allowed = self.vocabulary.bind_kinds.get(prop_kind)
-        port = self.local_port(path)
+        port = self.local_port(binding, path)
         if allowed is None or port is None:
             return
         kind = kind_name(port.kind)
@@ -519,24 +620,24 @@ class _Checker:
             return
         self.add("palette.scene_colour", node.id, component=node.component, prop=key, value=value, roles=", ".join(roles))
 
-    def visit_path(self, path: str, where: Where, scope: Mapping[str, Match]) -> None:
+    def visit_path(self, path: str, where: Where, scope: Mapping[str, Binding]) -> None:
         self.resolve(path, where, scope, owner=where.text)
 
-    def visit_agent_call(self, call: AgentProbeInput, where: Where, scope: Mapping[str, Match], into: str | None) -> None:
+    def visit_agent_call(self, call: AgentProbeInput, where: Where, scope: Mapping[str, Binding], into: str | None) -> None:
         kind = self.kind
         owner = where.text
         action = action_key_for(call)
         if call.dependency == "self":
             if "self" not in kind.roots:
-                self.add("roots.not_in_kind", where.node.id, path=f"self.{action}(...)", n=_article(self.scope.kind), kind=self.scope.kind, root="self", roots=", ".join(sorted(kind.roots)))
+                self.add("roots.not_in_kind", where.node.id, path=f"self.{action}(...)", n=_article(self.kind_name), kind=self.kind_name, root="self", roots=", ".join(sorted(kind.roots)))
                 return
         elif "deps" not in kind.roots:
-            self.add("roots.not_in_kind", where.node.id, path=f"deps.{call.dependency}.{action}(...)", n=_article(self.scope.kind), kind=self.scope.kind, root="deps", roots=", ".join(sorted(kind.roots)))
+            self.add("roots.not_in_kind", where.node.id, path=f"deps.{call.dependency}.{action}(...)", n=_article(self.kind_name), kind=self.kind_name, root="deps", roots=", ".join(sorted(kind.roots)))
             return
         dependency = self.dependencies.get(call.dependency)
         if dependency is None:
-            if call.dependency != "self":
-                self.add("deps.unknown", where.node.id, path=owner, key=call.dependency, keys=", ".join(sorted(self.dependencies)) or "none", hint=dependency_hint(call.dependency, self.scope.kind))
+            if call.dependency != "self" and self.mounted:
+                self.add("deps.unknown", where.node.id, path=owner, key=call.dependency, keys=", ".join(sorted(self.dependencies)) or "none", hint=dependency_hint(call.dependency, self.kind_name))
             return
         actions = dependency.action_dependencies
         if actions is not None and action not in {demand.key for demand in actions}:
@@ -546,16 +647,19 @@ class _Checker:
         if demand is not None and demand.arg_matches:
             self.check_arg_kinds(call, demand.arg_matches, where, scope)
 
-    def check_arg_kinds(self, call: AgentProbeInput, matches: Sequence[PortMatchInput], where: Where, scope: Mapping[str, Match]) -> None:
+    def check_arg_kinds(self, call: AgentProbeInput, matches: Sequence[PortMatchInput], where: Where, scope: Mapping[str, Binding]) -> None:
         """A local passed whole to a task call fits the action's arg port (``arg_kinds``)."""
         ports = {match.key: match for match in matches if match.key is not None}
         name = f"self.{call.operation}" if call.dependency == "self" else f"deps.{call.dependency}.{call.operation}"
         for argument in call.arguments or ():
             path = argument.value_path
             match = ports.get(argument.key or "")
-            if path is None or match is None or match.kind is None or path.split(".")[0] in scope:
+            if path is None or match is None or match.kind is None:
                 continue
-            port = self.local_port(path) if path.split(".")[0] in self.locals else None
+            binding = scope.get(path.split(".")[0])
+            if not isinstance(binding, LocalBinding):
+                continue
+            port = self.local_port(binding, path)
             if port is None:
                 continue
             kind = kind_name(port.kind)
@@ -567,7 +671,7 @@ class _Checker:
                 shown = f"{port_kind} {match.identifier}" if other_structure else port_kind
                 self.add("local.arg_kind", where.node.id, call=name, argument=argument.key, port_kind=shown, path=path, kind=f"{kind} {port.identifier}" if other_structure else kind)
 
-    def visit_util_call(self, call: UtilCallInput, where: Where, scope: Mapping[str, Match], top: bool) -> None:
+    def visit_util_call(self, call: UtilCallInput, where: Where, scope: Mapping[str, Binding], top: bool) -> None:
         functions = self.view.functions if self.view is not None else self.vocabulary.functions
         function = functions.get(call.operation)
         if function is None:
@@ -601,7 +705,7 @@ class _Checker:
             return
         path = f"queries.{name}.{verb}()"
         if "queries" not in self.kind.roots:
-            self.add("roots.not_in_kind", where.node.id, path=path, n=_article(self.scope.kind), kind=self.scope.kind, root="queries", roots=", ".join(sorted(self.kind.roots)))
+            self.add("roots.not_in_kind", where.node.id, path=path, n=_article(self.kind_name), kind=self.kind_name, root="queries", roots=", ".join(sorted(self.kind.roots)))
             return
         query = self.queries.get(name)
         if query is None:
@@ -610,7 +714,11 @@ class _Checker:
         if call.operation == FETCH_MORE_FUNCTION and query.more is None:
             self.add("query.fetch_more", where.node.id, path=path, name=name)
 
-    def bind_let(self, name: str, items: ComponentPropInput | None, where: Where, scope: Mapping[str, Match]) -> Match:
+    def bind_let(self, name: str, items: ComponentPropInput | None, where: Where, scope: Mapping[str, Binding]) -> Binding:
+        if name in self.vocabulary.reserved:
+            self.add("roots.reserved", where.node.id, name=name)
+        elif name in scope:
+            self.add("roots.shadow", where.node.id, name=name, first=_binding_what(name, scope[name], self.into), second=f"the let of <foreach> ({where.node.id})")
         keyed = any(prop.key == FOREACH_KEY_PROP for prop in where.node.props or ())
         if items is not None and isinstance(items.static_value, list) and not keyed:
             if any(isinstance(item, (dict, list)) for item in items.static_value):
@@ -618,7 +726,7 @@ class _Checker:
         if items is None or items.dynamic_value is None or items.dynamic_value.path is None:
             return open_match(name)
         resolved = self.resolve(items.dynamic_value.path, None, scope, owner=where.text, record=False)
-        if resolved is None or is_open(resolved):
+        if resolved is None or isinstance(resolved, LocalBinding) or is_open(resolved):
             return open_match(name)
         children = resolved.children or ()
         if len(children) == 1 and children[0].key == ITEM:
@@ -631,6 +739,14 @@ class _Checker:
         self.add("path.unknown", where.node.id, path=items.dynamic_value.path, detail=f"{FOREACH_ITEMS_PROP} of a foreach reads a list, not this {str(resolved.kind).lower()}")
         return open_match(name)
 
+    def bind_local(self, name: str, node: ComponentNodeInput, scope: Mapping[str, Binding]) -> Binding:
+        if name in scope and name not in self.vocabulary.reserved:
+            self.add("roots.shadow", node.id, name=name, first=_binding_what(name, scope[name], self.into), second=f"the local {node.id}")
+        resolved = self.resolved.get(node.id)
+        if resolved is None:
+            return open_match(name)
+        return LocalBinding(node=node.id, name=name, local=resolved.local)
+
     def bind_into(self, name: str, call: AgentProbeInput) -> Match:
         dependency = self.dependencies.get(call.dependency)
         action = action_key_for(call)
@@ -642,21 +758,22 @@ class _Checker:
 
     # -- paths
 
-    def resolve(self, path: str, where: Where | None, scope: Mapping[str, Match], *, owner: str, record: bool = True) -> Match:
+    def resolve(self, path: str, where: Where | None, scope: Mapping[str, Binding], *, owner: str, record: bool = True) -> Match:
         """What ``path`` holds, recording a finding (and returning None) when it holds nothing."""
         vocabulary = self.vocabulary
         node_id = where.node.id if where is not None else owner
         parts = path.split(".")
         root, rest = parts[0], parts[1:]
         if root in scope:
+            binding = scope[root]
+            if isinstance(binding, LocalBinding):
+                port = local_arg_port(binding.local)
+                if port is None or kind_name(port.kind) in _OPAQUE_KINDS:
+                    return open_match(root)
+                return self.descend(build_port_match(0, port).model_copy(update={"key": root, "at": None}), rest, path, node_id)
             if root in self.into:
                 self.check_returns(path, rest, node_id)
-            return self.descend(scope[root], rest, path, node_id)
-        if root in self.locals:
-            port = local_arg_port(self.locals[root])
-            if port is None or kind_name(port.kind) in _OPAQUE_KINDS:
-                return open_match(root)
-            return self.descend(build_port_match(0, port).model_copy(update={"key": root, "at": None}), rest, path, node_id)
+            return self.descend(binding, rest, path, node_id)
         if root == "event":
             if where is None or not where.callback:
                 self.add("roots.event_outside_callback", node_id, path=path)
@@ -672,7 +789,7 @@ class _Checker:
             self.add("roots.unknown", node_id, path=path, root=root if detail is None else f"{root} ({detail})")
             return None
         if root not in self.kind.roots:
-            self.add("roots.not_in_kind", node_id, path=path, n=_article(self.scope.kind), kind=self.scope.kind, root=root, roots=", ".join(sorted(self.kind.roots)))
+            self.add("roots.not_in_kind", node_id, path=path, n=_article(self.kind_name), kind=self.kind_name, root=root, roots=", ".join(sorted(self.kind.roots)))
             return None
         if root == "then":
             if rest:
@@ -686,7 +803,9 @@ class _Checker:
                 return None
             dependency = self.dependencies.get(rest[0])
             if dependency is None:
-                self.add("deps.unknown", node_id, path=path, key=rest[0], keys=", ".join(sorted(self.dependencies)) or "none", hint=dependency_hint(rest[0], self.scope.kind))
+                if not self.mounted:
+                    return open_match(path)
+                self.add("deps.unknown", node_id, path=path, key=rest[0], keys=", ".join(sorted(self.dependencies)) or "none", hint=dependency_hint(rest[0], self.kind_name))
                 return None
             return self.agent(dependency, rest[0], rest[1:], path, node_id)
         if root == "args":
@@ -855,7 +974,7 @@ def dependency_hint(key: str, kind: str) -> str:
     - an action blok's dependencies are its action's: ``add a dependency parameter `laser` to the action``;
     - an agent blok has none: ``agent bloks read only `self```.
     """
-    if kind in ("action", "assign", "action_logo"):
+    if kind in ("action", "assign"):
         return f"add a dependency parameter `{key}` to the action"
     if kind == "agent":
         return "agent bloks read only `self`"
@@ -985,24 +1104,28 @@ def _demo_items(prop: ComponentPropInput, demo: BlokDemoInput | None) -> int:
     return len(value) if isinstance(value, list) else 0
 
 
-def check_blok_tree(tree: ComponentNodeInput, scope: BlokScope, view: BlokView | None = None) -> list[Finding]:
-    """Every finding of ``tree`` against ``scope`` and ``view``: errors and warnings, in tree order.
+def check_blok_tree(tree: ComponentNodeInput, scope: BlokScope | None = None, view: BlokView | None = None) -> list[Finding]:
+    """Every finding of ``tree`` mounted as ``scope`` says, against ``view``: errors and
+    warnings, in tree order. A root that is no readable ``<Blok>`` is the one finding.
 
-    The scope is resolved first (:func:`~arkitekt_spec.declare.blok.infer.resolve_scope`): the
-    kinds of its locals.
+    Its locals are resolved first (:func:`~arkitekt_spec.declare.blok.infer.resolve_locals`).
 
     Args:
-        tree: The blok's root.
-        scope: What it declares beside its tree (:class:`BlokScope`).
+        tree: The blok: its ``<Blok>``.
+        scope: Where it is mounted (:class:`BlokScope`); left out, nowhere.
         view: The catalogs that draw it; ``None`` skips every catalog rule (component names,
             props, placement, callback props, event fields, unknown functions).
     """
-    from arkitekt_spec.declare.blok.infer import resolve_scope
-
-    checker = _Checker(resolve_scope(tree, scope, view), view)
+    scope = scope or BlokScope()
+    problem = header_problem(tree)
+    if problem is not None:
+        return [problem]
+    header = blok_header(tree)
+    locals_ = resolve_locals(tree, scope.dependencies, view, arg_ports=scope.arg_ports)
+    checker = _Checker(header, scope, view, locals_)
     checker.check_declarations(tree)
     walk_tree(tree, checker)
-    if scope.drawn_in == LOGO:
+    if header.context == LOGO:
         checker.findings.extend(check_logo(tree, scope.demo))
     checker.finish()
     return checker.findings
@@ -1038,21 +1161,54 @@ def validate_bsx(
 
     A finding about a node of a parsed source carries its ``line`` and ``column``, a refusal too.
 
+    The view is the one of the catalog its ``<Blok catalog=...>`` names, as known here, when
+    none is given. Without a ``scope`` it is checked on its own, mounted nowhere.
+
     Example:
-        >>> validate_bsx('<Html><Card><Button>Go</Button></Card></Html>')
+        >>> validate_bsx('<Blok kind="agent" context="panel"><Card><Button>Go</Button></Card></Blok>')
         []
     """
     from arkitekt_spec.blok.bsx import parse_bsx_with_spans
 
-    resolved = view or default_view()
     if not isinstance(source, str):
-        return validate_blok(source, scope, resolved, mode=mode)
+        return validate_blok(source, scope, view or view_for(source_catalog_of(source)), mode=mode)
+    resolved = view or view_for(source_catalog(source))
     tree, spans = parse_bsx_with_spans(source, view=resolved)
     findings = [place(finding, spans) for finding in check_blok_tree(tree, scope or BlokScope(), resolved)]
     for finding in findings:
         if finding.level == "error" or mode == "strict":
             raise BlokError.from_finding(finding)
     return findings
+
+
+def source_catalog_of(tree: ComponentNodeInput) -> str | None:
+    """The catalog a tree's ``<Blok catalog=...>`` names."""
+    from arkitekt_spec.blok.declared import blok_catalog
+
+    return blok_catalog(tree)
+
+
+def view_for(catalog: str | None) -> BlokView:
+    """What a blok written for ``catalog`` is checked with here: the base catalog's for none, the
+    catalog's when it is known here, else an incomplete view that reports no component unknown."""
+    if catalog is None:
+        return default_view()
+    if known_catalog(catalog) is not None:
+        return blok_view(catalog)
+    return blok_view(complete=False)
+
+
+def _spelled(context: str) -> str:
+    """A context as a ``<Blok context>`` spells it (``PANEL`` -> ``panel``)."""
+    return context.lower()
+
+
+def _binding_what(name: str, binding: Binding, into: set[str]) -> str:
+    if isinstance(binding, LocalBinding):
+        return f"the local {binding.node}"
+    if name in into:
+        return "a call's record"
+    return "a let"
 
 
 def place(finding: Finding, spans: Mapping[str, tuple[int, int]]) -> Finding:
@@ -1118,7 +1274,7 @@ def _follow(match: PortMatchInput, parts: Sequence[str], path: str, context: str
 __all__ = [
     "OPEN_IDENTIFIER",
     "BlokScope",
-    "blok_context",
+    "LocalBinding",
     "check_blok_tree",
     "check_logo",
     "is_open",
@@ -1128,4 +1284,5 @@ __all__ = [
     "task_record_match",
     "validate_blok",
     "validate_bsx",
+    "view_for",
 ]

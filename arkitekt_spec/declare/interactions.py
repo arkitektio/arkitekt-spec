@@ -9,7 +9,7 @@ with its blok::
 
     @app.interactions
     class ClusterUI(Protocol):
-        @ask(CHANNELS_BSX, locals={"cluster": Local[ArrayLens]()})
+        @ask(CHANNELS_BSX)  # a <Blok kind="task" context="panel">
         def pick_channels(self, dataset: ChannelImage, error: str = "") -> Picked:
             \"\"\"Pick the two channels.\"\"\"
 
@@ -62,21 +62,13 @@ from arkitekt_spec.actions import (
     InformBlokInput,
     UtilCallInput,
 )
-from arkitekt_spec.blok.bsx import parse_bsx
+from arkitekt_spec.blok.bsx import parse_bsx, source_catalog
+from arkitekt_spec.blok.declared import blok_catalog, blok_header
 from arkitekt_spec.blok.vocabulary import BlokError, load_vocabulary
-from arkitekt_spec.declare.blok.declarations import (
-    Local,
-    Query,
-    Subscription,
-    demo_input,
-    local_inputs,
-    query_inputs,
-    subscription_inputs,
-)
-from arkitekt_spec.declare.blok.infer import resolve_scope
+from arkitekt_spec.declare.blok.declarations import demo_input
 from arkitekt_spec.declare.blok.origin import declared_at, finding_key, warn_at
 from arkitekt_spec.declare.blok.registry import check_catalog_target, checked_view
-from arkitekt_spec.declare.blok.validate import BlokScope, blok_context, check_blok_tree
+from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
 from arkitekt_spec.declare.catalogs import BlokCheckMode
 from arkitekt_spec.declare.definition.define import prepare_definition
 from arkitekt_spec.declare.definition.errors import DefinitionError
@@ -101,25 +93,19 @@ class InteractionOptions:
     """What ``@ask`` and ``@inform`` declare beside the method: the blok and what it declares.
 
     Args:
-        component: The tree, as v2 BSX (sent as such) or already parsed; an ``<Html>``.
-        locals: Its form state, written only through ``bind``: each a :class:`Local`, or a bare default.
+        component: The tree, as v2 BSX (sent as such) or already parsed: a
+            ``<Blok kind="task" context="panel">``, declaring its locals, queries and
+            subscriptions inside.
         dependencies: The agents it reads or calls besides ``self``, as ``deps.<key>``: each a
             protocol class this app declared (``@app.declare``).
         demo: What a preview renders it with.
-        queries: Its declared reads.
-        subscriptions: Its declared streams.
-        catalog: The catalog it is written for; the base catalog when left out.
         description: What it asks or shows, in a sentence; the method's docstring when left out.
         mode: ``"strict"`` refuses on a catalog finding as well as on an error.
     """
 
     component: str | ComponentNodeInput
-    locals: "Mapping[str, Local[object] | JSONSerializable] | None" = None
     dependencies: Mapping[str, type[Any]] | None = None
     demo: "BlokDemoInput | Mapping[str, JSONSerializable] | None" = None
-    queries: "Mapping[str, Query] | None" = None
-    subscriptions: "Mapping[str, Subscription] | None" = None
-    catalog: str | None = None
     description: str | None = None
     mode: BlokCheckMode = "warning"
 
@@ -171,12 +157,8 @@ class InformMethod(InteractionMethod[P, R]):
 def ask(
     component: str | ComponentNodeInput,
     *,
-    locals: "Mapping[str, Local[object] | JSONSerializable] | None" = None,
     dependencies: Mapping[str, type[Any]] | None = None,
     demo: "BlokDemoInput | Mapping[str, JSONSerializable] | None" = None,
-    queries: "Mapping[str, Query] | None" = None,
-    subscriptions: "Mapping[str, Subscription] | None" = None,
-    catalog: str | None = None,
     description: str | None = None,
     mode: BlokCheckMode = "warning",
 ) -> Callable[[Callable[Concatenate[Any, P], R]], AskMethod[P, R]]:
@@ -189,12 +171,8 @@ def ask(
     """
     options = InteractionOptions(
         component=component,
-        locals=locals,
         dependencies=dependencies,
         demo=demo,
-        queries=queries,
-        subscriptions=subscriptions,
-        catalog=catalog,
         description=description,
         mode=mode,
     )
@@ -208,12 +186,8 @@ def ask(
 def inform(
     component: str | ComponentNodeInput,
     *,
-    locals: "Mapping[str, Local[object] | JSONSerializable] | None" = None,
     dependencies: Mapping[str, type[Any]] | None = None,
     demo: "BlokDemoInput | Mapping[str, JSONSerializable] | None" = None,
-    queries: "Mapping[str, Query] | None" = None,
-    subscriptions: "Mapping[str, Subscription] | None" = None,
-    catalog: str | None = None,
     description: str | None = None,
     mode: BlokCheckMode = "warning",
 ) -> Callable[[Callable[Concatenate[Any, P], R]], InformMethod[P, R]]:
@@ -225,12 +199,8 @@ def inform(
     """
     options = InteractionOptions(
         component=component,
-        locals=locals,
         dependencies=dependencies,
         demo=demo,
-        queries=queries,
-        subscriptions=subscriptions,
-        catalog=catalog,
         description=description,
         mode=mode,
     )
@@ -318,37 +288,28 @@ class DeclaredInteraction:
             registry.structure_registry.protocol_for(cls).to_dependency_input(key)
             for key, cls in (options.dependencies or {}).items()
         )
-        view = registry.blok_view(options.catalog)
         declared = options.component
         source = declared if isinstance(declared, str) else None
         try:
+            catalog = source_catalog(declared) if isinstance(declared, str) else blok_catalog(declared)
+            view = registry.blok_view(catalog)
             component = parse_bsx(declared, view=view) if isinstance(declared, str) else declared
-            context = blok_context(component)
+            header = blok_header(component)
         except BlokError as error:
             raise error.within(f"{where} ({role})") from None
-        if context != ComponentContext.HTML:
-            raise DefinitionError(f"{where}: an {role} is an <Html> blok, not <{component.component}>")
-        try:
-            locals_ = local_inputs(options.locals, registry)
-        except BlokError as error:
-            raise error.within(f"{where} ({role})") from None
-        queries = query_inputs(options.queries)
-        subscriptions = subscription_inputs(options.subscriptions)
+        if header.context != ComponentContext.PANEL.value:
+            raise DefinitionError(f"{where}: an {role} is a panel blok, not a {header.context.lower()}")
         demo = demo_input(options.demo)
         scope = BlokScope(
-            kind="task",
-            context=context.value,
+            kinds=("task",),
+            mount=f"@{role} {where}",
             dependencies=self.dependencies,
-            locals=locals_,
-            queries=queries,
-            subscriptions=subscriptions,
             args=tuple(port.key for port in self.definition.args or ()),
             demo=demo,
         )
-        scope = resolve_scope(component, scope, view)
         at = declared_at()
         reported: set[str] = set()
-        for finding in check_catalog_target(options.catalog, registry):
+        for finding in check_catalog_target(catalog, registry):
             if options.mode == "strict":
                 raise BlokError.from_finding(finding)
             warn_at(f"{where} ({role}): {finding.message} [{finding.code}]", at, finding=finding, blok=where)
@@ -374,12 +335,9 @@ class DeclaredInteraction:
         optional: dict[str, object] = {
             "components": None if source is not None else (component,),
             "source": source,
-            "catalog": options.catalog,
+            "catalog": catalog,
             "dependencies": self.dependencies or None,
-            "locals": locals_ or None,
             "demo": demo,
-            "queries": queries or None,
-            "subscriptions": subscriptions or None,
         }
         self._fields.update({name: value for name, value in optional.items() if value is not None})
 

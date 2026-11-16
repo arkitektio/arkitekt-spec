@@ -106,35 +106,46 @@ def check_blok(blok: BlokImplementationInput) -> BlokImplementationInput:
     No catalog is consulted: what draws it is the UI's to say. Raises the first error as a
     :class:`~arkitekt_spec.blok.vocabulary.BlokError`.
     """
+    from arkitekt_spec.blok.declared import blok_header
     from arkitekt_spec.declare.blok.validate import BlokScope, validate_blok
 
-    context = ComponentContext(blok.context).value
     scope = BlokScope(
-        kind="action_logo" if context == ComponentContext.ACTION_LOGO.value else "agent",
-        context=context,
+        # An agent declares its own bloks, and an action's logo (kind action, in LOGO only).
+        kinds=("agent", "action") if ComponentContext(blok.context) == ComponentContext.LOGO else ("agent",),
+        mount=f"the agent's blok {blok.key!r}",
         dependencies=tuple(blok.dependencies or ()),
-        locals=blok.locals,
-        queries=blok.queries,
-        subscriptions=blok.subscriptions,
         args=tuple(port.key for port in blok.args or ()),
         demo=blok.demo,
     )
     for component in blok.components or ():
         validate_blok(component, scope)
+        if blok_header(component).context != ComponentContext(blok.context).value:
+            raise ValueError(f"blok {blok.key!r} is sent as {ComponentContext(blok.context).value}, but its <Blok> says {blok_header(component).context}")
     return blok
+
+
+def is_action_logo(blok: BlokImplementationInput) -> bool:
+    """Whether ``blok`` is an action's logo: a ``<Blok kind="action" context="logo">``."""
+    from arkitekt_spec.blok.bsx import parse_bsx
+    from arkitekt_spec.blok.declared import blok_header, header_problem
+
+    if blok.context != ComponentContext.LOGO and ComponentContext(blok.context) != ComponentContext.LOGO:
+        return False
+    trees = blok.components or ((parse_bsx(blok.source),) if blok.source is not None else ())
+    return any(header_problem(tree) is None and blok_header(tree).kind == "action" for tree in trees)
 
 
 def check_agent_input(agent: ImplementAgentInput) -> ImplementAgentInput:
     """Run the rekuest-side checks over a whole declaration, and hand it back."""
     own_states = tuple(agent.states or ())
-    logos = {blok.key for blok in agent.bloks or () if blok.context == ComponentContext.ACTION_LOGO}
+    logos = {blok.key for blok in agent.bloks or () if is_action_logo(blok)}
     for implementation in agent.implementations or ():
         check_implementation(implementation, own_states)
         if implementation.logo is not None and implementation.logo not in logos:
             name = implementation.interface or implementation.definition.name
             raise ValueError(
                 f"implementation '{name}' is drawn by the logo {implementation.logo!r}, "
-                f"which is not an action logo blok this app declares (app.blok(name, \"<ActionLogo>...</ActionLogo>\"))"
+                f"which is not an action logo blok this app declares (app.blok(name, '<Blok kind=\"action\" context=\"logo\">...</Blok>'))"
             )
     for blok in agent.bloks or ():
         check_blok(blok)

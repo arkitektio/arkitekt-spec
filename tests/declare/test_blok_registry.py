@@ -10,8 +10,13 @@ import pytest
 
 from arkitekt_spec.blok.vocabulary import BlokError
 from arkitekt_spec.declare.app import AppRegistry
-from arkitekt_spec.declare.blok.declarations import Local
+from arkitekt_spec.declare.blok.registry import resolved_locals
 from arkitekt_spec.declare.catalogs import CatalogWarning
+
+
+def panel(content: str) -> str:
+    """An agent's panel blok drawing ``content``."""
+    return f'<Blok kind="agent" context="panel">{content}</Blok>'
 
 
 @pytest.fixture
@@ -48,7 +53,7 @@ def built(registry: AppRegistry, name: str = "panel"):
 def test_what_it_reads_of_self_is_its_dependency(registry: AppRegistry) -> None:
     registry.register_blok(
         "panel",
-        "<Html><Card><Text>{self.Arm.mode}</Text><Button onClick={self.move_to(position: 1)}>Go</Button><Progress value={self.tasks.home.progress} /></Card></Html>",
+        panel("<Card><Text>{self.Arm.mode}</Text><Button onClick={self.move_to(position: 1)}>Go</Button><Progress value={self.tasks.home.progress} /></Card>"),
     )
 
     (dependency,) = built(registry).dependencies
@@ -58,14 +63,14 @@ def test_what_it_reads_of_self_is_its_dependency(registry: AppRegistry) -> None:
 
 
 def test_a_blok_reading_nothing_of_self_has_no_dependency(registry: AppRegistry) -> None:
-    registry.register_blok("panel", "<Html><Card><Text>Hello</Text></Card></Html>")
+    registry.register_blok("panel", panel("<Card><Text>Hello</Text></Card>"))
 
     assert built(registry).dependencies == ()
 
 
 def test_its_demo_is_a_placeholder_per_state_it_reads(registry: AppRegistry) -> None:
-    registry.register_blok("panel", "<Html><Text>{self.Arm.mode}</Text></Html>")
-    registry.register_blok("mine", "<Html><Text>{self.Arm.mode}</Text></Html>", demo={"deps": {"self": {"Arm": {"mode": "idle"}}}})
+    registry.register_blok("panel", panel("<Text>{self.Arm.mode}</Text>"))
+    registry.register_blok("mine", panel("<Text>{self.Arm.mode}</Text>"), demo={"deps": {"self": {"Arm": {"mode": "idle"}}}})
 
     assert built(registry).demo.deps == {"self": {"Arm": {"mode": "", "joints": []}}}  # type: ignore[union-attr]
     assert built(registry, "mine").demo.deps == {"self": {"Arm": {"mode": "idle"}}}  # type: ignore[union-attr]
@@ -74,11 +79,11 @@ def test_its_demo_is_a_placeholder_per_state_it_reads(registry: AppRegistry) -> 
 @pytest.mark.parametrize(
     ("source", "code"),
     [
-        ("<Html><Button onClick={self.fly()} /></Html>", "deps.unknown_action"),
-        ("<Html><Text text={self.tasks.fly.status} /></Html>", "deps.unknown_action"),
-        ("<Html><Text text={self.Legs.count} /></Html>", "deps.unknown_state"),
-        ("<Html><Text text={self.Arm.speed} /></Html>", "path.unknown"),
-        ("<Html><Text text={self.assets.scope} /></Html>", "deps.asset"),
+        (panel("<Button onClick={self.fly()} />"), "deps.unknown_action"),
+        (panel("<Text text={self.tasks.fly.status} />"), "deps.unknown_action"),
+        (panel("<Text text={self.Legs.count} />"), "deps.unknown_state"),
+        (panel("<Text text={self.Arm.speed} />"), "path.unknown"),
+        (panel("<Text text={self.assets.scope} />"), "deps.asset"),
     ],
 )
 def test_what_the_app_does_not_declare_is_refused(registry: AppRegistry, source: str, code: str) -> None:
@@ -92,49 +97,28 @@ def test_a_records_returns_are_typed_by_the_action(registry: AppRegistry) -> Non
     with pytest.warns(CatalogWarning, match=r"returns.unnamed"):
         registry.register_blok(
             "panel",
-            "<Html><Card><Button onClick={self.move_to(position: 1) into move} /><Text text={move.returns.return0} /></Card></Html>",
+            panel("<Card><Button onClick={self.move_to(position: 1) into move} /><Text text={move.returns.return0} /></Card>"),
         )
     built(registry)
 
-    registry.register_blok("bad", "<Html><Card><Button onClick={self.move_to(position: 1) into move} /><Text text={move.returns.nope} /></Card></Html>")
+    registry.register_blok("bad", panel("<Card><Button onClick={self.move_to(position: 1) into move} /><Text text={move.returns.nope} /></Card>"))
     with pytest.raises(BlokError, match="'nope' does not exist"):
         built(registry, "bad")
 
 
 def test_an_agent_blok_reads_no_other_agent(registry: AppRegistry) -> None:
     with pytest.raises(BlokError, match="roots.not_in_kind"):
-        registry.register_blok("panel", "<Html><Text text={deps.robot.mode} /></Html>")
+        registry.register_blok("panel", panel("<Text text={deps.robot.mode} />"))
 
 
 def test_locals_are_declared_and_bound(registry: AppRegistry) -> None:
     registry.register_blok(
         "panel",
-        "<Html><Card><Slider bind={iterations} /><Button onClick={self.move_to(position: iterations)} /></Card></Html>",
-        locals={"iterations": Local(15, persist=True)},
+        panel('<local name="iterations" default={15} persist /><Card><Slider bind={iterations} /><Button onClick={self.move_to(position: iterations)} /></Card>'),
     )
 
-    (local,) = built(registry).locals
+    (local,) = resolved_locals(built(registry), registry).values()
     assert (local.key, local.kind, local.default, local.persist) == ("iterations", "INT", 15, True)
-
-
-def test_a_local_is_a_port_its_kind_inferred_like_an_arguments(registry: AppRegistry) -> None:
-    registry.register_blok(
-        "panel",
-        "<Html><Card><Input bind={name} /><Slider bind={speed} /><Switch bind={on} /><Text text={tags} /><Text text={picked} /></Card></Html>",
-        locals={
-            "name": "robot",
-            "speed": Local[float](),
-            "on": Local(True, description="Whether it runs"),
-            "tags": Local(["a", "b"]),
-            "picked": Local[int | None](),
-        },
-    )
-
-    ports = {local.key: local for local in built(registry).locals}
-    assert {key: port.kind for key, port in ports.items()} == {"name": "STRING", "speed": "FLOAT", "on": "BOOL", "tags": "LIST", "picked": "INT"}
-    assert ports["tags"].children is not None and ports["tags"].children[0].kind == "STRING"
-    assert ports["picked"].nullable and not ports["speed"].nullable
-    assert ports["on"].description == "Whether it runs" and ports["name"].default == "robot"
 
 
 def test_a_structure_local_is_typed_by_its_identifier() -> None:
@@ -160,105 +144,52 @@ def test_a_structure_local_is_typed_by_its_identifier() -> None:
         """
         return 0
 
-    registry.register_blok(
-        "panel",
-        "<Html><Button onClick={self.segment(image: picked)} /></Html>",
-        locals={"picked": Local[Image | None]()},
-    )
-    (local,) = built(registry).locals
+    registry.register_blok("panel", panel('<local name="picked" nullable /><Button onClick={self.segment(image: picked)} />'))
+    (local,) = resolved_locals(built(registry), registry).values()
     assert (local.kind, local.identifier, local.nullable) == ("STRUCTURE", "@mikro/image", True)
-
-
-@pytest.mark.parametrize("value", [None, [], {}, [1, "a"]])
-def test_a_local_nothing_types_is_any(registry: AppRegistry, value: object) -> None:
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        registry.register_blok("panel", "<Html><Text /></Html>", locals={"x": Local(value)})
-        (local,) = built(registry).locals
-    assert (local.kind, local.default) == ("ANY", value if value is not None else None)
-
-
-def test_local_t_keeps_its_type() -> None:
-    from typing import Annotated
-
-    assert Local[int]().type is int and Local[int] is Local[int]
-    assert Local[int](3).default == 3 and Local(type=str).type is str
-    assert Local[Annotated[int, {"unhashable": True}]]().type is not None
-
-
-def test_a_kind_name_is_no_type(registry: AppRegistry) -> None:
-    with pytest.raises(BlokError) as caught:
-        registry.register_blok("panel", "<Html><Text /></Html>", locals={"n": Local(15, type="INT")})
-    assert caught.value.code == "local.kind" and "not an annotation" in str(caught.value)
-
-
-def test_a_control_writes_only_a_local_of_its_kind(registry: AppRegistry) -> None:
-    with pytest.raises(BlokError) as caught:
-        registry.register_blok("panel", "<Html><Switch bind={iterations} /></Html>", locals={"iterations": 15})
-    assert caught.value.code == "local.bind_kind"
-    registry.register_blok("panel", "<Html><Slider bind={iterations} /></Html>", locals={"iterations": 15})
 
 
 def test_a_task_call_takes_a_local_of_its_ports_kind(registry: AppRegistry) -> None:
     """``move_to(position: int)``: a string local is refused once the app's actions type ``self``."""
-    registry.register_blok("panel", "<Html><Button onClick={self.move_to(position: name)} /></Html>", locals={"name": "a"})
-
+    registry.register_blok("panel", panel('<local name="name" default={"a"} /><Button onClick={self.move_to(position: name)} />'))
     with pytest.raises(BlokError) as caught:
         built(registry)
     assert caught.value.code == "local.arg_kind"
 
 
-@pytest.mark.parametrize(
-    ("source", "locals_", "code"),
-    [
-        ("<Html><Slider bind={nope} /></Html>", {}, "local.unknown"),
-        ("<Html><Slider bind={n} /></Html>", {"n": Local("x", type=int)}, "local.default"),
-    ],
-)
-def test_a_wrong_local_is_refused(registry: AppRegistry, source: str, locals_: dict, code: str) -> None:
-    with pytest.raises(BlokError) as caught:
-        registry.register_blok("panel", source, locals=locals_)
-    assert caught.value.code == code
-
-
-def test_a_local_never_takes_a_reserved_root(registry: AppRegistry) -> None:
-    with pytest.raises(ValueError, match=r"'self' is reserved.*\[roots.reserved\]"):
-        registry.register_blok("panel", "<Html><Text /></Html>", locals={"self": 1})
-
-
 def test_args_are_read_only_where_declared(registry: AppRegistry) -> None:
-    registry.register_blok("panel", "<Html><Text text={args.image} /></Html>", args={"image": int})
+    registry.register_blok("panel", panel("<Text text={args.image} />"), args={"image": int})
     assert [port.key for port in built(registry).args or ()] == ["image"]
 
     with pytest.raises(BlokError, match="args.unknown"):
-        registry.register_blok("other", "<Html><Text text={args.dataset} /></Html>", args={"image": int})
-    with pytest.raises(ValueError, match="only an html blok"):
-        registry.register_blok("scene", "<Scene />", args={"image": int})
+        registry.register_blok("other", panel("<Text text={args.dataset} />"), args={"image": int})
+    with pytest.raises(ValueError, match="only a panel blok"):
+        registry.register_blok("scene", '<Blok kind="agent" context="scene"><Scene /></Blok>', args={"image": int})
 
 
 def test_then_is_the_moment_and_now_is_gone(registry: AppRegistry) -> None:
-    registry.register_blok("panel", "<Html><Card><Time value={then} /><Badge when={then}>past</Badge></Card></Html>")
+    registry.register_blok("panel", panel("<Card><Time value={then} /><Badge when={then}>past</Badge></Card>"))
     with pytest.raises(BlokError, match="roots.unknown"):
-        registry.register_blok("other", "<Html><Text text={now} /></Html>")
+        registry.register_blok("other", panel("<Text text={now} />"))
     with pytest.raises(TypeError):
-        registry.register_blok("other", "<Html><Card /></Html>", now_interval=30)  # type: ignore[call-arg]
+        registry.register_blok("other", panel("<Card />"), now_interval=30)  # type: ignore[call-arg]
 
 
 def test_an_action_logo_reads_only_its_task(registry: AppRegistry) -> None:
-    registry.register_blok("logo", '<ActionLogo><Circle r="2" fill={task.running ? "brand" : "muted"} /></ActionLogo>')
+    registry.register_blok("logo", '<Blok kind="action" context="logo"><Logo><Circle r="2" fill={task.running ? "brand" : "muted"} /></Logo></Blok>')
     assert built(registry, "logo").dependencies == ()
 
     with pytest.raises(BlokError, match="roots.not_in_kind"):
-        registry.register_blok("bad", "<ActionLogo><Circle fill={self.Arm.mode} /></ActionLogo>")
+        registry.register_blok("bad", '<Blok kind="action" context="logo"><Logo><Circle fill={self.Arm.mode} /></Logo></Blok>')
 
 
 def test_a_logo_paints_with_the_pens(registry: AppRegistry) -> None:
     with pytest.raises(BlokError, match="palette.logo_paint"):
-        registry.register_blok("logo", '<AgentLogo><Circle fill="#ff0000" /></AgentLogo>')
+        registry.register_blok("logo", '<Blok kind="agent" context="logo"><Logo><Circle fill="#ff0000" /></Logo></Blok>')
 
 
 def test_a_blok_of_the_base_catalog_names_none(registry: AppRegistry) -> None:
-    registry.register_blok("panel", "<Html><Card><StructurePicker identifier=\"@mikro/image\" /><div /></Card></Html>")
+    registry.register_blok("panel", panel("<Card><StructurePicker identifier=\"@mikro/image\" /><div /></Card>"))
 
     blok = built(registry)
     assert (blok.catalog, blok.catalog_minor) == (None, None)
@@ -268,15 +199,15 @@ def test_a_blok_of_the_base_catalog_names_none(registry: AppRegistry) -> None:
 def test_a_blok_written_in_bsx_is_sent_as_its_source(registry: AppRegistry) -> None:
     from arkitekt_spec.blok.bsx import parse_bsx
 
-    registry.register_blok("source", "<Html><Card /></Html>")
-    registry.register_blok("tree", parse_bsx("<Html><Card /></Html>"))
+    registry.register_blok("source", panel("<Card />"))
+    registry.register_blok("tree", parse_bsx(panel("<Card />")))
 
-    assert (built(registry, "source").source, built(registry, "source").components) == ("<Html><Card /></Html>", None)
-    assert built(registry, "tree").components == (parse_bsx("<Html><Card /></Html>"),)
+    assert (built(registry, "source").source, built(registry, "source").components) == (panel("<Card />"), None)
+    assert built(registry, "tree").components == (parse_bsx(panel("<Card />")),)
 
 
 def test_the_wire_carries_vocab_and_only_what_is_declared(registry: AppRegistry) -> None:
-    registry.register_blok("panel", "<Html><Card /></Html>")
+    registry.register_blok("panel", panel("<Card />"))
 
     wire = built(registry).model_dump(mode="json", by_alias=True, exclude_unset=True)
     assert wire["vocab"] == 2
@@ -285,9 +216,9 @@ def test_the_wire_carries_vocab_and_only_what_is_declared(registry: AppRegistry)
 
 def test_what_the_catalog_does_not_know_is_a_warning_unless_strict(registry: AppRegistry) -> None:
     with pytest.warns(CatalogWarning, match="catalog.unknown_component"):
-        registry.register_blok("panel", "<Html><Frobnicator /></Html>")
+        registry.register_blok("panel", panel("<Frobnicator />"))
     with pytest.raises(BlokError, match="catalog.unknown_component"):
-        registry.register_blok("strict", "<Html><Frobnicator /></Html>", mode="strict")
+        registry.register_blok("strict", panel("<Frobnicator />"), mode="strict")
 
 
 def test_a_declared_catalog_is_drawn_with(registry: AppRegistry) -> None:
@@ -296,19 +227,14 @@ def test_a_declared_catalog_is_drawn_with(registry: AppRegistry) -> None:
     registry.declare_ui_catalog("mine", components=[ComponentSpec(name="Gauge", text_prop=None)])
     with warnings.catch_warnings():
         warnings.simplefilter("error", CatalogWarning)
-        registry.register_blok("panel", "<Html><Card><Gauge /></Card></Html>", catalog="mine")
+        registry.register_blok("panel", '<Blok kind="agent" context="panel" catalog="mine"><Card><Gauge /></Card></Blok>')
 
 
 def test_a_new_default_replaces_the_previous_one_of_its_context(registry: AppRegistry) -> None:
-    registry.register_blok("a", "<Html><Card /></Html>", default=True)
-    registry.register_blok("b", "<Html><Card /></Html>", default=True)
+    registry.register_blok("a", panel("<Card />"), default=True)
+    registry.register_blok("b", panel("<Card />"), default=True)
 
     assert [name for name, blok in registry.registered_bloks.items() if blok.default] == ["b"]
-
-
-def test_a_space_is_an_actions(registry: AppRegistry) -> None:
-    with pytest.raises(ValueError, match="reads a run of an action"):
-        registry.register_blok("o", '<Space room="lab" />')
 
 
 def test_a_state_cannot_take_a_segment_of_an_agent() -> None:
@@ -327,9 +253,10 @@ def test_a_blok_names_the_one_catalog_it_is_written_for(registry: AppRegistry) -
     from arkitekt_spec.declare.catalogs import ComponentSpec
 
     registry.declare_ui_catalog("mine", components=[ComponentSpec(name="Gauge")])
-    registry.register_blok("extras", "<Html><Resizable><ResizablePanel><Card /></ResizablePanel></Resizable></Html>", mode="strict")
-    registry.register_blok("mine", "<Html><Card><Gauge /></Card></Html>", catalog="mine", mode="strict")
-    registry.register_blok("scene", "<Html><MikroScene value={args.scene}><MikroSceneViewport /></MikroScene></Html>", catalog=ORKESTRATOR_CATALOG_ID, args={"scene": str}, mode="strict")
+    registry.register_blok("extras", panel("<Resizable><ResizablePanel><Card /></ResizablePanel></Resizable>"), mode="strict")
+    registry.register_blok("mine", '<Blok kind="agent" context="panel" catalog="mine"><Card><Gauge /></Card></Blok>', mode="strict")
+    scene = "<MikroScene value={args.scene}><MikroSceneViewport /></MikroScene></Blok>"
+    registry.register_blok("scene", f'<Blok kind="agent" context="panel" catalog="{ORKESTRATOR_CATALOG_ID}">' + scene, args={"scene": str}, mode="strict")
     with warnings.catch_warnings():
         warnings.simplefilter("error", CatalogWarning)
         declared = registry.get_declared_bloks()
@@ -337,14 +264,14 @@ def test_a_blok_names_the_one_catalog_it_is_written_for(registry: AppRegistry) -
 
 
 def test_a_component_of_a_catalog_the_blok_is_not_written_for_is_refused(registry: AppRegistry) -> None:
-    with pytest.raises(BlokError, match=r"<MikroSceneProbe> is of https://arkitekt.live/catalogs/orkestrator/v1, and this blok is written for https://arkitekt.live/catalogs/base/v3") as refused:
-        registry.register_blok("panel", "<Html><MikroSceneProbe /></Html>")
+    with pytest.raises(BlokError, match=r"<MikroSceneProbe> is of https://arkitekt.live/catalogs/orkestrator/v1, and this blok is written for https://arkitekt.live/catalogs/base/v4") as refused:
+        registry.register_blok("panel", panel("<MikroSceneProbe />"))
     assert refused.value.code == "catalog.target"
 
 
 def test_what_names_no_catalog_at_all_is_refused(registry: AppRegistry) -> None:
     with pytest.raises(ValueError, match="manifest.catalog"):
-        registry.register_blok("panel", "<Html><Card /></Html>", catalog="ui@1")
+        registry.register_blok("panel", '<Blok kind="agent" context="panel" catalog="ui@1"><Card /></Blok>')
 
 
 def _caught(registry: AppRegistry, declare: Callable[[], None]) -> list[warnings.WarningMessage]:
@@ -363,7 +290,7 @@ def test_a_warning_is_told_once_at_the_line_that_declared_the_blok(registry: App
         frame = inspect.currentframe()
         assert frame is not None
         line = frame.f_lineno + 1
-        registry.register_blok("odd", "<Html><Card><Frobnicator /></Card></Html>")
+        registry.register_blok("odd", panel("<Card><Frobnicator /></Card>"))
 
     found = _caught(registry, declare)
     assert ["[catalog.unknown_component]" in str(warning.message) for warning in found] == [True]
@@ -371,8 +298,6 @@ def test_a_warning_is_told_once_at_the_line_that_declared_the_blok(registry: App
 
 
 def test_a_warning_only_the_build_finds_points_at_the_declaration_too() -> None:
-    from arkitekt_spec.declare.blok.declarations import Query
-
     registry = AppRegistry()
     line = 0
 
@@ -381,7 +306,7 @@ def test_a_warning_only_the_build_finds_points_at_the_declaration_too() -> None:
         frame = inspect.currentframe()
         assert frame is not None
         line = frame.f_lineno + 1
-        registry.register_blok("cells", "<Html><p>{queries.cells.status}</p></Html>", queries={"cells": Query(service="mikro", document="query { datasets { id } }")})
+        registry.register_blok("cells", panel('<query name="cells" service="mikro" document="query { datasets { id } }" /><p>{queries.cells.status}</p>'))
 
     found = _caught(registry, declare)
     assert ["query.schema" in str(warning.message) for warning in found] == [True]
@@ -390,14 +315,14 @@ def test_a_warning_only_the_build_finds_points_at_the_declaration_too() -> None:
 
 def test_a_parse_error_names_the_blok() -> None:
     with pytest.raises(BlokError, match=r"^Blok 'broken': line 1, column \d+: .*\[bsx\.unclosed\]$") as refused:
-        AppRegistry().register_blok("broken", "<Html><Card>")
+        AppRegistry().register_blok("broken", '<Blok kind="agent" context="panel"><Card>')
     assert (refused.value.code, refused.value.line) == ("bsx.unclosed", 1)
 
 
 def test_a_catalog_warning_carries_its_finding_and_blok(registry: AppRegistry) -> None:
     """What ``arkitekt check --json-out`` places in the source: no parsing of the message."""
     with pytest.warns(CatalogWarning) as caught:
-        registry.register_blok("panel", "<Html><Frobnicator /></Html>")
+        registry.register_blok("panel", panel("<Frobnicator />"))
 
     (warning,) = [record.message for record in caught if isinstance(record.message, CatalogWarning)]
     assert warning.blok == "panel"
@@ -408,7 +333,7 @@ def test_a_catalog_warning_carries_its_finding_and_blok(registry: AppRegistry) -
 
 def test_a_refused_blok_names_the_node_it_refuses(registry: AppRegistry) -> None:
     with pytest.raises(BlokError) as raised:
-        registry.register_blok("strict", "<Html><Frobnicator /></Html>", mode="strict")
+        registry.register_blok("strict", panel("<Frobnicator />"), mode="strict")
 
     assert raised.value.code == "catalog.unknown_component"
     assert raised.value.node is not None and "Frobnicator" in raised.value.node

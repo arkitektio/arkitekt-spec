@@ -17,6 +17,9 @@ expression in braces, and text children are content::
 - ``className={[...]}`` and ``className={{...}}`` desugar to ``str.classes`` (clsx).
 - ``<foreach items={...} let="p" key={...}>``: ``key`` is optional; without it items are keyed
   by their position, and the stored node has no ``key`` prop.
+- ``<local name="x" .../>`` declares ``x`` (stored as its ``name`` prop's ``declares_value``,
+  like a ``let``); its other attributes are literals. ``<query>``/``<subscription>`` take
+  ``<var key value>`` children (:mod:`.declared`).
 - Operators desugar to ``cmp.*`` / ``logic.*`` calls (``a ?? b`` to ``logic.coalesce``); a callback holds one task call (``into
   name`` names its record) or one effect. ``queries.<name>.refetch()`` and
   ``queries.<name>.fetch_more(name: value, ...)`` desugar to the effects ``query.refetch`` and
@@ -39,7 +42,7 @@ from arkitekt_spec.actions import (
     DynamicValueInput,
     UtilCallInput,
 )
-from arkitekt_spec.blok.catalogs import BlokView, default_view
+from arkitekt_spec.blok.catalogs import BlokView, blok_view, default_view, known_catalog
 from arkitekt_spec.blok.expr import (
     Call,
     Compare,
@@ -75,6 +78,8 @@ TEMPLATE_FUNCTION = "str.template"
 ELSE = "else"
 IF = "if"
 FOREACH = "foreach"
+LOCAL = "local"
+LOCAL_NAME = "name"
 REFETCH_FUNCTION = "query.refetch"
 FETCH_MORE_FUNCTION = "query.fetch_more"
 QUERY_SUGAR = {"refetch": REFETCH_FUNCTION, "fetch_more": FETCH_MORE_FUNCTION}
@@ -488,6 +493,11 @@ class _Lowering:
 
     def prop(self, component: str, attribute: _Attribute) -> ComponentPropInput:
         value = attribute.value
+        if component == LOCAL and attribute.name == LOCAL_NAME:
+            if not isinstance(value, str) or not _LOCAL.fullmatch(value):
+                written = value if isinstance(value, str) else "{...}"
+                raise self.fail("local.attribute", attribute.offset, name=written, key="name", problem="is not a name: write name=\"x\", a plain identifier")
+            return ComponentPropInput(key=attribute.name, static_value=value, declares_value=value)
         if isinstance(value, bool):
             return ComponentPropInput(key=attribute.name, static_value=value)
         if isinstance(value, str):
@@ -766,9 +776,38 @@ def parse_bsx_with_spans(source: str, *, view: BlokView | None = None) -> tuple[
     locate = Locator(source)
     markup = _Markup(source, locate)
     root = markup.document()
-    lowering = _Lowering(view or default_view(), locate, markup)
+    lowering = _Lowering(view or _catalog_view(_root_catalog(root)), locate, markup)
     tree = lowering.node(root, f"{root.name}[0]", None)
     return tree, lowering.spans
+
+
+CATALOG_ATTRIBUTE = "catalog"
+
+
+def _root_catalog(root: _Element) -> str | None:
+    attribute = next((attribute for attribute in root.attributes if attribute.name == CATALOG_ATTRIBUTE), None)
+    return attribute.value if attribute is not None and isinstance(attribute.value, str) else None
+
+
+def _catalog_view(catalog: str | None) -> BlokView:
+    """The view of the catalog a source's ``<Blok catalog=...>`` names, as known here: the base
+    catalog's when it names none, an incomplete one when nobody here knows it."""
+    if catalog is None:
+        return default_view()
+    if known_catalog(catalog) is not None:
+        return blok_view(catalog)
+    return blok_view(complete=False)
+
+
+def source_catalog(source: str) -> str | None:
+    """The catalog a BSX source's ``<Blok catalog=...>`` names, read off its markup alone; None
+    for the base catalog.
+
+    Raises:
+        BlokError: If the markup does not parse.
+    """
+    locate = Locator(source)
+    return _root_catalog(_Markup(source, locate).document())
 
 
 def parse_argument(key: str | None, text: str, *, view: BlokView | None = None) -> ActionArgumentInput:
@@ -782,4 +821,4 @@ def parse_argument(key: str | None, text: str, *, view: BlokView | None = None) 
     return _Lowering(view or default_view(), locate, _Markup(text, locate)).argument(key, expression)
 
 
-__all__ = ["FETCH_MORE_FUNCTION", "MAX_SOURCE_BYTES", "QUERY_SUGAR", "REFETCH_FUNCTION", "jsx_text", "parse_argument", "parse_bsx", "parse_bsx_with_spans"]
+__all__ = ["FETCH_MORE_FUNCTION", "MAX_SOURCE_BYTES", "QUERY_SUGAR", "REFETCH_FUNCTION", "jsx_text", "parse_argument", "parse_bsx", "parse_bsx_with_spans", "source_catalog"]

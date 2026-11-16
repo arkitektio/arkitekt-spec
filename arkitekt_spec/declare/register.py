@@ -45,6 +45,7 @@ from arkitekt_spec.actions import (
     ValidatorInput,
     definition_hash,
 )
+from arkitekt_spec.blok.declared import blok_header
 from arkitekt_spec.declare.actors.actify import (
     derive_implementation_details,
     prepare_definition_from_config,
@@ -58,7 +59,6 @@ from arkitekt_spec.declare.actors.types import (
 from arkitekt_spec.declare.annotations.markers import Fits
 from arkitekt_spec.declare.blok.action import ActionBloks, build_action_bloks
 from arkitekt_spec.declare.blok.parser import parse_estimated_runtime, parse_fits
-from arkitekt_spec.declare.blok.validate import blok_context
 from arkitekt_spec.declare.coercible_types import (
     OptimisticCoercible,
 )
@@ -162,8 +162,12 @@ def _logo_of(config: RegisterConfig, interface: str, registry: "AppRegistry") ->
         return {}
     if isinstance(config.logo, ComponentNodeInput):
         name = f"{interface}.logo"
-        if blok_context(config.logo) != ComponentContext.ACTION_LOGO:
-            raise DefinitionError(f"{interface}: an inline logo is an <ActionLogo>, not <{config.logo.component}>")
+        header = blok_header(config.logo)
+        if header.kind != "action" or header.context != ComponentContext.LOGO.value:
+            article = "an" if header.kind[:1] in "aeiou" else "a"
+            raise DefinitionError(
+                f'{interface}: an inline logo is a <Blok kind="action" context="logo">, not {article} {header.kind} blok in {header.context.lower()}'
+            )
         registry.register_blok(name, config.logo)
         return {"logo": name}
     return {"logo": config.logo}
@@ -308,19 +312,12 @@ def register_func(
         asks.extend(declared.to_ask_inputs(key))
         informs.extend(declared.to_inform_inputs(key))
 
-    if config.bloks or config.assign_bloks:
+    if config.bloks:
         # Set only when there are some, so an action without bloks keeps its wire bytes.
         arg_keys = tuple(port.key for port in definition.args or ())
         owner = f"Action {interface!r}"
         definition = definition.model_copy(
-            update={
-                "bloks": (
-                    *build_action_bloks(config.bloks or (), tuple(dependencies), implementation_registry, owner, arg_keys=arg_keys, interface=interface),
-                    *build_action_bloks(
-                        config.assign_bloks or (), tuple(dependencies), implementation_registry, owner, arg_keys=arg_keys, interface=interface, kind="assign"
-                    ),
-                )
-            }
+            update={"bloks": build_action_bloks(config.bloks, tuple(dependencies), implementation_registry, owner, arg_keys=arg_keys, interface=interface)}
         )
 
     optimistics: list[OptimisticInput] = [
@@ -396,7 +393,6 @@ def declare_implementation(
     execution: Execution = Execution.PLAIN,
     logo: str | ComponentNodeInput | None = None,
     bloks: "ActionBloks | None" = None,
-    assign_bloks: "ActionBloks | None" = None,
     dynamic_asks: bool = False,
     dynamic_calls: bool = False,
     dynamic_informs: bool = False,
@@ -436,7 +432,6 @@ def declare_implementation(
     execution: Execution = Execution.PLAIN,
     logo: str | ComponentNodeInput | None = None,
     bloks: "ActionBloks | None" = None,
-    assign_bloks: "ActionBloks | None" = None,
     dynamic_asks: bool = False,
     dynamic_calls: bool = False,
     dynamic_informs: bool = False,
@@ -475,7 +470,6 @@ def declare_implementation(
     execution: Execution = Execution.PLAIN,
     logo: str | ComponentNodeInput | None = None,
     bloks: "ActionBloks | None" = None,
-    assign_bloks: "ActionBloks | None" = None,
     dynamic_asks: bool = False,
     dynamic_calls: bool = False,
     dynamic_informs: bool = False,
@@ -539,15 +533,14 @@ def declare_implementation(
             after a crash; PLAIN otherwise.
         logo (str | ComponentNodeInput | None): The logo that draws the action:
             the name of an action logo blok the app declares, or a tree of its
-            own (``bsx("<ActionLogo>...</ActionLogo>")``), declared as the
-            action logo blok ``<interface>.logo``.
-        assign_bloks (ActionBloks | None): The action's own bloks for starting a run of it, one per
-            context: shown before there is a task, with the arguments being filled in as ``args`` and
-            the agents a run would get as ``deps``. ``<args />`` places the argument form and
-            ``assign.start()`` starts the run with those agents.
-        bloks (ActionBloks | None): The action's own bloks, one per context, which
-            each one's root names (``"<Space room=...>...</Space>"``, or an ``ActionBlok``
-            for locals and the like; one needs no list): how a client shows a run of it. Checked now against the function's
+            own (``bsx('<Blok kind="action" context="logo"><Logo>...</Logo></Blok>')``),
+            declared as the action logo blok ``<interface>.logo``.
+        bloks (ActionBloks | None): The action's own bloks, one per kind and context, each a
+            ``<Blok>`` (or an ``ActionBlok`` for a demo and a description; one needs no list):
+            ``kind="action"`` for how a client shows a run of it, ``kind="assign"`` for starting
+            one (shown before there is a task, with the arguments being filled in as ``args``
+            and the agents a run would get as ``deps``; ``<args />`` places the argument form and
+            ``assign.start()`` starts the run with those agents). Checked now against the function's
             dependency parameters and the bloks' catalogs; sent with the definition
             (never when there are none) and not part of its hash.
 
@@ -597,7 +590,6 @@ def declare_implementation(
         execution=execution,
         logo=logo,
         bloks=bloks,
-        assign_bloks=assign_bloks,
         dynamic_asks=dynamic_asks,
         dynamic_calls=dynamic_calls,
         dynamic_informs=dynamic_informs,

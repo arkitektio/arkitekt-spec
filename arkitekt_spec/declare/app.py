@@ -33,9 +33,6 @@ from arkitekt_spec.actions import (
     AssignWidgetInput,
     BlokDemoInput,
     BlokImplementationInput,
-    BlokLocalInput,
-    BlokQueryInput,
-    BlokSubscriptionInput,
     ComponentContext,
     ComponentNodeInput,
     Effects,
@@ -52,7 +49,7 @@ from arkitekt_spec.actions import (
     ValidatorInput,
     is_asset_source,
 )
-from arkitekt_spec.blok.bsx import parse_bsx
+from arkitekt_spec.blok.bsx import parse_bsx, source_catalog
 from arkitekt_spec.blok.catalogs import (
     BlokView,
     blok_view,
@@ -60,23 +57,18 @@ from arkitekt_spec.blok.catalogs import (
     default_view,
     known_catalog,
 )
+from arkitekt_spec.blok.declared import blok_catalog, blok_header
 from arkitekt_spec.blok.vocabulary import VOCAB, BlokError, Finding, load_vocabulary
 from arkitekt_spec.declare.actors.policy import KEEP, DisconnectPolicy
 from arkitekt_spec.declare.actors.types import Actifier, DeclaredImplementation
 from arkitekt_spec.declare.agents.hooks.registry import HooksRegistry
 from arkitekt_spec.declare.blok.action import ActionBloks, action_blok_components_in
 from arkitekt_spec.declare.blok.declarations import (
-    Local,
-    Query,
-    Subscription,
     demo_input,
-    local_inputs,
-    query_inputs,
-    subscription_inputs,
 )
 from arkitekt_spec.declare.blok.origin import DeclaredAt, declared_at, finding_key, warn_at
 from arkitekt_spec.declare.blok.registry import build_declared_bloks
-from arkitekt_spec.declare.blok.validate import BlokScope, blok_context, check_blok_tree
+from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
 from arkitekt_spec.declare.catalogs import (
     BASE_CATALOG_ID,
     BASE_CATALOG_NAME,
@@ -138,13 +130,12 @@ class BlokDeclaration(BaseModel):
     source: str | None = None
     """The BSX the component was parsed from, which is what is sent: a third of the tree's bytes."""
     description: str | None = None
-    locals: tuple[BlokLocalInput, ...] = ()
     demo: BlokDemoInput | None = None
-    queries: tuple[BlokQueryInput, ...] = ()
-    subscriptions: tuple[BlokSubscriptionInput, ...] = ()
+    kind: str = "agent"
+    """What its ``<Blok kind>`` says: ``agent``, or ``action`` for an action's logo."""
     catalog: str | None = None
-    """The catalog it is written for; None: the base catalog."""
-    context: ComponentContext = ComponentContext.HTML
+    """The catalog its ``<Blok catalog>`` names; None: the base catalog."""
+    context: ComponentContext = ComponentContext.PANEL
     default: bool = False
     for_model: str | None = None
     for_node: str | None = None
@@ -799,11 +790,7 @@ class AppRegistry(BaseModel):
         component: str | ComponentNodeInput | None = None,
         description: str | None = None,
         *,
-        locals: "Mapping[str, Local[object] | JSONSerializable] | None" = None,
         demo: "BlokDemoInput | Mapping[str, JSONSerializable] | None" = None,
-        queries: "Mapping[str, Query] | None" = None,
-        subscriptions: "Mapping[str, Subscription] | None" = None,
-        catalog: str | None = None,
         default: bool = False,
         for_model: str | None = None,
         for_node: str | None = None,
@@ -812,38 +799,29 @@ class AppRegistry(BaseModel):
     ) -> None:
         """Register a blok of this app's agent (blok language v2).
 
-        The tree reads its own agent as ``self`` -- ``self.<state>.<field>``, ``self.tasks.<action>``,
+        The blok is one ``<Blok kind="agent" context="panel|scene|logo">``: what it owns
+        (``<local>``, ``<query>``, ``<subscription>``) is declared inside it. It reads its own
+        agent as ``self`` -- ``self.<state>.<field>``, ``self.tasks.<action>``,
         ``self.assets.<name>`` -- and calls it as ``self.<action>(name: value) into <record>``;
         what it reads of ``self`` becomes the demands of its one dependency when the agent's
         input is built. It is checked now against the language (roots, callbacks, ids, ...)
-        and the catalog it is drawn with; a catalog finding is a
+        and the catalog its ``<Blok catalog>`` names; a catalog finding is a
         :class:`~arkitekt_spec.declare.catalogs.CatalogWarning` unless ``mode`` is ``"strict"``.
+        An action's logo (``<Blok kind="action" context="logo">``, painted with the pens only,
+        reading only ``task``) is registered here too, and named by the action's ``logo=``.
 
         Args:
             name: The blok's name.
-            component: The tree, as v2 BSX or already parsed. Its root names the context:
-                ``<Html>`` for a panel, ``<Scene>`` for a 3D view, ``<AgentLogo>`` for the
-                app's logo or ``<ActionLogo>`` for an action's (painted with the pens only; an
-                action logo reads only ``task``).
+            component: The tree, as v2 BSX or already parsed: a ``<Blok>``.
             description: What the blok shows.
-            locals: Its form state, written only through ``bind``: each a port,
-                ``{"iterations": Local(15, persist=True), "image": Local[Image | None]()}``,
-                its kind from its default, ``Local[T]()`` or ``Local(type=T)`` (converted as an
-                argument's annotation is); a bare value is a local with that default.
             demo: What a preview renders it with, mirroring the roots it reads:
                 ``{"deps": {"self": {...}}, "args": {...}, "queries": {...}}``. Placeholders
                 for the states of ``self`` it reads when left out.
-            queries: Its declared reads (``queries.<name>``), each a :class:`Query`.
-            subscriptions: Its declared streams (``subscriptions.<name>``).
-            catalog: The catalog it is written for: the address a frontend publishes its
-                own at (:data:`~arkitekt_spec.blok.catalogs.ORKESTRATOR_CATALOG_ID` for what
-                only the Orkestrator draws), or the name of one this app declared. The base
-                catalog, which every renderer draws, when left out.
             default: Whether this is the app's default blok for its context.
-            for_model: The model (``"sha256:..."``) this blok decorates. Html bloks only.
+            for_model: The model (``"sha256:..."``) this blok decorates. Panel bloks only.
             for_node: The node of ``for_model`` to attach to.
             args: The items the blok is opened for, typed like an action's arguments and
-                read under ``args.<key>``. Html bloks only.
+                read under ``args.<key>``. Panel bloks only.
             mode: ``"warning"`` or ``"strict"`` (see above).
 
         Raises:
@@ -857,18 +835,21 @@ class AppRegistry(BaseModel):
         if component is None:
             raise ValueError(f"Blok '{name}' must define a component")
         at = declared_at()
-        view = self.blok_view(catalog)
         source: str | None = None
-        if isinstance(component, str):
-            source = component
-            try:
-                component = parse_bsx(component, view=view)
-            except BlokError as error:
-                raise error.within(f"Blok {name!r}") from None
         try:
-            context = blok_context(component)
+            catalog = source_catalog(component) if isinstance(component, str) else blok_catalog(component)
+            view = self.blok_view(catalog)
+            if isinstance(component, str):
+                source = component
+                component = parse_bsx(component, view=view)
+            header = blok_header(component)
         except BlokError as error:
             raise error.within(f"Blok {name!r}") from None
+        context = ComponentContext(header.context)
+        if header.kind == "action" and context != ComponentContext.LOGO:
+            raise ValueError(
+                f"Blok '{name}' is an action's {context.value.lower()} blok: it goes with its action (@app.workflow(bloks=...)), not app.blok"
+            )
         reading = action_blok_components_in(component)
         if reading:
             raise ValueError(
@@ -879,8 +860,8 @@ class AppRegistry(BaseModel):
             convert_object_to_argport(cls, key, self.structure_registry)
             for key, cls in (args or {}).items()
         )
-        if arg_ports and context != ComponentContext.HTML:
-            raise ValueError(f"Blok '{name}': only an html blok is opened for an item, so only it takes args")
+        if arg_ports and context != ComponentContext.PANEL:
+            raise ValueError(f"Blok '{name}': only a panel blok is opened for an item, so only it takes args")
         if for_node is not None and for_model is None:
             raise ValueError(f"Blok '{name}' names for_node without a for_model")
         if for_model is not None:
@@ -888,20 +869,14 @@ class AppRegistry(BaseModel):
                 raise ValueError(
                     f"Blok '{name}': for_model must be 'sha256:' and 64 lowercase hex characters, not {for_model!r}"
                 )
-            if context != ComponentContext.HTML:
-                raise ValueError(f"Blok '{name}': only an html blok can decorate a model")
-        try:
-            locals_ = local_inputs(locals, self)
-        except BlokError as error:
-            raise error.within(f"Blok {name!r}") from None
+            if context != ComponentContext.PANEL:
+                raise ValueError(f"Blok '{name}': only a panel blok can decorate a model")
         declaration = BlokDeclaration(
             component=component,
             source=source,
             description=description,
-            locals=locals_,
             demo=demo_input(demo),
-            queries=query_inputs(queries),
-            subscriptions=subscription_inputs(subscriptions),
+            kind=header.kind,
             catalog=catalog,
             context=context,
             default=default,
@@ -917,36 +892,26 @@ class AppRegistry(BaseModel):
             vocab=VOCAB,
             components=(component,),
             context=context,
-            locals=declaration.locals,
             demo=declaration.demo,
-            queries=declaration.queries,
-            subscriptions=declaration.subscriptions,
             catalog=catalog,
             args=arg_ports or None,
         )
-        kind = "action_logo" if context == ComponentContext.ACTION_LOGO else "agent"
-        # ``self`` is open here: what it reads is checked when the agent's input is built,
-        # against the demands that reading infers.
-        scope = BlokScope(
-            kind=kind,
-            context=context.value,
-            locals=declaration.locals,
-            queries=declaration.queries,
-            subscriptions=declaration.subscriptions,
-            args=tuple(port.key for port in arg_ports),
-            demo=declaration.demo,
-        )
-        from arkitekt_spec.declare.blok.infer import resolve_scope
         from arkitekt_spec.declare.blok.registry import (
             check_catalog_target,
             checked_view,
             self_arg_ports,
         )
 
-        # Checked with the kinds the tree tells of its locals now; they are checked again when
-        # the agent's input is built, against every action the app registered by then. The
-        # input carries them as written: the server resolves and stores them beside.
-        scope = resolve_scope(component, scope, view, arg_ports=self_arg_ports(self))
+        # ``self`` is open here (not mounted yet): what it reads is checked when the agent's input
+        # is built, against the demands that reading infers. A local's ``like`` borrows from the
+        # actions registered by now.
+        scope = BlokScope(
+            kinds=("agent", "action"),
+            mount="app.blok",
+            args=tuple(port.key for port in arg_ports),
+            demo=declaration.demo,
+            arg_ports=self_arg_ports(self),
+        )
         reported: set[str] = set()
         for finding in (*check_catalog_target(catalog, self), *check_blok_tree(component, scope, checked_view(view))):
             if finding.level == "error" or mode == "strict":
@@ -1877,7 +1842,6 @@ class AppRegistry(BaseModel):
         execution: Execution = Execution.PLAIN,
         logo: "str | ComponentNodeInput | None" = None,
         bloks: "ActionBloks | None" = None,
-        assign_bloks: "ActionBloks | None" = None,
         dynamic_asks: bool = False,
         dynamic_calls: bool = False,
         dynamic_informs: bool = False,
@@ -1926,15 +1890,14 @@ class AppRegistry(BaseModel):
             execution: ``Execution.WORKFLOW`` to call other actions and be resumed
                 after a crash (see :meth:`register_workflow`).
             logo: The logo that draws the action: the name of an action logo blok
-                this app declares (an ``<ActionLogo>`` registered with ``register_blok``),
-                or a tree of its own (``bsx("<ActionLogo>...</ActionLogo>")``).
+                this app declares (a ``<Blok kind="action" context="logo">`` registered with
+                ``register_blok``), or a tree of its own (``bsx(...)``).
                 Without one, a client shows the app's default logo.
-            assign_bloks: The action's own bloks for starting a run of it, one per context:
-                shown before there is a task, with ``<args />`` for the argument form and
-                ``assign.start()`` to start the run with the agents the blok was shown.
-            bloks: The action's own bloks, one per context, which each one's root names
-                (``"<Space room=...>...</Space>"``, or an ``ActionBlok`` for locals and the like;
-                one needs no list): how a client shows a run of it. They name devices only by the function's
+            bloks: The action's own bloks, one per kind and context, each a ``<Blok>`` (or an
+                ``ActionBlok`` for a demo and a description; one needs no list):
+                ``kind="action"`` for how a client shows a run of it, ``kind="assign"`` for
+                starting one (``<args />`` for the argument form, ``assign.start()`` to start
+                the run with the agents the blok was shown). They name devices only by the function's
                 dependency parameters, are checked now, and are not part of the hash.
             dynamic_asks: Whether a task may also ask through a blok made at ask time
                 (``task.dynamic_ask``), not only the interactions protocols it is handed.
@@ -1980,7 +1943,6 @@ class AppRegistry(BaseModel):
             execution=execution,
             logo=logo,
             bloks=bloks,
-            assign_bloks=assign_bloks,
             dynamic_asks=dynamic_asks,
             dynamic_calls=dynamic_calls,
             dynamic_informs=dynamic_informs,

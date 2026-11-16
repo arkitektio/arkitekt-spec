@@ -3,7 +3,7 @@
 import re
 import warnings
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 
@@ -75,8 +75,17 @@ def drawn(source: str, component: str) -> list[dict[str, object]]:
     return [props(node) for node in nodes(bsx(source)) if node.component == component]
 
 
+def logo(source: str) -> ComponentNodeInput:
+    """The one ``<Logo>`` of a converted logo blok."""
+    children = bsx(source).children
+    assert children is not None
+    (drawing,) = children
+    assert drawing.component == "Logo"
+    return drawing
+
+
 def register(source: str) -> None:
-    """Register a converted logo; its root (``<AgentLogo>``/``<ActionLogo>``) names its context."""
+    """Register a converted logo; its ``<Blok kind=... context="logo">`` says what it draws."""
     AppRegistry().register_blok("converted", source)
 
 
@@ -86,8 +95,9 @@ def register(source: str) -> None:
 def test_an_icon_set_svg_keeps_its_root_paint_on_a_group() -> None:
     source, lost = convert(LUCIDE)
     assert lost == []
-    root = bsx(source)
-    assert root.component == "AgentLogo"
+    blok = bsx(source)
+    assert (blok.component, props(blok)) == ("Blok", {"kind": "agent", "context": "logo"})
+    root = logo(source)
     assert props(root) == {"viewBox": "0 0 24 24"}
     (group,) = root.children or ()
     assert props(group) == {
@@ -107,7 +117,7 @@ def test_an_icon_set_svg_keeps_its_root_paint_on_a_group() -> None:
 def test_an_inkscape_file_is_flattened_through_its_cascade() -> None:
     source, lost = convert(INKSCAPE)
     assert lost == []
-    root = bsx(source)
+    root = logo(source)
     assert props(root) == {"viewBox": "0 0 64 64", "title": "Cell"}
 
     (defs, drawing) = root.children or ()
@@ -169,12 +179,12 @@ def test_entities_and_other_roots_are_refused() -> None:
     with pytest.raises(SvgConversionError, match="not well-formed"):
         from_svg("<svg>")
     with pytest.raises(ValueError, match="logo bloks"):
-        from_svg(LUCIDE, context="scene")
+        from_svg(LUCIDE, kind="custom")  # pyright: ignore[reportArgumentType]
 
 
 def test_a_missing_viewbox_is_made_from_the_size() -> None:
     source, _ = convert(svg('<path d="M0 0" />', 'width="48px" height="32"'))
-    assert props(bsx(source)) == {"viewBox": "0 0 48 32"}
+    assert props(logo(source)) == {"viewBox": "0 0 48 32"}
 
 
 # --------------------------------------------------------------------------- references
@@ -269,7 +279,7 @@ def test_text_that_would_read_as_an_expression_is_dropped() -> None:
     source, lost = convert(
         svg('<title>@home</title><text x="1" y="2">$5 <tspan>off</tspan></text><text>ok</text>')
     )
-    assert "title" not in props(bsx(source))
+    assert "title" not in props(logo(source))
     assert drawn(source, "SvgText") == [{"text": "ok", "fill": "ink"}]
     assert lost == [
         "title='@home' reads as an expression in BSX and was dropped",
@@ -309,12 +319,12 @@ def test_an_action_logo_paints_with_tokens_only() -> None:
             '<rect width="4" height="4" fill="rgba(52, 211, 153, .5)" stroke="url(#g)" />'
             '<rect width="4" height="4" fill="#fbbf24" />'
         ),
-        context="action_logo",
+        kind="action",
         palette={"#fbbf24": "brand-strong"},
     )
     tree = bsx(source)
-    assert tree.component == "ActionLogo"
-    assert check_blok_tree(tree, BlokScope(kind="action_logo", context="ACTION_LOGO")) == []
+    assert props(tree) == {"kind": "action", "context": "logo"}
+    assert check_blok_tree(tree, BlokScope(kinds=("action",), dependencies=())) == []
     assert [(rect.get("fill"), rect.get("stroke")) for rect in drawn(source, "Rect")] == [
         ("ink", "muted"),
         ("surface", "brand-strong"),
@@ -331,7 +341,7 @@ def test_an_action_logo_paints_with_tokens_only() -> None:
 
 
 def test_an_unpainted_shape_in_an_action_logo_is_inked() -> None:
-    source, _ = convert(svg('<path d="M0 0L4 4" />'), context="action_logo")
+    source, _ = convert(svg('<path d="M0 0L4 4" />'), kind="action")
     (path,) = [node for node in nodes(bsx(source)) if node.component == "Path"]
     assert props(path) == {"d": "M0 0L4 4", "fill": "ink"}
     register(source)
@@ -342,16 +352,16 @@ def test_an_action_logo_registers_inline_on_an_action() -> None:
         return x
 
     registry = AppRegistry()
-    registry.register_action(act, key="act", logo=bsx(from_svg(LUCIDE, context="action_logo")))
+    registry.register_action(act, key="act", logo=bsx(from_svg(LUCIDE, kind="action")))
     agent = registry.to_implement_agent_input()
     assert [blok.key for blok in agent.bloks or ()] == ["act.logo"]
 
 
 @pytest.mark.parametrize(
-    ("context", "expected"),
-    [("logo", ["brand", "brand", "ink"]), ("action_logo", ["brand", "brand", "ink"])],
+    ("kind", "expected"),
+    [("agent", ["brand", "brand", "ink"]), ("action", ["brand", "brand", "ink"])],
 )
-def test_current_colour_paints_the_colour_set_around_it(context: str, expected: list[str]) -> None:
+def test_current_colour_paints_the_colour_set_around_it(kind: Literal["agent", "action"], expected: list[str]) -> None:
     source, lost = convert(
         svg(
             '<path d="M0 0" fill="currentColor" />'
@@ -359,7 +369,7 @@ def test_current_colour_paints_the_colour_set_around_it(context: str, expected: 
             '<g color="currentColor"><path d="M2 2" fill="currentColor" /></g>',
             'viewBox="0 0 24 24" color="#e11d48"',
         ),
-        context=context,
+        kind=kind,
     )
     assert lost == []
     assert [
@@ -369,7 +379,7 @@ def test_current_colour_paints_the_colour_set_around_it(context: str, expected: 
         *expected[:2],
         expected[0],
     ]
-    without, _ = convert(svg('<path d="M0 0" fill="currentColor" />'), context=context)
+    without, _ = convert(svg('<path d="M0 0" fill="currentColor" />'), kind=kind)
     assert drawn(without, "Path")[0]["fill"] == expected[2]
 
 

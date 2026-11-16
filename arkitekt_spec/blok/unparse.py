@@ -31,6 +31,7 @@ from arkitekt_spec.blok.bsx import (
     TEXT_VALUE,
 )
 from arkitekt_spec.blok.catalogs import BlokView, default_view
+from arkitekt_spec.blok.declared import LOCAL_COMPONENT, NAME_PROP
 from arkitekt_spec.blok.vocabulary import JSON, load_vocabulary
 
 LINE_WIDTH = 100
@@ -150,6 +151,8 @@ class _Printer:
             return f"{key}={{{self.agent_call(prop.agent_call)}{into}}}"
         if prop.declares_value is not None:
             if node.component == FOREACH and key == "let" and prop.static_value == prop.declares_value:
+                return f"{key}={_quoted(prop.declares_value)}"
+            if node.component == LOCAL_COMPONENT and key == NAME_PROP and prop.static_value == prop.declares_value:
                 return f"{key}={_quoted(prop.declares_value)}"
             raise ValueError(f"<{node.component}> ({node.id}): {key} declares {prop.declares_value!r}, which BSX cannot spell")
         if prop.util_call is not None:

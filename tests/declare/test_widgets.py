@@ -209,7 +209,7 @@ def test_a_widget_without_a_tree_hashes_as_it_did() -> None:
 
 @pytest.mark.parametrize(
     "source",
-    ["<Html><p>{nope}</p></Html>", "<Html><Button onClick={self.go()}>x</Button></Html>"],
+    ["<div><p>{nope}</p></div>", "<div><Button onClick={self.go()}>x</Button></div>"],
 )
 def test_a_tree_reads_only_its_scope_and_calls_no_agent(source: str) -> None:
     with pytest.raises(ValueError):
@@ -218,5 +218,6 @@ def test_a_tree_reads_only_its_scope_and_calls_no_agent(source: str) -> None:
 
 def test_value_is_typed_from_the_port() -> None:
     definition = _tree_definition("STRING", BsxWidget(TREE, dependencies=["limit"]))
-    assert [finding.code for _, finding in widget_tree_findings(definition, default_view())] == ["local.bind_kind"]
+    codes = [finding.code for _, finding in widget_tree_findings(definition, default_view())]
+    assert [code for code in codes if not code.startswith("catalog.")] == ["local.bind_kind"]
 

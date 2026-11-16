@@ -3,7 +3,7 @@
 A *catalog* is a versioned set of components, named by the address it is published at (its
 ``id``). There are two sorts:
 
-- The **base catalog** (``catalogs/base@3.json``, ``https://arkitekt.live/catalogs/base/v3``):
+- The **base catalog** (``catalogs/base@4.json``, ``https://arkitekt.live/catalogs/base/v4``):
   everything every renderer draws. The language's own elements (``if``, ``foreach``,
   ``suspense``, the context roots), the html components, the structure and run parts a host
   supplies (``args``, ``ask``, ``timeline``), the scene and the logo shapes. A blok written for
@@ -48,12 +48,12 @@ _registered: dict[str, Catalog] = {}
 
 
 def _text(file: str) -> str:
-    """A file under ``arkitekt_spec/blok``: ``catalogs/base@3.json``."""
+    """A file under ``arkitekt_spec/blok``: ``catalogs/base@4.json``."""
     return resources.files("arkitekt_spec.blok").joinpath(file).read_text(encoding="utf-8")
 
 
 def label_of(catalog: Catalog) -> str:
-    """A catalog as a message names it: ``base@3``, or its bare name when it has no version."""
+    """A catalog as a message names it: ``base@4``, or its bare name when it has no version."""
     return f"{catalog.name}@{catalog.version}" if catalog.version is not None else catalog.name
 
 
@@ -309,7 +309,7 @@ def is_catalog_target(target: str) -> bool:
 
 
 def catalog_text(file: str) -> str:
-    """A file as shipped (``catalogs/base@3.json``), for a party that vendors it."""
+    """A file as shipped (``catalogs/base@4.json``), for a party that vendors it."""
     return _text(file)
 
 

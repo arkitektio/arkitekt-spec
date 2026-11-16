@@ -17,6 +17,7 @@ from arkitekt_spec.actions import (
     AssignWidgetInput,
     BlokLocalInput,
     ComponentNodeInput,
+    ComponentPropInput,
     CustomAssignWidgetInput,
     CustomReturnWidgetInput,
     DefinitionInput,
@@ -25,6 +26,7 @@ from arkitekt_spec.actions import (
     UtilCallInput,
 )
 from arkitekt_spec.blok.catalogs import BlokView
+from arkitekt_spec.blok.declared import local_node
 from arkitekt_spec.blok.vocabulary import Finding
 from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
 from arkitekt_spec.declare.blok.walk import iter_nodes
@@ -129,16 +131,21 @@ def _widget_tree_scope(port: ArgPortInput, widget: CustomAssignWidgetInput, sibl
     A local is typed like a port and written through ``bind``, which is what these are to the tree.
     The form holds them, so a default says nothing here. A dependency that is a path stays open.
     """
+    return BlokScope(kinds=("custom",), mount="a port's widget")
+
+
+def _widget_blok(port: ArgPortInput, widget: CustomAssignWidgetInput, siblings: Sequence[ArgPortInput]) -> ComponentNodeInput:
+    """A port's widget tree as the blok it is checked as: a custom panel whose locals are its own
+    port as ``value`` and each dependency that is a sibling, then the tree."""
     named = {sibling.key: sibling for sibling in siblings}
     scoped = [(OWN_VALUE, port), *((key, named[key]) for key in widget.dependencies if key in named)]
-    return BlokScope(
-        kind="custom",
-        context="HTML",
-        locals=tuple(
-            BlokLocalInput.model_validate({**source.model_dump(), "key": key, "default": None})
-            for key, source in scoped
-        ),
+    locals_ = tuple(
+        local_node(BlokLocalInput.model_validate({**source.model_dump(exclude={"widget"}), "key": key, "default": None}), f"widget-blok/local[{index}]")
+        for index, (key, source) in enumerate(scoped)
     )
+    tree = ComponentNodeInput(id="widget", component=widget.component, props=widget.props, children=widget.children)
+    header = (ComponentPropInput(key="kind", static_value="custom"), ComponentPropInput(key="context", static_value="panel"))
+    return ComponentNodeInput(id="widget-blok", component="Blok", props=header, children=(*locals_, tree))
 
 
 def widget_tree_findings(definition: DefinitionInput, view: BlokView) -> Iterator[tuple[str, Finding]]:
@@ -152,7 +159,7 @@ def widget_tree_findings(definition: DefinitionInput, view: BlokView) -> Iterato
         for port in ports:
             widget = port.widget
             if isinstance(widget, CustomAssignWidgetInput) and widget.children:
-                tree = ComponentNodeInput(id="widget", component=widget.component, props=widget.props, children=widget.children)
+                tree = _widget_blok(port, widget, ports)
                 for finding in check_blok_tree(tree, _widget_tree_scope(port, widget, ports), view):
                     yield port.key, finding
             yield from walk(port.children or ())

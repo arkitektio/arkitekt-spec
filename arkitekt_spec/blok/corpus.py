@@ -10,12 +10,15 @@ and codes, never message text.
     python -m arkitekt_spec.blok.corpus OUT_DIR    # writes bsx_v2.json
 
 The file is self-describing: it carries the vocab version and the catalogs the spec checked
-with. Parsing needs no catalog: text is stored as nodes. A checked
-case's scope has ``catalog``: whether it is checked against a catalog or held to the language
-alone, and ``target``: the id of the catalog it is written for, or null for the base. A checked case's
-``resolved`` is its scope after inference (``locals`` each with its kind): what a checker checks
-against. ``language`` is the same with no catalog read at all (``resolved`` and ``codes``):
-what a server, which holds a blok to the language alone, finds and stores. Dependencies are never inferred.
+with. Parsing needs no catalog: text is stored as nodes. Every checked case is a ``<Blok>``
+that declares what it owns (``<local>``, ``<query>``, ``<subscription>``) and names the catalog
+it is written for; its ``mount`` is where it is checked: ``kinds`` (the kinds the mount takes,
+empty for any), ``dependencies`` (null: mounted nowhere, every agent taken as written) and
+``args``, and ``catalog``: whether it is checked against a catalog or held to the language
+alone. A checked case's ``resolved`` is each ``<local>``'s port with its kind resolved, by node
+id: what a checker checks against. ``language`` is the same with no catalog read at all
+(``resolved`` and ``codes``): what a server, which holds a blok to the language alone, finds.
+Dependencies are never inferred.
 """
 
 import json
@@ -25,15 +28,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from arkitekt_spec.actions import (
-    AgentDependencyInput,
-    BlokLocalInput,
-    BlokQueryInput,
-    BlokSubscriptionInput,
-    ComponentNodeInput,
-)
+from arkitekt_spec.actions import AgentDependencyInput, ComponentNodeInput
 from arkitekt_spec.blok.bsx import parse_bsx
-from arkitekt_spec.blok.catalogs import ORKESTRATOR_CATALOG_ID, BlokView, blok_view, default_view
+from arkitekt_spec.blok.catalogs import BlokView, blok_view, default_view
+from arkitekt_spec.blok.declared import blok_catalog
 from arkitekt_spec.blok.unparse import to_bsx
 from arkitekt_spec.blok.vocabulary import JSON, BlokError, load_vocabulary
 
@@ -103,8 +101,15 @@ VALID: Sequence[tuple[str, str]] = (
     ("clsx object", '<Badge className={{"animate-pulse": task.running, ring: !task.done}} />'),
     ("a toast", "<Toast task={move}><done>Arrived at {move.args.position}</done><failed>Move failed: {move.error}</failed></Toast>"),
     ("a component's own persist prop", '<Scene id="main" camera="front" persist><Model src={self.assets.arm} /></Scene>'),
-    ("a space", '<Space room="room:lab"><Placed dep="robot"><Glow on={task.running} /></Placed><Route through={["robot", "ot2"]} /></Space>'),
-    ("a logo", '<AgentLogo viewBox="0 0 64 64"><G fill="ink"><Rect x="0" y="0" width="64" height="64" /></G></AgentLogo>'),
+    ("a space", '<Blok kind="action" context="scene"><Space room="room:lab"><Placed dep="robot"><Glow on={task.running} /></Placed><Route through={["robot", "ot2"]} /></Space></Blok>'),
+    ("a logo", '<Blok kind="agent" context="logo"><Logo viewBox="0 0 64 64"><G fill="ink"><Rect x="0" y="0" width="64" height="64" /></G></Logo></Blok>'),
+    ("a blok", '<Blok kind="action" context="panel" chrome="none" catalog="https://arkitekt.live/catalogs/orkestrator/v1"><Card /></Blok>'),
+    ("a local declares its name", '<Blok kind="agent" context="panel"><local name="iterations" default={15} persist /><Slider bind={iterations} /></Blok>'),
+    ("a local with a port", '<Blok kind="agent" context="panel"><local name="mode" kind="ENUM" choices={[{value: "a", label: "A"}]} nullable /><Text>{mode}</Text></Blok>'),
+    ("a local borrowing an argument", '<Blok kind="agent" context="panel"><local name="to" like="self.move.to" /><Button onClick={self.move(to: to)} /></Blok>'),
+    ("a local in a loop", '<foreach items={args.xs} let="x" key={x.id}><local name="open" default={false} /><Switch bind={open} /></foreach>'),
+    ("a query and its variables", '<Blok kind="agent" context="panel"><query name="positions" service="mikro" document="query ($slide: ID!) { positions(slide: $slide) { id } }" poll={5}><var key="slide" value={args.slide.id} /><var key="limit" value={20} /></query><Text>{queries.positions.status}</Text></Blok>'),
+    ("a subscription", '<Blok kind="agent" context="panel"><subscription name="events" service="mikro" document="subscription { events { id } }" keep={10} /><Text>{subscriptions.events.status}</Text></Blok>'),
     ("comments", "<Card><!-- a comment --><Button />{/* another */}</Card>"),
     ("a multi-line attribute", '<Card>\n  <Button\n    label="multi\n line"\n  />\n</Card>'),
     ("a trailing comma", "<Text text={str.concat([a, b,])} />"),
@@ -117,7 +122,7 @@ VALID: Sequence[tuple[str, str]] = (
     ("coalesce binds tighter than a ternary", '<Badge text={a ?? b ? "x" : "y"} />'),
     ("coalesce inside and", "<Badge when={(a ?? b) && c} />"),
     ("logic.coalesce written as the call", "<Text text={logic.coalesce(a, b)} />"),
-    ("spectral pens", '<AgentLogo><Path d="M0 0" fill="spectrum-red" stroke="spectrum-blue" /></AgentLogo>'),
+    ("spectral pens", '<Blok kind="agent" context="logo"><Logo><Path d="M0 0" fill="spectrum-red" stroke="spectrum-blue" /></Logo></Blok>'),
 )
 
 REFUSED: Sequence[tuple[str, str, str]] = (
@@ -137,6 +142,8 @@ REFUSED: Sequence[tuple[str, str, str]] = (
     ("a foreach with a literal key", '<foreach items={xs} let="p" key="id"><Text /></foreach>', "bsx.foreach"),
     ("a foreach with a literal items", '<foreach items="xs" let="p" key={p}><Text /></foreach>', "bsx.foreach"),
     ("a sigil in a let", '<foreach items={xs} let="#p" key={p}><Text /></foreach>', "bsx.let"),
+    ("a local named by an expression", "<local name={x} />", "local.attribute"),
+    ("a local named no name", '<local name="a.b" />', "local.attribute"),
     ("a sequence", "<Button onClick={self.a(); self.b()} />", "callback.sequence"),
     ("an assignment", '<Button onClick={camera = "iso"} />', "callback.assignment"),
     ("await", "<Button onClick={await self.a()} />", "callback.await"),
@@ -183,22 +190,18 @@ REFUSED: Sequence[tuple[str, str, str]] = (
 
 @dataclass(frozen=True)
 class Check:
-    """A source checked against a scope: the codes the validator finds, in order."""
+    """A blok checked where it is mounted: the codes the validator finds, in order."""
 
     name: str
     source: str
     codes: tuple[str, ...]
-    kind: str = "agent"
-    context: str = "HTML"
-    dependencies: tuple[Mapping[str, JSON], ...] = ()
-    locals: tuple[Mapping[str, JSON], ...] = ()
-    queries: tuple[Mapping[str, JSON], ...] = ()
-    subscriptions: tuple[Mapping[str, JSON], ...] = ()
+    dependencies: tuple[Mapping[str, JSON], ...] | None = ()
+    """The mount's dependencies; None: mounted nowhere, every agent taken as written."""
     args: tuple[str, ...] | None = None
+    kinds: tuple[str, ...] = ()
+    """The kinds the mount takes; empty: any."""
     catalog: bool = True
     """Whether it is checked against a catalog at all, or held to the language alone."""
-    target: str | None = None
-    """The id of the catalog it is written for; None: the base catalog."""
 
 
 _ROBOT: Mapping[str, JSON] = {
@@ -230,144 +233,193 @@ _UNNAMED: Mapping[str, JSON] = {
 }
 _FORM: Mapping[str, JSON] = {"key": "form", "kind": "DICT", "children": [{"key": "name", "kind": "STRING"}, {"key": "count", "kind": "INT"}]}
 
+_TO: Mapping[str, JSON] = {
+    "key": "self",
+    "action_dependencies": [{"key": "move", "demand": {"arg_matches": [{"key": "to", "kind": "INT"}]}}],
+}
+_PANEL = '<Blok kind="agent" context="panel">'
+
 CHECKS: Sequence[Check] = (
-    Check("a clean agent blok", '<Html><Card><Text>{self.arm.mode}</Text><Button onClick={self.move_to(position: 1) into move}>Go</Button><Progress value={move.progress} /></Card></Html>', (), dependencies=(_SELF,)),
-    Check("deps in an agent blok", "<Html><Text text={deps.robot.arm.mode} /></Html>", ("roots.not_in_kind",), dependencies=(_ROBOT,)),
-    Check("self in a custom blok", "<Html><Text text={self.arm.mode} /></Html>", ("roots.not_in_kind",), kind="custom", dependencies=(_ROBOT,)),
-    Check("task in an agent blok", "<Html><Text text={task.status} /></Html>", ("roots.not_in_kind",)),
-    Check("an action logo reads only task", '<ActionLogo><Path d="M0 0" fill={task.running ? "brand" : "muted"} stroke={viewer.user.id} /></ActionLogo>', ("roots.not_in_kind",), kind="action_logo", context="ACTION_LOGO"),
-    Check("an unknown root", "<Html><Text text={nothing.here} /></Html>", ("roots.unknown",)),
-    Check("a function namespace is no value", "<Html><Text text={math.pi} /></Html>", ("roots.unknown",)),
-    Check("event outside a callback", "<Html><Text text={event.value} /></Html>", ("roots.event_outside_callback",)),
-    Check("error outside its slot", "<Html><Text text={error.message} /></Html>", ("roots.error_outside_boundary",)),
-    Check("a reserved local", "<Html><Text /></Html>", ("roots.reserved",), locals=({"key": "task", "kind": "STRING"},)),
-    Check("then is reserved", "<Html><Text /></Html>", ("roots.reserved",), locals=({"key": "then", "kind": "STRING"},)),
-    Check("query is reserved", "<Html><Text /></Html>", ("roots.reserved",), locals=({"key": "query", "kind": "STRING"},)),
-    Check("a let shadowing a local", '<Html><foreach items={args.xs} let="x" key={x}><Text /></foreach></Html>', ("roots.shadow",), locals=({"key": "x", "kind": "STRING"},)),
-    Check("one record, two calls", "<Html><Card><Button onClick={self.move_to(position: 1) into move} /><Button onClick={self.move_to(position: 2) into move} /></Card></Html>", ("into.twice",), dependencies=(_SELF,)),
-    Check("an unknown dependency", "<Html><Text text={deps.nope.x} /></Html>", ("deps.unknown",), kind="custom", dependencies=(_ROBOT,)),
-    Check("a custom blok reading an undeclared dependency", "<Html><Card><Text text={deps.robot.arm.mode} /><Button onClick={deps.stage.move(x: 1)} /></Card></Html>", ("deps.unknown", "deps.unknown"), kind="custom"),
-    Check("an undeclared dependency beside a declared one", "<Html><Card><Text text={deps.robot.arm.mode} /><Text text={deps.camera.frame} /></Card></Html>", ("deps.unknown",), kind="custom", dependencies=(_ROBOT,)),
-    Check("a query variable reading an undeclared dependency", "<Html><Text text={queries.positions.status} /></Html>", ("deps.unknown",), kind="custom", queries=({**_POSITIONS, "variables": [{"key": "agent", "value_path": "deps.stage.id"}]},)),
-    Check("an unknown state", "<Html><Text text={deps.robot.legs} /></Html>", ("deps.unknown_state",), kind="custom", dependencies=(_ROBOT,)),
-    Check("an unknown action", "<Html><Button onClick={deps.robot.fly()} /></Html>", ("deps.unknown_action",), kind="custom", dependencies=(_ROBOT,)),
-    Check("an unknown field", "<Html><Text text={deps.robot.arm.speed} /></Html>", ("path.unknown",), kind="custom", dependencies=(_ROBOT,)),
-    Check("a task record field", "<Html><Text text={deps.robot.tasks.move_to.returns.arrived} /></Html>", (), kind="custom", dependencies=(_ROBOT,)),
-    Check("an unknown record field", "<Html><Card><Button onClick={self.move_to(position: 1) into move} /><Text text={move.result} /></Card></Html>", ("path.unknown",), dependencies=(_SELF,)),
-    Check("an undeclared arg", "<Html><Text text={args.image} /></Html>", ("args.unknown",), args=("dataset",)),
-    Check("an args read whole", "<Html><Text text={args} /></Html>", ("roots.whole",)),
-    Check("an undeclared query", "<Html><Text text={queries.cells.value} /></Html>", ("query.unknown",)),
-    Check("a declared query", "<Html><Card><Text text={queries.positions.status} /><Button onClick={queries.positions.refetch()} /></Card></Html>", (), queries=(_POSITIONS,)),
-    Check("refetch of an undeclared query", "<Html><Button onClick={queries.cells.refetch()} /></Html>", ("query.unknown",)),
-    Check("fetch_more of a paged query", "<Html><Button onClick={queries.positions.fetch_more(after: queries.positions.value.cursor)} /></Html>", (), queries=(_PAGED,)),
-    Check("fetch_more of a query without more", "<Html><Button onClick={queries.positions.fetch_more()} /></Html>", ("query.fetch_more",), queries=(_POSITIONS,)),
-    Check("fetch_more of an undeclared query", "<Html><Button onClick={queries.cells.fetch_more()} /></Html>", ("query.unknown",)),
-    Check("a query effect named by a path", "<Html><Button onClick={query.refetch(args.which)} /></Html>", ("query.effect_target",)),
-    Check("fetching_more is a field of the record", "<Html><Spinner when={queries.positions.fetching_more} /></Html>", (), queries=(_PAGED,)),
-    Check("then is the viewed moment", "<Html><Text text={then} /></Html>", ()),
-    Check("then has no fields", "<Html><Text text={then.year} /></Html>", ("path.unknown",)),
-    Check("then in an action logo", '<ActionLogo><Path d="M0 0" fill={then ? "muted" : "brand"} /></ActionLogo>', ("roots.not_in_kind",), kind="action_logo", context="ACTION_LOGO"),
-    Check("now is no root", "<Html><Text text={now} /></Html>", ("roots.unknown",)),
-    Check("time.since is gone", "<Html><Text text={time.since(task.message)} /></Html>", ("expr.unknown_function", "roots.not_in_kind")),
-    Check("time.diff is pure", "<Html><Text text={fmt.duration(time.diff(args.start, args.end))} /></Html>", ()),
-    Check("a time component", "<Html><Time value={args.started} relative /></Html>", ()),
-    Check("a callback holding a value", '<Html><Button onClick={"x"} /></Html>', ("callback.unbound",)),
-    Check("a task call in a value prop", "<Html><Text text={self.move_to(position: 1)} /></Html>", ("callback.not_callback",), dependencies=(_SELF,)),
-    Check("an unknown event field", "<Html><Slider onChange={self.move_to(position: event.nope)} /></Html>", ("callback.event_field",), dependencies=(_SELF,)),
-    Check("bind to no local", "<Html><Slider bind={deps.robot.arm} /></Html>", ("local.unknown",), kind="custom", dependencies=(_ROBOT,)),
-    Check("a bind that is a literal", '<Html><Slider bind="iterations" /></Html>', ("local.bind",), locals=(_ITERATIONS,)),
-    Check("a default that does not fit its kind", "<Html><Slider bind={iterations} /></Html>", ("local.default",), locals=({"key": "iterations", "kind": "INT", "default": "15"},)),
-    Check("a persisted local nothing binds", "<Html><Text /></Html>", ("local.unused_persist",), locals=({**_ITERATIONS, "persist": True},)),
-    Check("a slider binds an int local", "<Html><Slider bind={iterations} /></Html>", (), locals=(_ITERATIONS,)),
-    Check("an input binds a string local", "<Html><Input bind={name} /></Html>", (), locals=(_NAME,)),
-    Check("a switch bound to an int local", "<Html><Switch bind={iterations} /></Html>", ("local.bind_kind",), locals=(_ITERATIONS,)),
-    Check("an input bound to an int local", "<Html><Input bind={iterations} /></Html>", ("local.bind_kind",), locals=(_ITERATIONS,)),
-    Check("a slider bound to a string local", "<Html><Slider bind={name} /></Html>", ("local.bind_kind",), locals=(_NAME,)),
-    Check("a bind checks the field it writes", "<Html><Card><Input bind={form.name} /><Switch bind={form.count} /></Card></Html>", ("local.bind_kind",), locals=(_FORM,)),
-    Check("an ANY control binds any local", "<Html><ToggleGroup bind={iterations} /></Html>", (), locals=(_ITERATIONS,)),
-    Check("a local passed to its port's kind", "<Html><Button onClick={self.move_to(position: iterations, speed: iterations)} /></Html>", (), locals=(_ITERATIONS,), dependencies=(_TYPED_SELF,)),
-    Check("a local passed to a port of another kind", "<Html><Button onClick={self.move_to(position: name)} /></Html>", ("local.arg_kind",), locals=(_NAME,), dependencies=(_TYPED_SELF,)),
-    Check("a structure local of another identifier", "<Html><Button onClick={self.move_to(image: picked)} /></Html>", ("local.arg_kind",), locals=({"key": "picked", "kind": "STRUCTURE", "identifier": "@mikro/table"},), dependencies=(_TYPED_SELF,)),
-    Check("a structure local of the port's identifier", "<Html><Button onClick={self.move_to(image: picked)} /></Html>", (), locals=({"key": "picked", "kind": "STRUCTURE", "identifier": "@mikro/image"},), dependencies=(_TYPED_SELF,)),
-    Check("a toast on someone else's task", "<Html><Toast task={self.tasks.move_to}><done>ok</done></Toast></Html>", ("toast.task",), dependencies=(_SELF,)),
-    Check("persist is an ordinary prop", "<Scene persist />", (), context="SCENE"),
-    Check("persist where a component offers no such prop", '<Html><Card id="c" persist /></Html>', ("catalog.props",)),
-    Check("a raw palette colour", '<Html><Badge className="bg-green-500 text-white hover:bg-red-600/50" /></Html>', ("palette.raw_colour", "palette.raw_colour", "palette.raw_colour")),
-    Check("an arbitrary colour", '<Html><Badge className={["bg-[#fff]", task.done && "text-emerald-700"]} /></Html>', ("palette.raw_colour", "palette.raw_colour", "roots.not_in_kind")),
-    Check("roles are fine", '<Html><Badge className="bg-success-soft text-success data-[busy]:opacity-60 bg-brand/20" /></Html>', ()),
-    Check("a logo paints with pens", '<AgentLogo><Path d="M0 0" fill="#fbbf24" stroke="brand" /></AgentLogo>', ("palette.logo_paint",), context="LOGO"),
-    Check("a scene blok's root", "<Card />", ("context.root",), context="SCENE"),
-    Check("an html blok's root", "<Card />", ("context.root",)),
-    Check("an action logo's root", '<AgentLogo><Path d="M0 0" fill="brand" /></AgentLogo>', ("context.root",), kind="action_logo", context="ACTION_LOGO"),
-    Check("a space is an action's", '<Space room="room:lab" />', ("catalog.kind",), context="SCENE"),
-    Check("a custom blok has no run to place", '<Space room="room:lab"><Placed dep="robot" /></Space>', ("catalog.kind", "catalog.kind"), kind="custom", context="SCENE", dependencies=(_ROBOT,)),
-    Check("the language alone knows no kind of a component", '<Space room="room:lab" />', (), context="SCENE", catalog=False),
-    Check("an assign blok", '<Html><Card><Text>{args.slides}</Text><args /><Button onClick={assign.start()}>Start</Button></Card></Html>', (), kind="assign", dependencies=(_ROBOT,), args=("slides",)),
-    Check("an assign blok places the run's dependencies", '<Html><Space room="room:lab"><Placed dep="robot" /></Space></Html>', (), kind="assign", dependencies=(_ROBOT,)),
-    Check("an assign blok has no task", "<Html><Text>{task.status}</Text></Html>", ("roots.not_in_kind",), kind="assign"),
-    Check("starting a run is an assign blok's", "<Html><args /><Button onClick={assign.start()}>Start</Button></Html>", ("catalog.kind", "assign.kind"), kind="action"),
-    Check("an unknown component", "<Html><Frobnicator /></Html>", ("catalog.unknown_component",)),
-    Check("an unknown prop", "<Html><Button frob={1} /></Html>", ("catalog.props",)),
-    Check("a component outside its context", "<Html><Model /></Html>", ("catalog.props", "catalog.placement", "catalog.placement")),
-    Check("text is a child of whatever takes children", "<Html><Card>hi <Badge>new</Badge> there</Card><div>plain</div></Html>", ()),
-    Check("text where neither text nor children go", "<Html><Separator>x</Separator></Html>", ("catalog.text",)),
-    Check("text and its prop", '<Html><Button label="a">b</Button></Html>', ("catalog.text",)),
-    Check("text in a scene", "<Scene><Model src={self.assets.scope}>x</Model></Scene>", ("catalog.placement",), context="SCENE"),
-    Check("text in a logo", "<AgentLogo><G>x</G></AgentLogo>", ("catalog.placement",), context="LOGO"),
-    Check("the language alone takes text anywhere", "<Scene><Model>x</Model><Foo>y</Foo></Scene>", (), context="SCENE", catalog=False),
-    Check("a component of a catalog the blok is not written for", "<Html><MikroSceneProbe /></Html>", ("catalog.target",)),
-    Check("a blok written for the Orkestrator's catalog", "<Html><MikroScene value={args.scene}><MikroSceneViewport /></MikroScene></Html>", (), target=ORKESTRATOR_CATALOG_ID),
-    Check("the base catalog is under every other", "<Html><Card><MikroSceneProbe /></Card></Html>", ("catalog.placement",), target=ORKESTRATOR_CATALOG_ID),
-    Check("an assign blok reads the run it prepares", '<Html><arg key="slides" /><args omit={["slides"]} given="show" /><deps /><Button disabled={!assign.ready} onClick={assign.start()}>{assign.blocked ?? "Start"}</Button></Html>', (), kind="assign", args=("slides",)),
-    Check("what the caller gave is told per argument", "<Html><if when={assign.given.slides}><Text>{args.slides}</Text></if><Text>{assign.given.nope}</Text><Text>{assign.nope}</Text></Html>", ("args.unknown", "path.unknown"), kind="assign", args=("slides",)),
-    Check("assign is an assign blok's", "<Html><Text>{assign.ready}</Text></Html>", ("roots.not_in_kind",), kind="action"),
-    Check("assign is reserved", "<Html><Text /></Html>", ("roots.reserved",), locals=({"key": "assign", "kind": "STRING"},)),
-    Check("a run's blok places the host's parts", '<Html chrome="none"><status /><ask /><returns only={["image"]} /><timeline /><Button disabled={!task.can.cancel} onClick={task.cancel()}>Stop</Button><Text>{task.paused ? "Paused" : fmt.duration(task.duration)}</Text></Html>', (), kind="action"),
-    Check("a task operation needs a task", "<Html><Button onClick={task.pause()} /></Html>", ("roots.not_in_kind",)),
-    Check("no chrome and no ask", '<Html chrome="none"><status /></Html>', ("chrome.no_ask",), kind="action"),
-    Check("a host part claims its slot even where it does not show", "<Html><if when={task.running}><timeline /></if></Html>", ("part.conditional",), kind="action"),
-    Check("a host part outside its kind", "<Html><returns /></Html>", ("catalog.kind",)),
-    Check("an agent says whether it is connected", '<Html><Text>{deps.robot.connected ? "Online" : "Offline"}</Text></Html>', (), kind="custom", dependencies=(_ROBOT,)),
-    Check("classes outside the portable subset", '<Html><Card className="before:block float-left [&>*]:p-2 grid-cols-3 translate-x-[3px] w-[12rem] -mt-[4px] space-y-2 hover:bg-muted md:flex-row dark:bg-card cursor-pointer w-48 gap-2" /></Html>', ("class.not_portable",) * 5),
-    Check("an unknown function in a namespace", "<Html><Text text={str.frobnicate(a)} /></Html>", ("expr.unknown_function", "roots.unknown")),
-    Check("an action blok", '<Space room="room:lab"><Placed dep="robot"><Glow on={task.running} /></Placed></Space>', (), kind="action", context="SCENE", dependencies=(_ROBOT,)),
-    Check("a placed key that is no dependency", '<Space room="room:lab"><Placed dep="arm" /><Route through={["robot", "arm"]} /></Space>', ("deps.unknown", "deps.unknown"), kind="action", context="SCENE", dependencies=(_ROBOT,)),
-    Check("task.answer in an agent blok", "<Html><Button onClick={task.answer(values: {})} /></Html>", ("roots.not_in_kind",)),
-    Check("a task blok answers", '<Html><Button onClick={task.answer(values: {image: args.image})} /></Html>', (), kind="task"),
-    Check("a \"@...\" string is a literal", '<Html><Text text="@self.arm.mode" /></Html>', ()),
-    Check("a string on a bool prop", '<Html><Button fullWidth="true" /></Html>', ("props.literal_type",)),
-    Check("a string on a number prop", '<Html><Progress value="50" max={100} /></Html>', ("props.literal_type",)),
-    Check("typed literals", '<Html><Card><Button fullWidth disabled={false} /><Progress value={50} max={100.5} /></Card></Html>', ()),
-    Check("a scene colour that is no role", '<Space room="room:lab"><Placed dep="robot"><Glow on={task.running} color="#ff3b30" /></Placed><Route through={["robot"]} color="hotpink" /></Space>', ("palette.scene_colour", "palette.scene_colour"), kind="action", context="SCENE", dependencies=(_ROBOT,)),
-    Check("an uninferrable local is ANY", "<Html><Text text={x} /></Html>", (), locals=({"key": "x"},)),
-    Check("a local takes its kind from its default", "<Html><Slider bind={n} /></Html>", (), locals=({"key": "n", "default": 3},)),
-    Check("a local takes its task argument's port", "<Html><Button onClick={self.move_to(position: p)} /></Html>", (), locals=({"key": "p"},), dependencies=(_TYPED_SELF,)),
-    Check("a structure local takes its argument's identifier", "<Html><Button onClick={self.move_to(image: picked)} /></Html>", (), locals=({"key": "picked"},), dependencies=(_TYPED_SELF,)),
-    Check("a local takes its control's bind kind", "<Html><Switch bind={on} /></Html>", (), locals=({"key": "on"},)),
-    Check("what a local says wins over what it infers", "<Html><Switch bind={on} /></Html>", (), locals=({"key": "on", "nullable": True, "description": "Lights"},)),
-    Check("an inferred port keeps the local's choices", "<Html><Button onClick={self.move_to(position: p)} /></Html>", (), locals=({"key": "p", "choices": [{"value": 1, "label": "one"}, {"value": 2, "label": "two"}]},), dependencies=(_TYPED_SELF,)),
-    Check("a task argument beats a bind", "<Html><Card><Input bind={p} /><Button onClick={self.move_to(position: p)} /></Card></Html>", ("local.bind_kind",), locals=({"key": "p"},), dependencies=(_TYPED_SELF,)),
-    Check("the first task argument wins", "<Html><Card><Button onClick={self.move_to(speed: p)} /><Button onClick={self.move_to(position: p)} /></Card></Html>", ("local.arg_kind",), locals=({"key": "p"},), dependencies=(_TYPED_SELF,)),
-    Check("a default beats a use", "<Html><Slider bind={name} /></Html>", ("local.bind_kind",), locals=({"key": "name", "default": "a"},)),
-    Check("a list control tells too little", "<Html><ToggleGroup bind={x} /></Html>", (), locals=({"key": "x"},)),
-    Check("an untyped argument tells nothing", "<Html><Button onClick={self.move_to(position: p)} /></Html>", (), locals=({"key": "p"},), dependencies=(_SELF,)),
-    Check("a given ANY is kept", "<Html><Slider bind={x} /></Html>", (), locals=({"key": "x", "kind": "ANY"},)),
-    Check("an ANY local skips the argument check", "<Html><Button onClick={self.move_to(image: x)} /></Html>", (), locals=({"key": "x", "kind": "ANY"},), dependencies=(_TYPED_SELF,)),
-    Check("a path below an ANY local is taken as written", "<Html><Text text={x.a.b} /></Html>", (), locals=({"key": "x", "kind": "ANY"},)),
-    Check("a foreach of objects without key", '<Html><foreach items={deps.shelf.inventory.slots} let="s"><Text>{s.id}</Text></foreach></Html>', ("foreach.position_key",), kind="custom", dependencies=(_SHELF,)),
-    Check("a keyed foreach of objects", '<Html><foreach items={deps.shelf.inventory.slots} let="s" key={s.id}><Text>{s.id}</Text></foreach></Html>', (), kind="custom", dependencies=(_SHELF,)),
-    Check("a foreach of scalars without key", '<Html><foreach items={deps.shelf.inventory.names} let="n"><Text>{n}</Text></foreach></Html>', (), kind="custom", dependencies=(_SHELF,)),
-    Check("a foreach of literal objects without key", '<Html><foreach items={[{a: 1}, {a: 2}]} let="x"><Text /></foreach></Html>', ("foreach.position_key",)),
-    Check("a foreach of unknown items without key", '<Html><foreach items={args.xs} let="x"><Text /></foreach></Html>', ()),
-    Check("an unnamed return of a record", "<Html><Card><Button onClick={self.measure() into run} /><Text text={run.returns.return0} /></Card></Html>", ("returns.unnamed",), dependencies=(_UNNAMED,)),
-    Check("an unnamed return of a latest task", "<Html><Text text={self.tasks.measure.returns.return0} /></Html>", ("returns.unnamed",), dependencies=(_UNNAMED,)),
-    Check("an unnamed return of the task", "<Html><Text text={task.returns.return1} /></Html>", ("returns.unnamed",), kind="task"),
-    Check("a named return", "<Html><Text text={deps.robot.tasks.move_to.returns.arrived} /></Html>", (), kind="custom", dependencies=(_ROBOT,)),
-    Check("coalesce reads its operands", "<Html><Text text={nothing ?? args.x} /></Html>", ("roots.unknown",)),
-    Check("spectral roles are scene colours", '<Space room="room:lab"><Placed dep="robot"><Glow on={task.running} color="spectrum-green" /></Placed><Route through={["robot"]} color="spectrum-violet-soft" /></Space>', (), kind="action", context="SCENE", dependencies=(_ROBOT,)),
-    Check("spectral roles are classes", '<Html><Badge className="bg-spectrum-red-soft text-spectrum-red border-spectrum-cyan/40" /></Html>', ()),
-    Check("spectral pens paint a logo", '<AgentLogo><Path d="M0 0" fill="spectrum-violet" stroke="spectrum-orange" /></AgentLogo>', (), context="LOGO"),
-    Check("scene colours are roles", '<Space room="room:lab"><Placed dep="robot"><Glow on={task.running} color="info" /></Placed><Route through={["robot"]} color="chart-2" /></Space>', (), kind="action", context="SCENE", dependencies=(_ROBOT,)),
+    Check('a clean agent blok', '<Blok kind="agent" context="panel"><Card><Text>{self.arm.mode}</Text><Button onClick={self.move_to(position: 1) into move}>Go</Button><Progress value={move.progress} /></Card></Blok>', (), dependencies=(_SELF,)),
+    Check('deps in an agent blok', '<Blok kind="agent" context="panel"><Text text={deps.robot.arm.mode} /></Blok>', ("roots.not_in_kind",), dependencies=(_ROBOT,)),
+    Check('self in a custom blok', '<Blok kind="custom" context="panel"><Text text={self.arm.mode} /></Blok>', ("roots.not_in_kind",), dependencies=(_ROBOT,)),
+    Check('task in an agent blok', '<Blok kind="agent" context="panel"><Text text={task.status} /></Blok>', ("roots.not_in_kind",)),
+    Check('an action logo reads only task', '<Blok kind="action" context="logo"><Logo><Path d="M0 0" fill={task.running ? "brand" : "muted"} stroke={viewer.user.id} /></Logo></Blok>', ("roots.not_in_kind",)),
+    Check('an unknown root', '<Blok kind="agent" context="panel"><Text text={nothing.here} /></Blok>', ("roots.unknown",)),
+    Check('a function namespace is no value', '<Blok kind="agent" context="panel"><Text text={math.pi} /></Blok>', ("roots.unknown",)),
+    Check('event outside a callback', '<Blok kind="agent" context="panel"><Text text={event.value} /></Blok>', ("roots.event_outside_callback",)),
+    Check('error outside its slot', '<Blok kind="agent" context="panel"><Text text={error.message} /></Blok>', ("roots.error_outside_boundary",)),
+    Check('a reserved local', '<Blok kind="agent" context="panel"><local name="task" kind="STRING" /><Text /></Blok>', ("roots.reserved",)),
+    Check('then is reserved', '<Blok kind="agent" context="panel"><local name="then" kind="STRING" /><Text /></Blok>', ("roots.reserved",)),
+    Check('query is reserved', '<Blok kind="agent" context="panel"><local name="query" kind="STRING" /><Text /></Blok>', ("roots.reserved",)),
+    Check('a let shadowing a local', '<Blok kind="agent" context="panel"><local name="x" kind="STRING" /><foreach items={args.xs} let="x" key={x}><Text /></foreach></Blok>', ("roots.shadow",)),
+    Check('one record, two calls', '<Blok kind="agent" context="panel"><Card><Button onClick={self.move_to(position: 1) into move} /><Button onClick={self.move_to(position: 2) into move} /></Card></Blok>', ("into.twice",), dependencies=(_SELF,)),
+    Check('an unknown dependency', '<Blok kind="custom" context="panel"><Text text={deps.nope.x} /></Blok>', ("deps.unknown",), dependencies=(_ROBOT,)),
+    Check('a custom blok reading an undeclared dependency', '<Blok kind="custom" context="panel"><Card><Text text={deps.robot.arm.mode} /><Button onClick={deps.stage.move(x: 1)} /></Card></Blok>', ('deps.unknown', 'deps.unknown')),
+    Check('an undeclared dependency beside a declared one', '<Blok kind="custom" context="panel"><Card><Text text={deps.robot.arm.mode} /><Text text={deps.camera.frame} /></Card></Blok>', ("deps.unknown",), dependencies=(_ROBOT,)),
+    Check('a query variable reading an undeclared dependency', '<Blok kind="custom" context="panel"><query name="positions" service="mikro" document="query { positions { id } }"><var key="agent" value={deps.stage.id} /></query><Text text={queries.positions.status} /></Blok>', ("deps.unknown",)),
+    Check('an unknown state', '<Blok kind="custom" context="panel"><Text text={deps.robot.legs} /></Blok>', ("deps.unknown_state",), dependencies=(_ROBOT,)),
+    Check('an unknown action', '<Blok kind="custom" context="panel"><Button onClick={deps.robot.fly()} /></Blok>', ("deps.unknown_action",), dependencies=(_ROBOT,)),
+    Check('an unknown field', '<Blok kind="custom" context="panel"><Text text={deps.robot.arm.speed} /></Blok>', ("path.unknown",), dependencies=(_ROBOT,)),
+    Check('a task record field', '<Blok kind="custom" context="panel"><Text text={deps.robot.tasks.move_to.returns.arrived} /></Blok>', (), dependencies=(_ROBOT,)),
+    Check('an unknown record field', '<Blok kind="agent" context="panel"><Card><Button onClick={self.move_to(position: 1) into move} /><Text text={move.result} /></Card></Blok>', ("path.unknown",), dependencies=(_SELF,)),
+    Check('an undeclared arg', '<Blok kind="agent" context="panel"><Text text={args.image} /></Blok>', ("args.unknown",), args=('dataset',)),
+    Check('an args read whole', '<Blok kind="agent" context="panel"><Text text={args} /></Blok>', ("roots.whole",)),
+    Check('an undeclared query', '<Blok kind="agent" context="panel"><Text text={queries.cells.value} /></Blok>', ("query.unknown",)),
+    Check('a declared query', '<Blok kind="agent" context="panel"><query name="positions" service="mikro" document="query { positions { id } }" /><Card><Text text={queries.positions.status} /><Button onClick={queries.positions.refetch()} /></Card></Blok>', ()),
+    Check('refetch of an undeclared query', '<Blok kind="agent" context="panel"><Button onClick={queries.cells.refetch()} /></Blok>', ("query.unknown",)),
+    Check('fetch_more of a paged query', '<Blok kind="agent" context="panel"><query name="positions" service="mikro" document="query { positions { id } }" more="positions" /><Button onClick={queries.positions.fetch_more(after: queries.positions.value.cursor)} /></Blok>', ()),
+    Check('fetch_more of a query without more', '<Blok kind="agent" context="panel"><query name="positions" service="mikro" document="query { positions { id } }" /><Button onClick={queries.positions.fetch_more()} /></Blok>', ("query.fetch_more",)),
+    Check('fetch_more of an undeclared query', '<Blok kind="agent" context="panel"><Button onClick={queries.cells.fetch_more()} /></Blok>', ("query.unknown",)),
+    Check('a query effect named by a path', '<Blok kind="agent" context="panel"><Button onClick={query.refetch(args.which)} /></Blok>', ("query.effect_target",)),
+    Check('fetching_more is a field of the record', '<Blok kind="agent" context="panel"><query name="positions" service="mikro" document="query { positions { id } }" more="positions" /><Spinner when={queries.positions.fetching_more} /></Blok>', ()),
+    Check('then is the viewed moment', '<Blok kind="agent" context="panel"><Text text={then} /></Blok>', ()),
+    Check('then has no fields', '<Blok kind="agent" context="panel"><Text text={then.year} /></Blok>', ("path.unknown",)),
+    Check('then in an action logo', '<Blok kind="action" context="logo"><Logo><Path d="M0 0" fill={then ? "muted" : "brand"} /></Logo></Blok>', ("roots.not_in_kind",)),
+    Check('now is no root', '<Blok kind="agent" context="panel"><Text text={now} /></Blok>', ("roots.unknown",)),
+    Check('time.since is gone', '<Blok kind="agent" context="panel"><Text text={time.since(task.message)} /></Blok>', ('expr.unknown_function', 'roots.not_in_kind')),
+    Check('time.diff is pure', '<Blok kind="agent" context="panel"><Text text={fmt.duration(time.diff(args.start, args.end))} /></Blok>', ()),
+    Check('a time component', '<Blok kind="agent" context="panel"><Time value={args.started} relative /></Blok>', ()),
+    Check('a callback holding a value', '<Blok kind="agent" context="panel"><Button onClick={"x"} /></Blok>', ("callback.unbound",)),
+    Check('a task call in a value prop', '<Blok kind="agent" context="panel"><Text text={self.move_to(position: 1)} /></Blok>', ("callback.not_callback",), dependencies=(_SELF,)),
+    Check('an unknown event field', '<Blok kind="agent" context="panel"><Slider onChange={self.move_to(position: event.nope)} /></Blok>', ("callback.event_field",), dependencies=(_SELF,)),
+    Check('bind to no local', '<Blok kind="custom" context="panel"><Slider bind={deps.robot.arm} /></Blok>', ("local.unknown",), dependencies=(_ROBOT,)),
+    Check('a bind that is a literal', '<Blok kind="agent" context="panel"><local name="iterations" kind="INT" default={15} /><Slider bind="iterations" /></Blok>', ("local.bind",)),
+    Check('a default that does not fit its kind', '<Blok kind="agent" context="panel"><local name="iterations" kind="INT" default={"15"} /><Slider bind={iterations} /></Blok>', ("local.default",)),
+    Check('a persisted local nothing binds', '<Blok kind="agent" context="panel"><local name="iterations" kind="INT" default={15} persist /><Text /></Blok>', ("local.unused_persist",)),
+    Check('a slider binds an int local', '<Blok kind="agent" context="panel"><local name="iterations" kind="INT" default={15} /><Slider bind={iterations} /></Blok>', ()),
+    Check('an input binds a string local', '<Blok kind="agent" context="panel"><local name="name" kind="STRING" default={""} /><Input bind={name} /></Blok>', ()),
+    Check('a switch bound to an int local', '<Blok kind="agent" context="panel"><local name="iterations" kind="INT" default={15} /><Switch bind={iterations} /></Blok>', ("local.bind_kind",)),
+    Check('an input bound to an int local', '<Blok kind="agent" context="panel"><local name="iterations" kind="INT" default={15} /><Input bind={iterations} /></Blok>', ("local.bind_kind",)),
+    Check('a slider bound to a string local', '<Blok kind="agent" context="panel"><local name="name" kind="STRING" default={""} /><Slider bind={name} /></Blok>', ("local.bind_kind",)),
+    Check('a bind checks the field it writes', '<Blok kind="agent" context="panel"><local name="form" kind="DICT" children={[{"key": "name", "kind": "STRING"}, {"key": "count", "kind": "INT"}]} /><Card><Input bind={form.name} /><Switch bind={form.count} /></Card></Blok>', ("local.bind_kind",)),
+    Check('an ANY control binds any local', '<Blok kind="agent" context="panel"><local name="iterations" kind="INT" default={15} /><ToggleGroup bind={iterations} /></Blok>', ()),
+    Check("a local passed to its port's kind", '<Blok kind="agent" context="panel"><local name="iterations" kind="INT" default={15} /><Button onClick={self.move_to(position: iterations, speed: iterations)} /></Blok>', (), dependencies=(_TYPED_SELF,)),
+    Check('a local passed to a port of another kind', '<Blok kind="agent" context="panel"><local name="name" kind="STRING" default={""} /><Button onClick={self.move_to(position: name)} /></Blok>', ("local.arg_kind",), dependencies=(_TYPED_SELF,)),
+    Check('a structure local of another identifier', '<Blok kind="agent" context="panel"><local name="picked" kind="STRUCTURE" identifier="@mikro/table" /><Button onClick={self.move_to(image: picked)} /></Blok>', ("local.arg_kind",), dependencies=(_TYPED_SELF,)),
+    Check("a structure local of the port's identifier", '<Blok kind="agent" context="panel"><local name="picked" kind="STRUCTURE" identifier="@mikro/image" /><Button onClick={self.move_to(image: picked)} /></Blok>', (), dependencies=(_TYPED_SELF,)),
+    Check("a toast on someone else's task", '<Blok kind="agent" context="panel"><Toast task={self.tasks.move_to}><done>ok</done></Toast></Blok>', ("toast.task",), dependencies=(_SELF,)),
+    Check('persist is an ordinary prop', '<Blok kind="agent" context="scene"><Scene persist /></Blok>', ()),
+    Check('persist where a component offers no such prop', '<Blok kind="agent" context="panel"><Card id="c" persist /></Blok>', ("catalog.props",)),
+    Check('a raw palette colour', '<Blok kind="agent" context="panel"><Badge className="bg-green-500 text-white hover:bg-red-600/50" /></Blok>', ('palette.raw_colour', 'palette.raw_colour', 'palette.raw_colour')),
+    Check('an arbitrary colour', '<Blok kind="agent" context="panel"><Badge className={["bg-[#fff]", task.done && "text-emerald-700"]} /></Blok>', ('palette.raw_colour', 'palette.raw_colour', 'roots.not_in_kind')),
+    Check('roles are fine', '<Blok kind="agent" context="panel"><Badge className="bg-success-soft text-success data-[busy]:opacity-60 bg-brand/20" /></Blok>', ()),
+    Check('a logo paints with pens', '<Blok kind="agent" context="logo"><Logo><Path d="M0 0" fill="#fbbf24" stroke="brand" /></Logo></Blok>', ("palette.logo_paint",)),
+    Check("a space is an action's", '<Blok kind="agent" context="scene"><Space room="room:lab" /></Blok>', ("catalog.kind",)),
+    Check('a custom blok has no run to place', '<Blok kind="custom" context="scene"><Space room="room:lab"><Placed dep="robot" /></Space></Blok>', ('catalog.kind', 'catalog.kind'), dependencies=(_ROBOT,)),
+    Check('the language alone knows no kind of a component', '<Blok kind="agent" context="scene"><Space room="room:lab" /></Blok>', (), catalog=False),
+    Check('an assign blok', '<Blok kind="assign" context="panel"><Card><Text>{args.slides}</Text><args /><Button onClick={assign.start()}>Start</Button></Card></Blok>', (), dependencies=(_ROBOT,), args=('slides',)),
+    Check("an assign blok places the run's dependencies", '<Blok kind="assign" context="panel"><Space room="room:lab"><Placed dep="robot" /></Space></Blok>', (), dependencies=(_ROBOT,)),
+    Check('an assign blok has no task', '<Blok kind="assign" context="panel"><Text>{task.status}</Text></Blok>', ("roots.not_in_kind",)),
+    Check("starting a run is an assign blok's", '<Blok kind="action" context="panel"><args /><Button onClick={assign.start()}>Start</Button></Blok>', ('catalog.kind', 'assign.kind')),
+    Check('an unknown component', '<Blok kind="agent" context="panel"><Frobnicator /></Blok>', ("catalog.unknown_component",)),
+    Check('an unknown prop', '<Blok kind="agent" context="panel"><Button frob={1} /></Blok>', ("catalog.props",)),
+    Check('a component outside its context', '<Blok kind="agent" context="panel"><Model /></Blok>', ('catalog.props', 'catalog.placement', 'catalog.placement')),
+    Check('text is a child of whatever takes children', '<Blok kind="agent" context="panel"><Card>hi <Badge>new</Badge> there</Card><div>plain</div></Blok>', ()),
+    Check('text where neither text nor children go', '<Blok kind="agent" context="panel"><Separator>x</Separator></Blok>', ("catalog.text",)),
+    Check('text and its prop', '<Blok kind="agent" context="panel"><Button label="a">b</Button></Blok>', ("catalog.text",)),
+    Check('text in a scene', '<Blok kind="agent" context="scene"><Scene><Model src={self.assets.scope}>x</Model></Scene></Blok>', ("catalog.placement",)),
+    Check('text in a logo', '<Blok kind="agent" context="logo"><Logo><G>x</G></Logo></Blok>', ("catalog.placement",)),
+    Check('the language alone takes text anywhere', '<Blok kind="agent" context="scene"><Scene><Model>x</Model><Foo>y</Foo></Scene></Blok>', (), catalog=False),
+    Check('a component of a catalog the blok is not written for', '<Blok kind="agent" context="panel"><MikroSceneProbe /></Blok>', ("catalog.target",)),
+    Check("a blok written for the Orkestrator's catalog", '<Blok kind="agent" context="panel" catalog="https://arkitekt.live/catalogs/orkestrator/v1"><MikroScene value={args.scene}><MikroSceneViewport /></MikroScene></Blok>', ()),
+    Check('the base catalog is under every other', '<Blok kind="agent" context="panel" catalog="https://arkitekt.live/catalogs/orkestrator/v1"><Card><MikroSceneProbe /></Card></Blok>', ("catalog.placement",)),
+    Check('an assign blok reads the run it prepares', '<Blok kind="assign" context="panel"><arg key="slides" /><args omit={["slides"]} given="show" /><deps /><Button disabled={!assign.ready} onClick={assign.start()}>{assign.blocked ?? "Start"}</Button></Blok>', (), args=('slides',)),
+    Check('what the caller gave is told per argument', '<Blok kind="assign" context="panel"><if when={assign.given.slides}><Text>{args.slides}</Text></if><Text>{assign.given.nope}</Text><Text>{assign.nope}</Text></Blok>', ('args.unknown', 'path.unknown'), args=('slides',)),
+    Check("assign is an assign blok's", '<Blok kind="action" context="panel"><Text>{assign.ready}</Text></Blok>', ("roots.not_in_kind",)),
+    Check('assign is reserved', '<Blok kind="agent" context="panel"><local name="assign" kind="STRING" /><Text /></Blok>', ("roots.reserved",)),
+    Check("a run's blok places the host's parts", '<Blok kind="action" context="panel" chrome="none"><status /><ask /><returns only={["image"]} /><timeline /><Button disabled={!task.can.cancel} onClick={task.cancel()}>Stop</Button><Text>{task.paused ? "Paused" : fmt.duration(task.duration)}</Text></Blok>', ()),
+    Check('a task operation needs a task', '<Blok kind="agent" context="panel"><Button onClick={task.pause()} /></Blok>', ("roots.not_in_kind",)),
+    Check('no chrome and no ask', '<Blok kind="action" context="panel" chrome="none"><status /></Blok>', ("chrome.no_ask",)),
+    Check('a host part claims its slot even where it does not show', '<Blok kind="action" context="panel"><if when={task.running}><timeline /></if></Blok>', ("part.conditional",)),
+    Check('a host part outside its kind', '<Blok kind="agent" context="panel"><returns /></Blok>', ("catalog.kind",)),
+    Check('an agent says whether it is connected', '<Blok kind="custom" context="panel"><Text>{deps.robot.connected ? "Online" : "Offline"}</Text></Blok>', (), dependencies=(_ROBOT,)),
+    Check('classes outside the portable subset', '<Blok kind="agent" context="panel"><Card className="before:block float-left [&>*]:p-2 grid-cols-3 translate-x-[3px] w-[12rem] -mt-[4px] space-y-2 hover:bg-muted md:flex-row dark:bg-card cursor-pointer w-48 gap-2" /></Blok>', ('class.not_portable', 'class.not_portable', 'class.not_portable', 'class.not_portable', 'class.not_portable')),
+    Check('an unknown function in a namespace', '<Blok kind="agent" context="panel"><Text text={str.frobnicate(a)} /></Blok>', ('expr.unknown_function', 'roots.unknown')),
+    Check('an action blok', '<Blok kind="action" context="scene"><Space room="room:lab"><Placed dep="robot"><Glow on={task.running} /></Placed></Space></Blok>', (), dependencies=(_ROBOT,)),
+    Check('a placed key that is no dependency', '<Blok kind="action" context="scene"><Space room="room:lab"><Placed dep="arm" /><Route through={["robot", "arm"]} /></Space></Blok>', ('deps.unknown', 'deps.unknown'), dependencies=(_ROBOT,)),
+    Check('task.answer in an agent blok', '<Blok kind="agent" context="panel"><Button onClick={task.answer(values: {})} /></Blok>', ("roots.not_in_kind",)),
+    Check('a task blok answers', '<Blok kind="task" context="panel"><Button onClick={task.answer(values: {image: args.image})} /></Blok>', ()),
+    Check('a "@..." string is a literal', '<Blok kind="agent" context="panel"><Text text="@self.arm.mode" /></Blok>', ()),
+    Check('a string on a bool prop', '<Blok kind="agent" context="panel"><Button fullWidth="true" /></Blok>', ("props.literal_type",)),
+    Check('a string on a number prop', '<Blok kind="agent" context="panel"><Progress value="50" max={100} /></Blok>', ("props.literal_type",)),
+    Check('typed literals', '<Blok kind="agent" context="panel"><Card><Button fullWidth disabled={false} /><Progress value={50} max={100.5} /></Card></Blok>', ()),
+    Check('a scene colour that is no role', '<Blok kind="action" context="scene"><Space room="room:lab"><Placed dep="robot"><Glow on={task.running} color="#ff3b30" /></Placed><Route through={["robot"]} color="hotpink" /></Space></Blok>', ('palette.scene_colour', 'palette.scene_colour'), dependencies=(_ROBOT,)),
+    Check('an uninferrable local is ANY', '<Blok kind="agent" context="panel"><local name="x" /><Text text={x} /></Blok>', ()),
+    Check('a local takes its kind from its default', '<Blok kind="agent" context="panel"><local name="n" default={3} /><Slider bind={n} /></Blok>', ()),
+    Check("a local takes its task argument's port", '<Blok kind="agent" context="panel"><local name="p" /><Button onClick={self.move_to(position: p)} /></Blok>', (), dependencies=(_TYPED_SELF,)),
+    Check("a structure local takes its argument's identifier", '<Blok kind="agent" context="panel"><local name="picked" /><Button onClick={self.move_to(image: picked)} /></Blok>', (), dependencies=(_TYPED_SELF,)),
+    Check("a local takes its control's bind kind", '<Blok kind="agent" context="panel"><local name="on" /><Switch bind={on} /></Blok>', ()),
+    Check('what a local says wins over what it infers', '<Blok kind="agent" context="panel"><local name="on" nullable description="Lights" /><Switch bind={on} /></Blok>', ()),
+    Check("an inferred port keeps the local's choices", '<Blok kind="agent" context="panel"><local name="p" choices={[{"value": 1, "label": "one"}, {"value": 2, "label": "two"}]} /><Button onClick={self.move_to(position: p)} /></Blok>', (), dependencies=(_TYPED_SELF,)),
+    Check('a task argument beats a bind', '<Blok kind="agent" context="panel"><local name="p" /><Card><Input bind={p} /><Button onClick={self.move_to(position: p)} /></Card></Blok>', ("local.bind_kind",), dependencies=(_TYPED_SELF,)),
+    Check('the first task argument wins', '<Blok kind="agent" context="panel"><local name="p" /><Card><Button onClick={self.move_to(speed: p)} /><Button onClick={self.move_to(position: p)} /></Card></Blok>', ("local.arg_kind",), dependencies=(_TYPED_SELF,)),
+    Check('a default beats a use', '<Blok kind="agent" context="panel"><local name="name" default={"a"} /><Slider bind={name} /></Blok>', ("local.bind_kind",)),
+    Check('a list control tells too little', '<Blok kind="agent" context="panel"><local name="x" /><ToggleGroup bind={x} /></Blok>', ()),
+    Check('an untyped argument tells nothing', '<Blok kind="agent" context="panel"><local name="p" /><Button onClick={self.move_to(position: p)} /></Blok>', (), dependencies=(_SELF,)),
+    Check('a given ANY is kept', '<Blok kind="agent" context="panel"><local name="x" kind="ANY" /><Slider bind={x} /></Blok>', ()),
+    Check('an ANY local skips the argument check', '<Blok kind="agent" context="panel"><local name="x" kind="ANY" /><Button onClick={self.move_to(image: x)} /></Blok>', (), dependencies=(_TYPED_SELF,)),
+    Check('a path below an ANY local is taken as written', '<Blok kind="agent" context="panel"><local name="x" kind="ANY" /><Text text={x.a.b} /></Blok>', ()),
+    Check('a foreach of objects without key', '<Blok kind="custom" context="panel"><foreach items={deps.shelf.inventory.slots} let="s"><Text>{s.id}</Text></foreach></Blok>', ("foreach.position_key",), dependencies=(_SHELF,)),
+    Check('a keyed foreach of objects', '<Blok kind="custom" context="panel"><foreach items={deps.shelf.inventory.slots} let="s" key={s.id}><Text>{s.id}</Text></foreach></Blok>', (), dependencies=(_SHELF,)),
+    Check('a foreach of scalars without key', '<Blok kind="custom" context="panel"><foreach items={deps.shelf.inventory.names} let="n"><Text>{n}</Text></foreach></Blok>', (), dependencies=(_SHELF,)),
+    Check('a foreach of literal objects without key', '<Blok kind="agent" context="panel"><foreach items={[{a: 1}, {a: 2}]} let="x"><Text /></foreach></Blok>', ("foreach.position_key",)),
+    Check('a foreach of unknown items without key', '<Blok kind="agent" context="panel"><foreach items={args.xs} let="x"><Text /></foreach></Blok>', ()),
+    Check('an unnamed return of a record', '<Blok kind="agent" context="panel"><Card><Button onClick={self.measure() into run} /><Text text={run.returns.return0} /></Card></Blok>', ("returns.unnamed",), dependencies=(_UNNAMED,)),
+    Check('an unnamed return of a latest task', '<Blok kind="agent" context="panel"><Text text={self.tasks.measure.returns.return0} /></Blok>', ("returns.unnamed",), dependencies=(_UNNAMED,)),
+    Check('an unnamed return of the task', '<Blok kind="task" context="panel"><Text text={task.returns.return1} /></Blok>', ("returns.unnamed",)),
+    Check('a named return', '<Blok kind="custom" context="panel"><Text text={deps.robot.tasks.move_to.returns.arrived} /></Blok>', (), dependencies=(_ROBOT,)),
+    Check('coalesce reads its operands', '<Blok kind="agent" context="panel"><Text text={nothing ?? args.x} /></Blok>', ("roots.unknown",)),
+    Check('spectral roles are scene colours', '<Blok kind="action" context="scene"><Space room="room:lab"><Placed dep="robot"><Glow on={task.running} color="spectrum-green" /></Placed><Route through={["robot"]} color="spectrum-violet-soft" /></Space></Blok>', (), dependencies=(_ROBOT,)),
+    Check('spectral roles are classes', '<Blok kind="agent" context="panel"><Badge className="bg-spectrum-red-soft text-spectrum-red border-spectrum-cyan/40" /></Blok>', ()),
+    Check('spectral pens paint a logo', '<Blok kind="agent" context="logo"><Logo><Path d="M0 0" fill="spectrum-violet" stroke="spectrum-orange" /></Logo></Blok>', ()),
+    Check('scene colours are roles', '<Blok kind="action" context="scene"><Space room="room:lab"><Placed dep="robot"><Glow on={task.running} color="info" /></Placed><Route through={["robot"]} color="chart-2" /></Space></Blok>', (), dependencies=(_ROBOT,)),
+    # The <Blok> itself.
+    Check("a blok is a <Blok>", "<Card />", ("blok.root",)),
+    Check("a blok says its kind", '<Blok context="panel"><Card /></Blok>', ("blok.attribute",)),
+    Check("a kind that does not exist", '<Blok kind="widget" context="panel"><Card /></Blok>', ("blok.attribute",)),
+    Check("a context that does not exist", '<Blok kind="agent" context="html"><Card /></Blok>', ("blok.attribute",)),
+    Check("a kind drawn where it has no blok", '<Blok kind="task" context="scene"><Scene /></Blok>', ("context.kind",)),
+    Check("a scene holds one Scene or Space", '<Blok kind="agent" context="scene"><Card /></Blok>', ("blok.content",)),
+    Check("a scene holds one element", '<Blok kind="agent" context="scene"><Scene /><Scene /></Blok>', ("blok.content",)),
+    Check("a logo holds one Logo", '<Blok kind="agent" context="logo"><Path d="M0 0" fill="ink" /></Blok>', ("blok.content", "catalog.placement", "catalog.placement")),
+    Check("chrome is a panel's or a scene's", '<Blok kind="agent" context="logo" chrome="none"><Logo /></Blok>', ("chrome.context",)),
+    Check("an action logo has no dependencies", '<Blok kind="action" context="logo"><Logo><Path d="M0 0" fill={task.running ? "brand" : "muted"} /></Logo></Blok>', ("manifest.action_logo",), dependencies=(_ROBOT,)),
+    Check("mounted where its kind does not go", _PANEL + "<Card /></Blok>", ("kind.placement",), kinds=("action", "assign")),
+    Check("mounted where its kind goes", '<Blok kind="assign" context="panel"><args /></Blok>', (), kinds=("action", "assign")),
+    # Mounted nowhere: what a mount provides is taken as written.
+    Check("unmounted, dependencies are open", '<Blok kind="action" context="panel"><Text>{deps.robot.arm.mode}</Text><Button onClick={deps.stage.move(x: 1)} /></Blok>', (), dependencies=None),
+    Check("unmounted, a placed key is open", '<Blok kind="action" context="scene"><Space room="room:lab"><Placed dep="arm" /></Space></Blok>', (), dependencies=None),
+    Check("unmounted, the kind's roots still hold", '<Blok kind="agent" context="panel"><Text>{deps.robot.arm.mode}</Text></Blok>', ("roots.not_in_kind",), dependencies=None),
+    Check("unmounted, a local is still checked", '<Blok kind="action" context="panel"><local name="show" default={true} persist /><Switch bind={shw} /></Blok>', ("local.unknown", "roots.unknown", "local.unused_persist"), dependencies=None),
+    Check("unmounted, like borrows nothing", '<Blok kind="action" context="panel"><local name="p" like="deps.robot.move_to.position" /><Text>{p}</Text></Blok>', (), dependencies=None),
+    # Locals in scope.
+    Check("a local is in scope in its parent's subtree", _PANEL + '<Card><local name="open" default={false} /><Switch bind={open} /><Card><Text>{open}</Text></Card></Card></Blok>', ()),
+    Check("a local is out of scope beside its parent", _PANEL + '<Card><local name="open" default={false} /><Switch bind={open} /></Card><Text>{open}</Text></Blok>', ("roots.unknown",)),
+    Check("a bind out of scope writes no local", _PANEL + '<Card><local name="open" default={false} /></Card><Switch bind={open} /></Blok>', ("local.unknown", "roots.unknown")),
+    Check("a local in a foreach is one per item", _PANEL + '<foreach items={args.xs} let="x" key={x.id}><local name="open" default={false} persist /><Switch bind={open} /><Text>{x.id}</Text></foreach></Blok>', ()),
+    Check("a kept local in a keyless foreach", _PANEL + '<foreach items={args.xs} let="x"><local name="open" default={false} persist /><Switch bind={open} /></foreach></Blok>', ("local.persist_id",)),
+    Check("a local comes first among its siblings", _PANEL + '<Card><Text /><local name="a" default={1} /><Slider bind={a} /></Card></Blok>', ("local.position",)),
+    Check("a local in a component that takes no children", _PANEL + '<Separator><local name="a" default={1} /></Separator></Blok>', ("local.position",)),
+    Check("a local shadowing an outer local", _PANEL + '<local name="a" default={1} /><Card><local name="a" default={2} /><Slider bind={a} /></Card><Slider bind={a} /></Blok>', ("roots.shadow",)),
+    Check("a local shadowing a let", _PANEL + '<foreach items={args.xs} let="x" key={x}><local name="x" default={1} /></foreach></Blok>', ("roots.shadow",)),
+    Check("a local shadowing a record", _PANEL + '<local name="move" default={1} /><Button onClick={self.move(to: 1) into move} /></Blok>', ("roots.shadow",), dependencies=(_TO,)),
+    Check("a local's attribute is a literal", _PANEL + '<local name="a" default={args.x} /></Blok>', ("local.attribute",)),
+    Check("a local has no such field", _PANEL + '<local name="a" colour="red" /></Blok>', ("local.attribute", "catalog.props")),
+    Check("an action logo has no locals", '<Blok kind="action" context="logo"><local name="a" default={1} /><Logo /></Blok>', ("roots.not_in_kind",)),
+    Check("a local's kind from a use in its scope only", _PANEL + '<Card><local name="p" /><Button onClick={self.move(to: p)} /></Card></Blok>', (), dependencies=(_TO,)),
+    Check("like borrows an argument's port", _PANEL + '<local name="p" like="self.move.to" /><Slider bind={p} /><Button onClick={self.move(to: p)} /></Blok>', (), dependencies=(_TO,)),
+    Check("like names an action the mount does not have", _PANEL + '<local name="p" like="self.fly.to" /><Text>{p}</Text></Blok>', ("local.like",), dependencies=(_TO,)),
+    Check("like is no argument", _PANEL + '<local name="p" like="move.to" /><Text>{p}</Text></Blok>', ("local.like",), dependencies=(_TO,)),
+    # Queries and subscriptions.
+    Check("a query is a child of the blok", _PANEL + '<Card><query name="q" service="mikro" document="query { a }" /></Card></Blok>', ("query.position",)),
+    Check("a query declared twice", _PANEL + '<query name="q" service="mikro" document="query { a }" /><query name="q" service="mikro" document="query { b }" /></Blok>', ("query.duplicate",)),
+    Check("a query needs its document", _PANEL + '<query name="q" service="mikro" /></Blok>', ("query.declaration", "catalog.props")),
+    Check("a query that writes", _PANEL + '<query name="q" service="mikro" document="mutation { a }" /></Blok>', ("query.read_only",)),
+    Check("a subscription that is a query", _PANEL + '<subscription name="s" service="mikro" document="query { a }" /></Blok>', ("query.kind",)),
+    Check("a subscription replays a declared query", _PANEL + '<subscription name="s" service="mikro" document="subscription { a }" history="q" /></Blok>', ("query.history",)),
+    Check("a var outside a query", _PANEL + '<var key="a" value={1} /></Blok>', ("query.declaration", "catalog.placement")),
+    Check("a query variable reads blok-level locals", _PANEL + '<local name="slide" default={"1"} /><query name="q" service="mikro" document="query ($s: ID) { a(s: $s) }"><var key="s" value={slide} /></query><Text>{queries.q.status}</Text></Blok>', ()),
 )
 
 
@@ -379,63 +431,59 @@ def _tree(node: ComponentNodeInput) -> JSON:
     return dumped
 
 
-def _scope(check: Check) -> dict[str, JSON]:
+def _mount(check: Check) -> dict[str, JSON]:
     return {
-        "kind": check.kind,
-        "context": check.context,
-        "dependencies": [dict(dependency) for dependency in check.dependencies],
-        "locals": [dict(local) for local in check.locals],
-        "queries": [dict(query) for query in check.queries],
-        "subscriptions": [dict(subscription) for subscription in check.subscriptions],
+        "kinds": list(check.kinds),
+        "dependencies": [dict(dependency) for dependency in check.dependencies] if check.dependencies is not None else None,
         "args": list(check.args) if check.args is not None else None,
         "catalog": check.catalog,
-        "target": check.target,
     }
+
+
+def _target(tree: ComponentNodeInput) -> str | None:
+    return blok_catalog(tree)
 
 
 def _view(check: Check) -> BlokView | None:
     if not check.catalog:
         return None
-    return blok_view(check.target) if check.target is not None else default_view()
+    target = _target(_parse(check))
+    return blok_view(target) if target is not None else default_view()
 
 
 def _parse(check: Check) -> ComponentNodeInput:
-    """The case's tree, parsed with the view of the catalog it is written for."""
-    return parse_bsx(check.source, view=blok_view(check.target)) if check.target is not None else parse_bsx(check.source)
+    """The case's tree, parsed with the view of the catalog its ``<Blok>`` names."""
+    return parse_bsx(check.source)
 
 
 def _check_scope(check: Check) -> "BlokScope":
     from arkitekt_spec.declare.blok.validate import BlokScope
 
     return BlokScope(
-        kind=check.kind,
-        context=check.context,
-        dependencies=tuple(AgentDependencyInput.model_validate(dict(d)) for d in check.dependencies),
-        locals=tuple(BlokLocalInput.model_validate(dict(local)) for local in check.locals),
-        queries=tuple(BlokQueryInput.model_validate(dict(q)) for q in check.queries),
-        subscriptions=tuple(BlokSubscriptionInput.model_validate(dict(s)) for s in check.subscriptions),
+        kinds=check.kinds,
+        dependencies=tuple(AgentDependencyInput.model_validate(dict(d)) for d in check.dependencies) if check.dependencies is not None else None,
         args=check.args,
     )
 
 
-def resolved(check: Check) -> dict[str, JSON]:
-    """What the scope resolves to before it is checked: every local's kind
-    (:func:`~arkitekt_spec.declare.blok.infer.resolve_scope`)."""
-    from arkitekt_spec.declare.blok.infer import resolve_scope
+def _resolved(check: Check, view: BlokView | None) -> dict[str, JSON]:
+    from arkitekt_spec.declare.blok.infer import resolve_locals
 
-    scope = resolve_scope(_parse(check), _check_scope(check), _view(check))
-    locals_: list[JSON] = [local.model_dump(mode="json", exclude_none=True) for local in scope.locals]
-    return {"locals": locals_}
+    scope = _check_scope(check)
+    locals_ = resolve_locals(_parse(check), scope.dependencies, view)
+    return {"locals": {node: each.local.model_dump(mode="json", exclude_none=True) for node, each in locals_.items()}}
+
+
+def resolved(check: Check) -> dict[str, JSON]:
+    """Each ``<local>``'s port with its kind resolved, by node id
+    (:func:`~arkitekt_spec.declare.blok.infer.resolve_locals`)."""
+    return _resolved(check, _view(check))
 
 
 def language_resolved(check: Check) -> dict[str, JSON]:
-    """What the scope resolves to with no catalog at all: what a server stores as a blok's
-    resolved locals. A local only a control's ``bind`` would type stays ``ANY``."""
-    from arkitekt_spec.declare.blok.infer import resolve_scope
-
-    scope = resolve_scope(_parse(check), _check_scope(check), None)
-    locals_: list[JSON] = [local.model_dump(mode="json", exclude_none=True) for local in scope.locals]
-    return {"locals": locals_}
+    """The same with no catalog at all: what a server resolves a blok's locals to. A local only
+    a control's ``bind`` would type stays ``ANY``."""
+    return _resolved(check, None)
 
 
 def language_codes(check: Check) -> list[str]:
@@ -484,7 +532,7 @@ def build_v2() -> dict[str, JSON]:
             "name": check.name,
             "source": check.source,
             "tree": _tree(_parse(check)),
-            "scope": _scope(check),
+            "mount": _mount(check),
             "resolved": resolved(check),
             "codes": list[JSON](codes),
             # What a server makes of it: the language's rules, and no catalog.

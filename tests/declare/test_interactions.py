@@ -18,9 +18,9 @@ from arkitekt_spec.declare.app import (
 from arkitekt_spec.declare.definition.errors import DefinitionError
 from arkitekt_spec.declare.interactions import ask, inform
 
-PICK = """<Html><Card><CardTitle text={args.question} />
+PICK = """<Blok kind="task" context="panel"><Card><CardTitle text={args.question} />
   <Button label="Go" onClick={task.answer(values: {name: args.question, count: 2})} />
-</Card></Html>"""
+</Card></Blok>"""
 
 
 class Picked(NamedTuple):
@@ -34,12 +34,12 @@ class Asks(Protocol):
         """Pick one."""
         ...
 
-    @ask('<Html><Button label="Ok" onClick={task.answer(values: {choice: "keep"})} /></Html>')
+    @ask('<Blok kind="task" context="panel"><Button label="Ok" onClick={task.answer(values: {choice: "keep"})} /></Blok>')
     def choose(self) -> Annotated[Literal["keep", "drop"], Key("choice")]:
         """Keep it?"""
         ...
 
-    @inform("<Html><Card><CardTitle text={args.step} /></Card></Html>")
+    @inform('<Blok kind="task" context="panel"><Card><CardTitle text={args.step} /></Card></Blok>')
     def progress(self, step: int, total: int) -> None:
         """How far it got."""
         ...
@@ -90,7 +90,7 @@ def test_an_answer_keyed_by_no_return_is_refused() -> None:
     registry = AppRegistry()
 
     class Bad(Protocol):
-        @ask('<Html><Button onClick={task.answer(values: {nope: 1})} /></Html>')
+        @ask('<Blok kind="task" context="panel"><Button onClick={task.answer(values: {nope: 1})} /></Blok>')
         def pick(self) -> Picked: ...
 
     with pytest.raises(DefinitionError, match="'nope'"):
@@ -101,7 +101,7 @@ def test_an_answer_leaving_out_a_required_return_is_refused() -> None:
     registry = AppRegistry()
 
     class Short(Protocol):
-        @ask('<Html><Button onClick={task.answer(values: {name: "x"})} /></Html>')
+        @ask('<Blok kind="task" context="panel"><Button onClick={task.answer(values: {name: "x"})} /></Blok>')
         def pick(self) -> Picked: ...
 
     with pytest.raises(DefinitionError, match="'count'"):
@@ -112,7 +112,7 @@ def test_an_ask_reads_only_its_parameters_as_args() -> None:
     registry = AppRegistry()
 
     class Reads(Protocol):
-        @ask('<Html><CardTitle text={args.other} /></Html>')
+        @ask('<Blok kind="task" context="panel"><CardTitle text={args.other} /></Blok>')
         def pick(self, question: str) -> None: ...
 
     with pytest.raises(BlokError):
@@ -160,7 +160,7 @@ def test_an_inform_with_a_return_is_refused() -> None:
     registry = AppRegistry()
 
     class Returns(Protocol):
-        @inform("<Html><Text text={args.step} /></Html>")
+        @inform('<Blok kind="task" context="panel"><Text text={args.step} /></Blok>')
         def progress(self, step: int) -> int: ...
 
     with pytest.raises(DefinitionError, match="returns nothing"):
@@ -171,7 +171,7 @@ def test_an_inform_answering_is_refused() -> None:
     registry = AppRegistry()
 
     class Answers(Protocol):
-        @inform('<Html><Button onClick={task.answer(values: {x: 1})} /></Html>')
+        @inform('<Blok kind="task" context="panel"><Button onClick={task.answer(values: {x: 1})} /></Blok>')
         def progress(self) -> None: ...
 
     with pytest.raises(DefinitionError, match="make it an @ask"):

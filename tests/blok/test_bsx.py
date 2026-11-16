@@ -86,7 +86,7 @@ def test_text_is_a_child_node_holding_its_value() -> None:
 
 def test_parsing_text_needs_no_catalog() -> None:
     """A component nobody here knows, one that takes children, one in a scene: all the same to the parser."""
-    for source in ("<Foo>x</Foo>", "<Card>x</Card>", "<div>x</div>", "<Scene><Model>x</Model></Scene>", "<AgentLogo><G>x</G></AgentLogo>"):
+    for source in ("<Foo>x</Foo>", "<Card>x</Card>", "<div>x</div>", "<Scene><Model>x</Model></Scene>", "<Logo><G>x</G></Logo>"):
         tree = parse_bsx(source)
         holder = tree if tree.children and tree.children[0].component == "#text" else child(tree)
         assert text(holder).static_value == "x", source

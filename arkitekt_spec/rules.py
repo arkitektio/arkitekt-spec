@@ -548,29 +548,8 @@ def operation_keyword(document: str) -> str:
     return match.group(0) if match else ""
 
 
-def _unique(keys: list[str], what: str) -> None:
-    from arkitekt_spec.blok.vocabulary import BlokError
-
-    twice = next((key for key in keys if keys.count(key) > 1), None)
-    if twice is not None:
-        raise BlokError("manifest.duplicate", what=what, key=twice)
-
-
 class _Keyed(Protocol):
     key: str
-
-
-class _Document(Protocol):
-    key: str
-    document: str
-
-
-class _Query(_Document, Protocol):
-    more: str | None
-
-
-class _Subscription(_Document, Protocol):
-    history: str | None
 
 
 class _Demo(Protocol):
@@ -583,56 +562,31 @@ class _BlokDeclarations(Protocol):
     components: object
     source: str | None
     catalog: str | None
-    locals: Sequence[_Keyed]
-    queries: Sequence[_Query]
-    subscriptions: Sequence[_Subscription]
     demo: _Demo | None
 
 
-def check_blok_declarations(blok: _BlokDeclarations, kind: str) -> None:
-    """The server's ``check_blok_manifest`` for what a v2 blok declares beside its tree.
+def check_blok_declarations(blok: _BlokDeclarations) -> None:
+    """The server's ``check_blok_manifest`` for what a v2 blok's input says beside its tree.
 
-    Sent one way; its catalog an address or a name; its locals, queries and subscriptions
-    each named once, by a name no root reserves; a query a ``query``, a subscription a
-    ``subscription``, neither a mutation; a subscription's history a declared query; and,
-    for an action logo, nothing but the task it is drawn against.
+    Sent one way; its catalog an address or a name; its demo naming only its dependencies.
+    What the blok declares (locals, queries, subscriptions) is in its tree, and checked with it
+    (:mod:`arkitekt_spec.declare.blok.validate`).
 
     Raises:
         ValueError: On the first rule broken.
     """
-    from arkitekt_spec.blok.vocabulary import BlokError, load_vocabulary
+    from arkitekt_spec.blok.vocabulary import BlokError
 
     if blok.components is not None and blok.source is not None:
         raise BlokError("manifest.sent", problem="not both")
     if blok.components is None and blok.source is None:
         raise BlokError("manifest.sent", problem="and this one has neither")
-    reserved = load_vocabulary().reserved
     if blok.catalog is not None:
         from arkitekt_spec.blok.catalogs import is_catalog_target
 
         if not is_catalog_target(blok.catalog):
             raise BlokError("manifest.catalog", catalog=blok.catalog)
-    named: tuple[tuple[str, Sequence[_Keyed]], ...] = (("locals", blok.locals), ("queries", blok.queries), ("subscriptions", blok.subscriptions))
-    for what, entries in named:
-        keys = [entry.key for entry in entries]
-        _unique(keys, what)
-        for key in keys:
-            if not _LOCAL_NAME.fullmatch(key):
-                raise BlokError("manifest.name", what=what, key=key)
-            if what == "locals" and key in reserved:
-                raise BlokError("roots.reserved", name=key)
-    for query in blok.queries or ():
-        _check_operation("query", query.key, operation_keyword(query.document))
-        if query.more is not None and not _FIELD_PATH.fullmatch(query.more):
-            raise BlokError("query.more", name=query.key, more=query.more, problem="is not a field path into its data (positions, images.items)")
-    declared = {query.key for query in blok.queries or ()}
-    for subscription in blok.subscriptions or ():
-        _check_operation("subscription", subscription.key, operation_keyword(subscription.document))
-        if subscription.history is not None and subscription.history not in declared:
-            raise BlokError("query.history", name=subscription.key, history=subscription.history)
     dependencies: Sequence[_Keyed] = getattr(blok, "dependencies", None) or ()
-    if kind == "action_logo" and (blok.locals or blok.queries or blok.subscriptions or dependencies):
-        raise BlokError("manifest.action_logo")
     demo = blok.demo
     deps = demo.deps if demo is not None else None
     if isinstance(deps, Mapping):
@@ -643,22 +597,25 @@ def check_blok_declarations(blok: _BlokDeclarations, kind: str) -> None:
             raise BlokError("manifest.demo", keys=", ".join(unknown))
 
 
-def _check_operation(kind: str, name: str, operation: str) -> None:
-    """A query's document is a ``query``, a subscription's a ``subscription``; neither writes."""
-    from arkitekt_spec.blok.vocabulary import BlokError
+def declared_name_problem(name: str) -> bool:
+    """Whether ``name`` is no name a local, a query or a subscription may have."""
+    return _LOCAL_NAME.fullmatch(name) is None
 
-    if operation == kind:
-        return
-    if operation == "mutation":
-        raise BlokError("query.read_only", kind=kind, name=name, problem="is a mutation: a blok reads, and writes only through a task")
-    raise BlokError("query.kind", kind=kind, name=name, operation=operation or "document without an operation")
+
+def field_path_problem(path: str) -> bool:
+    """Whether ``path`` is no field path into a query's data (``positions``, ``images.items``)."""
+    return _FIELD_PATH.fullmatch(path) is None
+
+
+ACTION_BLOK_PANEL_SCENE = ("PANEL", "SCENE")
+"""The contexts an action has a blok for; its logo is no action blok (``logo=``)."""
 
 
 def _wrong_context(kind: str, context: object) -> ValueError:
     """``context.kind``: a blok of ``kind`` drawn in a context its kind has no blok for."""
     from arkitekt_spec.blok.vocabulary import BlokError, load_vocabulary
 
-    contexts = load_vocabulary().kind(kind).contexts
+    contexts = ACTION_BLOK_PANEL_SCENE if kind == "action" else load_vocabulary().kind(kind).contexts
     return BlokError("context.kind", n="n" if kind[:1] in "aeiou" else "", kind=kind, contexts=", ".join(contexts), context=str(context))
 
 
@@ -668,8 +625,7 @@ class BlokRules(BaseModel):
     @model_validator(mode="after")
     def _manifest(self) -> Self:
         blok: Any = self
-        context = _value(blok.context)
-        check_blok_declarations(blok, "action_logo" if context == "ACTION_LOGO" else "agent")
+        check_blok_declarations(blok)
         _check_blok_args(self)
         return self
 
@@ -681,19 +637,19 @@ class ActionBlokRules(BaseModel):
     def _manifest(self) -> Self:
         blok: Any = self
         context = _value(blok.context)
-        if context not in ("HTML", "SCENE"):
+        if context not in ("PANEL", "SCENE"):
             raise _wrong_context("action", context)
-        check_blok_declarations(blok, "assign" if getattr(blok, "phase", "RUN") == "ASSIGN" else "action")
+        check_blok_declarations(blok)
         return self
 
 
 class AskBlokRules(BaseModel):
-    """An action's declared ask: an html task blok, its args and returns each keyed once."""
+    """An action's declared ask: a panel task blok, its args and returns each keyed once."""
 
     @model_validator(mode="after")
     def _manifest(self) -> Self:
         blok: Any = self
-        check_blok_declarations(blok, "task")
+        check_blok_declarations(blok)
         for what, ports in (("args", blok.args), ("returns", blok.returns)):
             keys = [port.key for port in ports]
             twice = next((key for key in keys if keys.count(key) > 1), None)
@@ -703,12 +659,12 @@ class AskBlokRules(BaseModel):
 
 
 class InformBlokRules(BaseModel):
-    """An action's declared inform: an html task blok, its args each keyed once."""
+    """An action's declared inform: a panel task blok, its args each keyed once."""
 
     @model_validator(mode="after")
     def _manifest(self) -> Self:
         blok: Any = self
-        check_blok_declarations(blok, "task")
+        check_blok_declarations(blok)
         keys = [port.key for port in blok.args]
         twice = next((key for key in keys if keys.count(key) > 1), None)
         if twice is not None:
@@ -717,13 +673,13 @@ class InformBlokRules(BaseModel):
 
 
 def _check_blok_args(rules: BaseModel) -> None:
-    """The server's ``check_blok_args``: an html blok's args, keyed once, owning the ``args`` root."""
+    """The server's ``check_blok_args``: a panel blok's args, keyed once, owning the ``args`` root."""
     blok: Any = rules
     if not blok.args:
         return
     context = getattr(blok.context, "value", blok.context)
-    if context != "HTML":
-        raise ValueError(f"Blok manifest: only an html blok takes args, not a {context} blok")
+    if context != "PANEL":
+        raise ValueError(f"Blok manifest: only a panel blok takes args, not a {context} blok")
     keys = [port.key for port in blok.args]
     twice = next((key for key in keys if keys.count(key) > 1), None)
     if twice is not None:

@@ -27,15 +27,15 @@ def test_then_replaces_now_in_every_kind_but_the_action_logo() -> None:
 
     for name in ("agent", "custom", "task", "action"):
         assert "then" in kinds[name].roots and "now" not in kinds[name].roots
-    assert "then" not in kinds["action_logo"].roots
+    assert "then" not in kinds["action"].drawn_in("LOGO").roots
 
 
 def test_catalogs_are_versioned_and_kinds_compatible() -> None:
     vocabulary = load_vocabulary()
 
-    assert (vocabulary.vocab, vocabulary.minor) == (2, 1)
-    assert vocabulary.base_catalog == "https://arkitekt.live/catalogs/base/v3"
-    assert list(vocabulary.bundled_catalogs.values()) == ["catalogs/base@3.json", "catalogs/orkestrator@1.json"]
+    assert (vocabulary.vocab, vocabulary.minor) == (2, 2)
+    assert vocabulary.base_catalog == "https://arkitekt.live/catalogs/base/v4"
+    assert list(vocabulary.bundled_catalogs.values()) == ["catalogs/base@4.json", "catalogs/orkestrator@1.json"]
     assert vocabulary.host_parts == ("args", "arg", "deps", "dep", "ask", "returns", "status", "timeline")
     assert vocabulary.bind_kinds["FLOAT"] >= {"FLOAT", "INT"} and vocabulary.bind_kinds["BOOL"] == {"BOOL"}
     assert "ANY" not in vocabulary.bind_kinds, "an ANY control writes any local"
@@ -55,10 +55,11 @@ def test_the_root_matrix_is_the_designs() -> None:
     assert "deps" not in kinds["agent"].roots and "self" in kinds["agent"].roots
     assert "self" not in kinds["custom"].roots and "deps" in kinds["custom"].roots
     assert {"self", "deps", "args", "task"} <= kinds["task"].roots
-    assert kinds["action"].contexts == ("HTML", "SCENE")
+    assert kinds["action"].contexts == ("PANEL", "SCENE", "LOGO")
     # Before a run there is no task to read, and no past to travel to.
     assert {"self", "deps", "args"} <= kinds["assign"].roots and not {"task", "then"} & kinds["assign"].roots
-    assert kinds["action_logo"].roots == frozenset({"task"}) and not kinds["action_logo"].locals
+    logo = kinds["action"].drawn_in("LOGO")
+    assert logo.roots == frozenset({"task"}) and not logo.locals
 
 
 def test_one_task_record_shape() -> None:
@@ -214,21 +215,21 @@ def test_a_runtime_code_is_no_checkers() -> None:
 
 
 def test_a_hint_is_filled_like_its_message() -> None:
-    finding = Finding.of("catalog.value", "Html[0]/Button[0]", component="Button", key="variant", value="loud", values="default, outline")
+    finding = Finding.of("catalog.value", "Blok[0]/Button[0]", component="Button", key="variant", value="loud", values="default, outline")
 
     assert finding.hint == "Write one of default, outline."
     assert finding.fields["value"] == "loud"
-    assert finding == Finding.of("catalog.value", "Html[0]/Button[0]", component="Button", key="variant", value="loud", values="default, outline").placed(3, 5)
+    assert finding == Finding.of("catalog.value", "Blok[0]/Button[0]", component="Button", key="variant", value="loud", values="default, outline").placed(3, 5)
 
 
 def test_a_finding_of_a_parsed_source_says_where_it_is() -> None:
     from arkitekt_spec.declare.blok.validate import validate_bsx
 
-    (finding,) = validate_bsx('<Html>\n  <Card>\n    <Button variant="loud">Go</Button>\n  </Card>\n</Html>')
+    (finding,) = validate_bsx('<Blok kind="agent" context="panel">\n  <Card>\n    <Button variant="loud">Go</Button>\n  </Card>\n</Blok>')
 
     assert (finding.code, finding.line, finding.column) == ("catalog.value", 3, 5)
     with pytest.raises(BlokError) as refused:
-        validate_bsx("<Html><Card>")
+        validate_bsx('<Blok kind="agent" context="panel"><Card>')
     assert (refused.value.code, refused.value.line) == ("bsx.unclosed", 1)
     assert refused.value.hint == "Close it with </Card>, or write it self-closing as <Card ... />."
 

@@ -10,10 +10,11 @@ from arkitekt_spec.actions import AgentDependencyInput, BlokLocalInput, Componen
 from arkitekt_spec.blok.bsx import parse_bsx
 from arkitekt_spec.blok.catalogs import default_view
 from arkitekt_spec.declare.app import AppRegistry
-from arkitekt_spec.declare.blok.infer import resolve_scope
 from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree, dependency_hint
 from arkitekt_spec.declare.catalogs import ComponentSpec, PropSpec
 from arkitekt_spec.declare.traits.blok import CreateBlokInputTrait
+
+CUSTOM = '<Blok kind="custom" context="panel">'
 
 
 class CreateBlok(CreateBlokInputTrait):
@@ -22,46 +23,30 @@ class CreateBlok(CreateBlokInputTrait):
     components: list[ComponentNodeInput] | None = None
     source: str | None = None
     dependencies: list[AgentDependencyInput] | None = None
-    locals: list[BlokLocalInput] | None = None
 
 
 def test_a_custom_blok_must_declare_the_dependencies_it_reads() -> None:
     with pytest.raises(ValidationError, match=r"'stage' is not a dependency of the blok .*Fix: dependencies=\[AgentDependencyInput\(key=\"stage\"\)\]"):
-        CreateBlok(source="<Html><Button onClick={deps.stage.home()} /></Html>")
+        CreateBlok(source=f"{CUSTOM}<Button onClick={{deps.stage.home()}} /></Blok>")
 
 
 def test_a_declared_dependency_says_its_demands() -> None:
     robot = AgentDependencyInput(key="robot", state_dependencies=())
     with pytest.raises(ValidationError, match="deps.unknown_state"):
-        CreateBlok(source="<Html><Text text={deps.robot.arm.mode} /></Html>", dependencies=[robot])
-
-
-@pytest.mark.parametrize("kind", ["custom", "agent", "action", "task"])
-def test_no_kind_infers_its_dependencies(kind: str) -> None:
-    tree = parse_bsx("<Text text={deps.robot.x} />")
-    scope = BlokScope(kind=kind, context="HTML")
-
-    assert resolve_scope(tree, scope).dependencies == ()
-
-
-def test_an_undeclared_dependency_hints_its_declaration() -> None:
-    findings = check_blok_tree(parse_bsx("<Html><Text text={deps.laser.power} /></Html>"), BlokScope(kind="custom"))
-
-    assert [finding.code for finding in findings] == ["deps.unknown"]
-    assert 'dependencies=[AgentDependencyInput(key="laser")]' in findings[0].message
+        CreateBlok(source=f"{CUSTOM}<Text text={{deps.robot.arm.mode}} /></Blok>", dependencies=[robot])
 
 
 @pytest.mark.parametrize(
     ("kind", "source", "hint"),
     [
-        ("custom", "<Html><Text text={deps.laser.power} /></Html>", 'dependencies=[AgentDependencyInput(key="laser")]'),
-        ("task", "<Html><Text text={deps.laser.power} /></Html>", 'dependencies=[AgentDependencyInput(key="laser")]'),
-        ("action", "<Html><Text text={deps.laser.power} /></Html>", "add a dependency parameter `laser` to the action"),
-        ("action", "<Html><Button onClick={deps.laser.fire()} /></Html>", "add a dependency parameter `laser` to the action"),
+        ("custom", "<Text text={deps.laser.power} />", 'dependencies=[AgentDependencyInput(key="laser")]'),
+        ("task", "<Text text={deps.laser.power} />", 'dependencies=[AgentDependencyInput(key="laser")]'),
+        ("action", "<Text text={deps.laser.power} />", "add a dependency parameter `laser` to the action"),
+        ("action", "<Button onClick={deps.laser.fire()} />", "add a dependency parameter `laser` to the action"),
     ],
 )
 def test_the_hint_says_what_the_kind_does_about_an_undeclared_dependency(kind: str, source: str, hint: str) -> None:
-    findings = check_blok_tree(parse_bsx(source), BlokScope(kind=kind))
+    findings = check_blok_tree(parse_bsx(f'<Blok kind="{kind}" context="panel">{source}</Blok>'), BlokScope(dependencies=()))
 
     assert [finding.code for finding in findings] == ["deps.unknown"]
     assert findings[0].message.endswith(f"Fix: {hint}.")
@@ -70,17 +55,10 @@ def test_the_hint_says_what_the_kind_does_about_an_undeclared_dependency(kind: s
 def test_an_agent_blok_reads_no_deps_at_all() -> None:
     """An agent blok has no ``deps`` root: the kind refuses it before any key is looked up, so
     its ``deps.unknown`` hint (``agent bloks read only `self```) is only the checker's fallback."""
-    findings = check_blok_tree(parse_bsx("<Html><Text text={deps.laser.power} /></Html>"), BlokScope(kind="agent"))
+    findings = check_blok_tree(parse_bsx('<Blok kind="agent" context="panel"><Text text={deps.laser.power} /></Blok>'), BlokScope(dependencies=()))
 
     assert [finding.code for finding in findings] == ["roots.not_in_kind"]
     assert dependency_hint("laser", "agent") == "agent bloks read only `self`"
-
-
-def test_resolving_twice_changes_nothing() -> None:
-    tree = parse_bsx("<Card><Switch bind={on} /><Text text={args.x} /></Card>")
-    once = resolve_scope(tree, BlokScope(kind="custom", locals=(BlokLocalInput(key="on"),)), default_view())
-
-    assert resolve_scope(tree, once, default_view()) == once and once.locals[0].kind == "BOOL"
 
 
 def test_a_string_on_a_typed_prop_says_how_to_write_it() -> None:
@@ -91,13 +69,14 @@ def test_a_string_on_a_typed_prop_says_how_to_write_it() -> None:
 
 
 def validate_bsx_findings(source: str):
-    return [finding for finding in check_blok_tree(parse_bsx(source), BlokScope(), default_view()) if finding.code == "props.literal_type"]
+    tree = parse_bsx(f'<Blok kind="agent" context="panel">{source}</Blok>')
+    return [finding for finding in check_blok_tree(tree, BlokScope(), default_view()) if finding.code == "props.literal_type"]
 
 
 def test_a_catalog_that_redefines_a_base_component_is_refused() -> None:
     registry = AppRegistry()
 
-    with pytest.raises(ValueError, match="redefines <Slider> of base@3: a catalog only adds"):
+    with pytest.raises(ValueError, match="redefines <Slider> of base@4: a catalog only adds"):
         registry.declare_ui_catalog("lab", components=[ComponentSpec(name="Slider", props=(PropSpec(key="bind", kind="STRING", required=False),))])
     assert "lab" not in registry.declared_catalogs
 
@@ -112,7 +91,7 @@ def test_a_declared_catalog_adds_to_the_base() -> None:
     assert view.component("MikroScene") is None, "it does not extend the Orkestrator's"
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        registry.register_blok("panel", "<Html><AspectRatio><Gauge /></AspectRatio></Html>", catalog="lab")
+        registry.register_blok("panel", '<Blok kind="agent" context="panel" catalog="lab"><AspectRatio><Gauge /></AspectRatio></Blok>')
 
 
 def test_an_enum_local_needs_its_choices() -> None:
