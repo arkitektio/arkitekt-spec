@@ -745,6 +745,13 @@ class _Checker:
         self.add("path.unknown", where.node.id, path=items.dynamic_value.path, detail=f"{FOREACH_ITEMS_PROP} of a foreach reads a list, not this {str(resolved.kind).lower()}")
         return open_match(name)
 
+    def bind_index(self, name: str, where: Where, scope: Mapping[str, Binding]) -> Binding:
+        if name in self.vocabulary.reserved:
+            self.add("roots.reserved", where.node.id, name=name)
+        elif name in scope:
+            self.add("roots.shadow", where.node.id, name=name, first=_binding_what(name, scope[name], self.into), second=f"the index of <foreach> ({where.node.id})")
+        return PortMatchInput(key=name, kind=PortKind.INT)
+
     def bind_local(self, name: str, node: ComponentNodeInput, scope: Mapping[str, Binding]) -> Binding:
         if name in scope and name not in self.vocabulary.reserved:
             self.add("roots.shadow", node.id, name=name, first=_binding_what(name, scope[name], self.into), second=f"the local {node.id}")

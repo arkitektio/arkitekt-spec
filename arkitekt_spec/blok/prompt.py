@@ -70,7 +70,8 @@ run.returns.<port>. A name belongs to exactly one call; derive state from it \
 str.template(template: "{{0}} of {{1}}", values: [a, b]), math.max(values: [a, b]).
 - <foreach items={{deps.stage.position.history}} let="p" key={{p.id}}> repeats its children; \
 inside, read p.field. Key a list of objects by a stable field; a list of plain values \
-(numbers, strings) needs no key: <foreach items={{deps.stage.position.ticks}} let="t">.
+(numbers, strings) needs no key: <foreach items={{deps.stage.position.ticks}} let="t">. \
+`index="i"` names the item's position, from 0: read it bare (math.add(a: i, b: 1) numbers from 1).
 - <if when={{run.failed}}>...<else>...</else></if> renders one branch; `when={{...}}` on any \
 component guards that one component.
 - Nothing ticks in an expression: there is no `now`. `then` is null while the viewer is live \

@@ -177,6 +177,9 @@ class _Uses:
     def bind_let(self, name: str, items: ComponentPropInput | None, where: Where, scope: Mapping[str, str | None]) -> None:
         return None
 
+    def bind_index(self, name: str, where: Where, scope: Mapping[str, str | None]) -> None:
+        return None
+
     def bind_into(self, name: str, call: AgentProbeInput) -> None:
         return None
 

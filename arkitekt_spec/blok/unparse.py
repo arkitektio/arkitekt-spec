@@ -150,7 +150,7 @@ class _Printer:
             into = f" into {prop.declares_value}" if prop.declares_value else ""
             return f"{key}={{{self.agent_call(prop.agent_call)}{into}}}"
         if prop.declares_value is not None:
-            if node.component == FOREACH and key == "let" and prop.static_value == prop.declares_value:
+            if node.component == FOREACH and key in ("let", "index") and prop.static_value == prop.declares_value:
                 return f"{key}={_quoted(prop.declares_value)}"
             if node.component == LOCAL_COMPONENT and key == NAME_PROP and prop.static_value == prop.declares_value:
                 return f"{key}={_quoted(prop.declares_value)}"

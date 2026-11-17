@@ -57,7 +57,7 @@ def _acme(**overrides: object) -> str:
 def test_the_base_catalog_is_one_list_named_by_its_address() -> None:
     base = base_catalog()
 
-    assert (base.id, base.name, base.version, base.minor, base.extends) == (BASE_ID, "base", 4, 0, None)
+    assert (base.id, base.name, base.version, base.minor, base.extends) == (BASE_ID, "base", 4, 1, None)
     assert load_vocabulary().base_catalog == BASE_ID
     names = [component.name for component in base.components]
     assert len(names) == len(set(names))

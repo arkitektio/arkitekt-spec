@@ -5,7 +5,7 @@ tree under the same scoping rules, so the traversal lives here and they supply a
 
 - ``into`` names are in scope in the whole tree (the button that starts a run and the panel
   that shows it are rarely nested), each written by one call site;
-- a ``foreach``'s ``let`` is in scope in its children and in its own ``key``, not in its
+- a ``foreach``'s ``let`` (and its ``index``) is in scope in its children and in its own ``key``, not in its
   ``items``;
 - a ``<local>`` is in scope in its parent's subtree: its siblings and their children (every
   local of a parent is bound before any of its children is walked, in order, so a second local
@@ -31,6 +31,7 @@ from arkitekt_spec.blok.vocabulary import load_vocabulary
 
 FOREACH_COMPONENT = "foreach"
 FOREACH_LET_PROP = "let"
+FOREACH_INDEX_PROP = "index"
 FOREACH_ITEMS_PROP = "items"
 FOREACH_KEY_PROP = "key"
 IF_COMPONENT = "if"
@@ -107,6 +108,16 @@ def foreach_let(node: ComponentNodeInput) -> str | None:
     )
 
 
+def foreach_index(node: ComponentNodeInput) -> str | None:
+    """The name a ``foreach`` gives each item's position (``index="i"``), when it names one."""
+    if node.component != FOREACH_COMPONENT:
+        return None
+    return next(
+        (prop.declares_value for prop in node.props or () if prop.key == FOREACH_INDEX_PROP and prop.declares_value),
+        None,
+    )
+
+
 def local_declared(node: ComponentNodeInput) -> str | None:
     """The name a ``<local>`` declares (its ``name`` prop's ``declares_value``), or None."""
     if node.component != LOCAL_COMPONENT:
@@ -156,6 +167,11 @@ class TreeVisitor(Protocol[Binding]):
         """What a ``foreach``'s loop variable is bound to, its ``items`` read in ``scope``."""
         ...
 
+    def bind_index(self, name: str, where: Where, scope: Mapping[str, Binding]) -> Binding:  # pragma: no cover - protocol
+        """What a ``foreach``'s ``index`` is bound to: the item's 0-based position. ``scope``
+        holds the loop variable already."""
+        ...
+
     def bind_into(self, name: str, call: AgentProbeInput) -> Binding:  # pragma: no cover - protocol
         """What an ``into`` name is bound to: the record of ``call``."""
         ...
@@ -190,6 +206,10 @@ def _walk_node(
         items = next((prop for prop in node.props or () if prop.key == FOREACH_ITEMS_PROP), None)
         where = Where(node=node, key=FOREACH_ITEMS_PROP, callback=False, in_error=in_error)
         inner[let] = visitor.bind_let(let, items, where, scope)
+    index = foreach_index(node)
+    if index is not None:
+        where = Where(node=node, key=FOREACH_INDEX_PROP, callback=False, in_error=in_error)
+        inner[index] = visitor.bind_index(index, where, dict(inner))
     for prop in node.props or ():
         # A foreach reads its items outside the loop, its key inside it.
         prop_scope = scope if (let is not None and prop.key == FOREACH_ITEMS_PROP) else inner
@@ -270,6 +290,7 @@ __all__ = [
     "ELSE_COMPONENT",
     "ERROR_SLOT",
     "FOREACH_COMPONENT",
+    "FOREACH_INDEX_PROP",
     "FOREACH_ITEMS_PROP",
     "FOREACH_KEY_PROP",
     "FOREACH_LET_PROP",
@@ -280,6 +301,7 @@ __all__ = [
     "Where",
     "action_key_for",
     "argument_paths",
+    "foreach_index",
     "foreach_let",
     "into_sites",
     "is_callback_value",

@@ -428,6 +428,9 @@ class _Lowering:
         let = attributes["let"]
         if not isinstance(let.value, str) or not _LOCAL.fullmatch(let.value):
             raise self.fail("bsx.let", let.offset, let=let.value if isinstance(let.value, str) else "{...}")
+        index = attributes.get("index")
+        if index is not None and (not isinstance(index.value, str) or not _LOCAL.fullmatch(index.value)):
+            raise self.fail("bsx.index", index.offset, index=index.value if isinstance(index.value, str) else "{...}")
         for name in ("items", "key"):
             if name in attributes and isinstance(attributes[name].value, (str, bool)):
                 raise self.fail("bsx.foreach", attributes[name].offset, missing=f"{name}={{...}}, an expression")
@@ -501,11 +504,13 @@ class _Lowering:
         if isinstance(value, bool):
             return ComponentPropInput(key=attribute.name, static_value=value)
         if isinstance(value, str):
-            if attribute.name == "let" and component == FOREACH:
+            if attribute.name in ("let", "index") and component == FOREACH:
                 return ComponentPropInput(key=attribute.name, static_value=value, declares_value=value)
             return ComponentPropInput(key=attribute.name, static_value=value)
         if attribute.name == "let" and component == FOREACH:
             raise self.fail("bsx.let", attribute.offset, let="{...}")
+        if attribute.name == "index" and component == FOREACH:
+            raise self.fail("bsx.index", attribute.offset, index="{...}")
         return self.value(attribute.name, value, attribute.offset)
 
     def value(self, key: str, expression: Expr, offset: int) -> ComponentPropInput:

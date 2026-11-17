@@ -2,7 +2,7 @@
  "id": "https://arkitekt.live/catalogs/base/v4",
  "name": "base",
  "version": 4,
- "minor": 0,
+ "minor": 1,
  "extends": null,
  "description": "The base catalog: everything every renderer draws. The language's own elements (control flow, async boundaries, the Blok element, the declarations, text), the html components, the structure and run parts a host supplies, the scene and the logo shapes. A renderer speaks it whole, in the contexts it draws; functions and effects are in vocabulary.json.",
  "components": [
@@ -371,7 +371,7 @@
   {
    "name": "foreach",
    "group": "language",
-   "description": "Renders its children once per item, the item bound to `let`; each item's subtree takes its ids from `key`, or from its position without one.",
+   "description": "Renders its children once per item, the item bound to `let` and its position to `index`; each item's subtree takes its ids from `key`, or from its position without one.",
    "context": "PANEL",
    "children_context": null,
    "inherits_context": true,
@@ -380,6 +380,13 @@
    "not_downstream_of": [],
    "text_prop": null,
    "props": [
+    {
+     "key": "index",
+     "kind": "STRING",
+     "required": false,
+     "description": "A name for the item's position, from 0 (`index=\"i\"`): a plain name, read bare inside.",
+     "since": 1
+    },
     {
      "key": "items",
      "kind": "ANY",
