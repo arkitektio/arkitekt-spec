@@ -227,6 +227,12 @@ _SHELF: Mapping[str, JSON] = {
         {"key": "names", "kind": "LIST", "children": [{"key": "...", "kind": "STRING"}]},
     ]}}],
 }
+_CAMERA: Mapping[str, JSON] = {
+    "key": "self",
+    "state_dependencies": [{"key": "camera", "demand": {"matches": [
+        {"key": "streams", "kind": "LIST", "children": [{"key": "...", "kind": "STRUCTURE", "identifier": "@lovekit/stream"}]},
+    ]}}],
+}
 _UNNAMED: Mapping[str, JSON] = {
     "key": "self",
     "action_dependencies": [{"key": "measure", "demand": {"return_matches": [{"key": "return0", "kind": "FLOAT"}]}}],
@@ -275,6 +281,8 @@ CHECKS: Sequence[Check] = (
     Check('fetching_more is a field of the record', '<Blok kind="agent" context="panel"><query name="positions" service="mikro" document="query { positions { id } }" more="positions" /><Spinner when={queries.positions.fetching_more} /></Blok>', ()),
     Check('then is the viewed moment', '<Blok kind="agent" context="panel"><Text text={then} /></Blok>', ()),
     Check('then has no fields', '<Blok kind="agent" context="panel"><Text text={then.year} /></Blok>', ("path.unknown",)),
+    Check('a structure reads as its reference', '<Blok kind="agent" context="panel"><foreach items={self.camera.streams} let="stream" key={stream.object}><Text>{stream.__identifier}</Text></foreach></Blok>', (), dependencies=(_CAMERA,)),
+    Check('a structure has no other field', '<Blok kind="agent" context="panel"><foreach items={self.camera.streams} let="stream" key={stream.id}><Text /></foreach></Blok>', ("path.unknown",), dependencies=(_CAMERA,)),
     Check('then in an action logo', '<Blok kind="action" context="logo"><Logo><Path d="M0 0" fill={then ? "muted" : "brand"} /></Logo></Blok>', ("roots.not_in_kind",)),
     Check('now is no root', '<Blok kind="agent" context="panel"><Text text={now} /></Blok>', ("roots.unknown",)),
     Check('time.since is gone', '<Blok kind="agent" context="panel"><Text text={time.since(task.message)} /></Blok>', ('expr.unknown_function', 'roots.not_in_kind')),

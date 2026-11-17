@@ -168,6 +168,12 @@ def record_match(key: str, fields: Iterable[RecordField], overrides: Mapping[str
     return PortMatchInput(key=key, kind=PortKind.DICT, children=tuple(children))
 
 
+def structure_match(structure: PortMatchInput) -> PortMatchInput:
+    """A STRUCTURE as what may be read below it: the ``structure`` record (``object``, ``__identifier``)."""
+    record = record_match(structure.key or "structure", load_vocabulary().records["structure"].fields)
+    return record.model_copy(update={"nullable": structure.nullable})
+
+
 def task_record_match(key: str, returns: Sequence[PortMatchInput] | None = None) -> PortMatchInput:
     """The task record (``task``, ``.tasks.<action>``, an ``into`` name), ``returns`` typed when known."""
     record = load_vocabulary().records["task"]
@@ -911,6 +917,9 @@ class _Checker:
         for index, part in enumerate(rest):
             if current is None or is_open(current):
                 return current
+            if kind_name(current.kind) == "STRUCTURE" and not current.children:
+                # A structure reads below it as the reference it travels as.
+                current = structure_match(current)
             children = current.children or ()
             child = next((candidate for candidate in children if candidate.key == part), None)
             if child is None and len(children) == 1 and children[0].key == ITEM:
