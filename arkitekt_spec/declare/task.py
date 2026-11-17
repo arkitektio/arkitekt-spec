@@ -350,6 +350,18 @@ class Task(Protocol):
         """:meth:`guard`, entered with ``async with``."""
         ...
 
+    def qualified(self, *qualifiers: str) -> "contextlib.AbstractContextManager[None]":
+        """Say what the state changes made in the block are for.
+
+        Every patch the task writes inside carries ``qualifiers`` (added to those of an
+        enclosing block), so whoever follows the state can tell a homing move from a
+        measurement. The names are the app's own::
+
+            with task.qualified("homing"):
+                state.position = 0
+        """
+        ...
+
     def hold(self, message: str, *, prompt: AssignPrompt | None = None, lost: AgentLost | None = None) -> Decision:
         """Wait for a person to decide: the task is HELD with ``message`` (and ``prompt``)
         until someone approves or denies it, and returns their :class:`Decision`.
@@ -658,6 +670,11 @@ class LocalTask:
     @contextlib.asynccontextmanager
     async def aguard(self, state: object, *paths: str) -> AsyncIterator[None]:
         """A local task is never resumed: nothing to watch."""
+        yield
+
+    @contextlib.contextmanager
+    def qualified(self, *qualifiers: str) -> Generator[None, None, None]:
+        """A local task's changes go to no agent: there is no patch to qualify."""
         yield
 
     def hold(self, message: str, *, prompt: AssignPrompt | None = None, lost: AgentLost | None = None) -> Decision:

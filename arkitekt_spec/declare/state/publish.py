@@ -3,6 +3,13 @@ from typing import Any, Protocol, runtime_checkable
 
 from arkitekt_spec.actions import ReturnPortInput
 
+CLEANUP = "cleanup"
+"""A patch's ``lifecycle``: a task wrote it while being stopped (cancel, interrupt), on
+its way out."""
+SHUTDOWN = "shutdown"
+"""A patch's ``lifecycle``: written outside any task while the agent shuts down (its
+shutdown hooks, and what follows a lifecycle hook's yield)."""
+
 
 @dataclass
 class Patch:
@@ -12,6 +19,11 @@ class Patch:
     old_value: Any = None
     port: ReturnPortInput | None = None
     correlation_id: str | None = None
+    lifecycle: str | None = None
+    """Where in a task's or the agent's life the change was made, when not in its ordinary
+    course (``CLEANUP``, ``SHUTDOWN``). The runtime says it; an app cannot."""
+    qualifiers: tuple[str, ...] = ()
+    """What the app says the change was for (``task.qualified("homing")``): any names, its own."""
 
     def __str__(self) -> str:
         return (
