@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
@@ -36,13 +37,16 @@ class Patch:
 
 @runtime_checkable
 class StateHolder(Protocol):
-    """Protocol for publisher functions"""
+    """Where a state's updates go: the agent that adopted it."""
 
-    def publish_patch(self, interface: str, patch: Patch) -> None:
-        """Method to publish a change to a specific field of the state
+    def publish_update(self, interface: str, patches: Sequence[Patch]) -> None:
+        """Take one update of a state: the operations that make it up, in order.
+
+        An update is the unit a state changes by. Whoever follows the state sees all of
+        its operations or none of them, so they are handed over together.
 
         Args:
             interface: The state interface name (e.g., "StageState")
-            patch: The patch containing op, path, value, and old_value
+            patches: The operations of the update, each with op, path and value
         """
         ...

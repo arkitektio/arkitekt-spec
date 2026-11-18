@@ -362,6 +362,26 @@ class Task(Protocol):
         """
         ...
 
+    def updating(self, *states: object) -> "contextlib.AbstractContextManager[None]":
+        """Make everything the block changes on a state one update of it.
+
+        A state changes by updates: each takes it from one revision to the next, and
+        whoever follows the state sees an update whole or not at all. One assignment is
+        one update. To change several things as one::
+
+            with task.updating(stage):
+                stage.x = 10
+                stage.y = 20
+                stage.moving = False
+
+        Nobody is ever shown the stage at the new ``x`` and the old ``y``. Each state named
+        gets one update of its own. The block is for a short, synchronous stretch: the
+        state is held for it, so another task changing the same state waits until it is
+        left, and nothing in it should wait for anything else. If the block raises, what
+        it had changed until then is still one update.
+        """
+        ...
+
     def hold(self, message: str, *, prompt: AssignPrompt | None = None, lost: AgentLost | None = None) -> Decision:
         """Wait for a person to decide: the task is HELD with ``message`` (and ``prompt``)
         until someone approves or denies it, and returns their :class:`Decision`.
@@ -675,6 +695,11 @@ class LocalTask:
     @contextlib.contextmanager
     def qualified(self, *qualifiers: str) -> Generator[None, None, None]:
         """A local task's changes go to no agent: there is no patch to qualify."""
+        yield
+
+    @contextlib.contextmanager
+    def updating(self, *states: object) -> Generator[None, None, None]:
+        """A local task's changes go to no agent: there is no update to make of them."""
         yield
 
     def hold(self, message: str, *, prompt: AssignPrompt | None = None, lost: AgentLost | None = None) -> Decision:
