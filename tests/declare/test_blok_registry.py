@@ -206,6 +206,33 @@ def test_a_blok_written_in_bsx_is_sent_as_its_source(registry: AppRegistry) -> N
     assert built(registry, "tree").components == (parse_bsx(panel("<Card />")),)
 
 
+def test_a_blok_declared_as_its_source_is_registered_without_its_dependency(registry: AppRegistry) -> None:
+    """The server works the ``self`` dependency out from the source; what is built here keeps it."""
+    registry.register_blok("panel", panel("<Card><Text>{self.Arm.mode}</Text></Card>"))
+
+    (sent,) = registry.to_registered_agent_input().model_dump(mode="json", by_alias=False, exclude_unset=True)["bloks"]
+    assert "dependencies" not in sent
+    assert (sent["source"], sent["context"], sent["vocab"]) == (panel("<Card><Text>{self.Arm.mode}</Text></Card>"), "PANEL", 2)
+    # Checked against, served and inspected with its dependency, as before.
+    assert [dependency.key for dependency in built(registry).dependencies] == ["self"]
+    assert [dependency.key for dependency in registry.to_implement_agent_input().bloks[0].dependencies] == ["self"]
+
+
+def test_a_blok_declared_as_its_tree_is_registered_as_the_source_that_says_it(registry: AppRegistry) -> None:
+    """No tree is put on the wire that BSX can say; one it cannot say is sent as it was declared."""
+    from arkitekt_spec.blok.bsx import parse_bsx
+
+    tree = parse_bsx(panel("<Card><Text>{self.Arm.mode}</Text></Card>"))
+    registry.register_blok("printed", tree)
+    registry.register_blok("hand_built", tree.model_copy(update={"id": "root"}))
+
+    sent = {blok["key"]: blok for blok in registry.to_registered_agent_input().model_dump(mode="json", by_alias=False, exclude_unset=True)["bloks"]}
+    assert "components" not in sent["printed"] and "dependencies" not in sent["printed"]
+    assert parse_bsx(sent["printed"]["source"]) == tree
+    assert "source" not in sent["hand_built"]
+    assert [dependency["key"] for dependency in sent["hand_built"]["dependencies"]] == ["self"]
+
+
 def test_the_wire_carries_vocab_and_only_what_is_declared(registry: AppRegistry) -> None:
     registry.register_blok("panel", panel("<Card />"))
 

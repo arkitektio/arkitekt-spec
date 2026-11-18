@@ -349,6 +349,44 @@ def build_declared_bloks(app_registry: "AppRegistry") -> dict[str, BlokImplement
     return declared
 
 
+def _printed(blok: BlokImplementationInput) -> str | None:
+    """The BSX of a blok declared as its tree, or None when BSX cannot say exactly that tree
+    (a hand-built one with ids of its own, a fallback literal): text that reads back into
+    another tree would change the blok on its way to the server."""
+    from arkitekt_spec.blok.bsx import parse_bsx
+    from arkitekt_spec.blok.unparse import to_bsx
+
+    if blok.components is None or len(blok.components) != 1:
+        return None
+    (tree,) = blok.components
+    try:
+        printed = to_bsx(tree)
+        return printed if parse_bsx(printed) == tree else None
+    except ValueError:
+        return None
+
+
+def as_registered(blok: BlokImplementationInput) -> BlokImplementationInput:
+    """A built blok as an agent registers it with a server: as its BSX source.
+
+    The source says what the blok depends on: the server parses it and works out the ``self``
+    dependency from the states and actions registered with it, the way :func:`self_dependency`
+    does here. So it is not sent a second time. What is built here keeps it: it is what the blok
+    is checked against before anything is sent, and what an app served without a server, or the
+    inspection of its image, hands out.
+
+    A blok declared as its tree is printed as the BSX that reads back into that tree, and sent
+    the same way. Only a tree BSX cannot say is still sent as it is, with its dependencies.
+    """
+    source = blok.source if blok.source is not None else _printed(blok)
+    if source is None:
+        return blok
+    declared = blok.model_dump(exclude_unset=True)
+    declared.pop("dependencies", None)
+    declared.pop("components", None)
+    return BlokImplementationInput.model_validate({**declared, "source": source})
+
+
 def resolved_locals(blok: BlokImplementationInput, app_registry: "AppRegistry") -> dict[str, BlokLocalInput]:
     """The ``<local>`` declarations of a built blok as its tree resolves them, by node id, with this
     app's full arg ports: what a server resolves them to. The tree itself carries them as written."""
@@ -398,4 +436,4 @@ def _demo_value(port: ReturnPortInput) -> JSON:
     return _DEMO_SCALARS.get(PortKind(port.kind), None)
 
 
-__all__ = ["SELF_KEY", "build_declared_bloks", "check_catalog_target", "checked_view", "minor_needed", "resolved_locals", "self_arg_ports", "self_dependency", "self_reads", "type_queries"]
+__all__ = ["SELF_KEY", "as_registered", "build_declared_bloks", "check_catalog_target", "checked_view", "minor_needed", "resolved_locals", "self_arg_ports", "self_dependency", "self_reads", "type_queries"]

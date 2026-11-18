@@ -67,7 +67,7 @@ from arkitekt_spec.declare.blok.declarations import (
     demo_input,
 )
 from arkitekt_spec.declare.blok.origin import DeclaredAt, declared_at, finding_key, warn_at
-from arkitekt_spec.declare.blok.registry import build_declared_bloks
+from arkitekt_spec.declare.blok.registry import as_registered, build_declared_bloks
 from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
 from arkitekt_spec.declare.catalogs import (
     BASE_CATALOG_ID,
@@ -1197,6 +1197,23 @@ class AppRegistry(BaseModel):
             bloks=tuple(self.get_declared_bloks().values()),
             **optional,
         ))
+
+    def to_registered_agent_input(
+        self,
+        name: str | None = None,
+        description: str | None = None,
+    ) -> ImplementAgentInput:
+        """The agent input as it is registered with a server (``Register``).
+
+        The same declaration as :meth:`to_implement_agent_input`, checked the same way, with each
+        blok as it is sent (:func:`~arkitekt_spec.declare.blok.registry.as_registered`): one
+        declared as its source goes without the ``self`` dependency built here, which the server
+        works out from the source.
+        """
+        checked = self.to_implement_agent_input(name=name, description=description)
+        # A copy, not a second validation: the whole declaration was checked with the
+        # dependencies in place, and the rules that read them have nothing to say of what is sent.
+        return checked.model_copy(update={"bloks": tuple(as_registered(blok) for blok in checked.bloks or ())})
 
     # ------------------------------------------------------------------ #
     # Merging                                                            #
