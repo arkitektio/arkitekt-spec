@@ -277,6 +277,34 @@ class CustomAssignWidgetInput(ActionModel):
     )
 
 
+class BlokAssignWidgetInput(ActionModel):
+    """A port blok as the port's widget: BSX the form draws where the port's control would be."""
+
+    kind: Literal["BLOK"] = Field(default="BLOK")
+    follow_value: str | None = Field(
+        validation_alias=AliasChoices("follow_value", "followValue"),
+        serialization_alias="followValue",
+        default=None,
+        description="Port path of another port whose value this widget follows and mirrors.",
+    )
+    source: str = Field(
+        min_length=1,
+        description="The port blok as v2 BSX: one `<Blok kind=\"port\" context=\"panel\">`. It reads the port as `port`, the form's other arguments as `args` and the agents a run would get as `self` and `deps`; it writes `port.value` and calls no agent.",
+    )
+    vocab: Literal[2] = Field(default=2, description="The blok language version the source speaks; 2 is the only one.")
+    fallback: "AssignWidgetInput | None" = Field(
+        default=None,
+        description="Widget to render where the UI draws no port bloks; the port's own kind's widget when left out.",
+    )
+
+    def model_post_init(self, context: Any, /) -> None:  # noqa: ANN401, D102
+        self.__pydantic_fields_set__.update({"kind", "vocab"})
+
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
+    )
+
+
 class CustomReturnWidgetInput(ActionModel):
     """A catalog component rendered for a returned value."""
 
@@ -778,7 +806,8 @@ class ArgPortInput(ArgPortFields):
 
 
 AssignWidgetInput = Annotated[
-    ChoiceAssignWidgetInput
+    BlokAssignWidgetInput
+    | ChoiceAssignWidgetInput
     | CustomAssignWidgetInput
     | ProxyAssignWidgetInput
     | SearchAssignWidgetInput
@@ -1960,6 +1989,7 @@ ArgPortFields.model_rebuild()
 ArgPortInput.model_rebuild()
 BlokLocalInput.model_rebuild()
 BlokImplementationInput.model_rebuild()
+BlokAssignWidgetInput.model_rebuild()
 ComponentNodeInput.model_rebuild()
 ComponentPropInput.model_rebuild()
 CustomAssignWidgetInput.model_rebuild()

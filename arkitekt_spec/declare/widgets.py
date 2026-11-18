@@ -7,6 +7,7 @@ from pydantic import Field
 from arkitekt_spec.actions import (
     ArgPortInput,
     AssignWidgetInput,
+    BlokAssignWidgetInput,
     ChoiceAssignWidgetInput,
     ChoiceInput,
     ChoiceReturnWidgetInput,
@@ -26,6 +27,8 @@ from arkitekt_spec.actions import (
     ValidatorInput,
 )
 from arkitekt_spec.blok.bsx import parse_bsx
+from arkitekt_spec.blok.declared import blok_header
+from arkitekt_spec.blok.vocabulary import BlokError
 from arkitekt_spec.declare.blok.parser import coerce_util_call, normalize_expression
 from arkitekt_spec.declare.structures.types import JSONSerializable
 from arkitekt_spec.rules import infer_dependencies
@@ -223,6 +226,44 @@ def BsxWidget(
         dependencies=tuple(dependencies or ()),
         fallback=fallback,
     )
+
+
+def PortBlok(source: str, fallback: AssignWidgetInput | None = None) -> AssignWidgetInput:
+    """A port's widget written as a blok: BSX the form draws where the port's control would be.
+
+    The blok is a field of the action's form. It reads its port as ``port`` (``port.value``,
+    ``port.label``, ``port.error``, ``port.editable``, ...), the form's other arguments as
+    ``args.<key>`` and the state of the agents a run would get as ``self`` and ``deps.<key>``.
+    It may declare ``<local>``, ``<query>`` and ``<subscription>``. It writes the port's value and
+    nothing else: a control with ``bind={port.value}``, or ``port.set(...)`` in a callback. It
+    calls no agent. What is wrong with the value is the port's own rules to say (its kind,
+    whether it is required, its validators): the blok reads ``port.error`` and may place
+    ``<message />``.
+
+        exposure: Annotated[float, PortBlok('''
+            <Blok kind="port" context="panel">
+              <Slider bind={port.value} min={0} max={self.Camera.max_exposure} />
+              <Button onClick={port.set(self.Camera.exposure)}>Use current</Button>
+              <message />
+            </Blok>
+        ''')]
+
+    Args:
+        source (str): The BSX: one ``<Blok kind="port" context="panel">``. Write it as a literal.
+        fallback (AssignWidgetInput, optional): Widget for a UI that draws no port bloks; the
+            port's own kind's widget when left out.
+
+    Returns:
+        AssignWidgetInput: The widget input
+
+    Raises:
+        BlokError: If the source does not parse or is no port blok.
+    """
+    source = source.strip()
+    header = blok_header(parse_bsx(source))
+    if header.kind != "port":
+        raise BlokError("kind.placement", n="n" if header.kind[:1] in "aeiou" else "", kind=header.kind, m="", expected="port", where="PortBlok")
+    return BlokAssignWidgetInput(source=source, fallback=fallback)
 
 
 def StructurePicker(

@@ -59,6 +59,7 @@ from arkitekt_spec.declare.actors.types import (
 from arkitekt_spec.declare.annotations.markers import Fits
 from arkitekt_spec.declare.blok.action import ActionBloks, build_action_bloks
 from arkitekt_spec.declare.blok.parser import parse_estimated_runtime, parse_fits
+from arkitekt_spec.declare.blok.port import check_port_bloks, widgets_read_self
 from arkitekt_spec.declare.coercible_types import (
     OptimisticCoercible,
 )
@@ -311,6 +312,14 @@ def register_func(
         declared = structure_registry.interactions_for(cls)
         asks.extend(declared.to_ask_inputs(key))
         informs.extend(declared.to_inform_inputs(key))
+
+    # A port's own blok is checked where it is mounted: against its port, the action's
+    # arguments and the action's dependencies.
+    check_port_bloks(definition.args or (), tuple(dependencies), implementation_registry, f"Action {interface!r}", interface=interface)
+    if not definition.stateful and widgets_read_self(definition.args or (), implementation_registry):
+        # A widget that shows the agent's own state makes it matter which agent runs the action:
+        # it is stateful, so a caller names the agent and the form is drawn for that one.
+        definition = definition.model_copy(update={"stateful": True})
 
     if config.bloks:
         # Set only when there are some, so an action without bloks keeps its wire bytes.

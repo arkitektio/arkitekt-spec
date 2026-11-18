@@ -67,6 +67,7 @@ from arkitekt_spec.declare.blok.declarations import (
     demo_input,
 )
 from arkitekt_spec.declare.blok.origin import DeclaredAt, declared_at, finding_key, warn_at
+from arkitekt_spec.declare.blok.port import check_port_blok_reads
 from arkitekt_spec.declare.blok.registry import as_registered, build_declared_bloks
 from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
 from arkitekt_spec.declare.catalogs import (
@@ -1189,6 +1190,8 @@ class AppRegistry(BaseModel):
             optional["description"] = description
         if self.registered_assets:
             optional["assets"] = self.get_declared_assets()
+        # What the port bloks of its actions read of the agent is declared by now.
+        check_port_blok_reads(self)
         return check_agent_input(ImplementAgentInput(
             name=name,
             implementations=tuple(self.get_implementations()),

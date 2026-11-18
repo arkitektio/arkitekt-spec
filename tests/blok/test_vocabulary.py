@@ -33,10 +33,10 @@ def test_then_replaces_now_in_every_kind_but_the_action_logo() -> None:
 def test_catalogs_are_versioned_and_kinds_compatible() -> None:
     vocabulary = load_vocabulary()
 
-    assert (vocabulary.vocab, vocabulary.minor) == (2, 4)
+    assert (vocabulary.vocab, vocabulary.minor) == (2, 5)
     assert vocabulary.base_catalog == "https://arkitekt.live/catalogs/base/v4"
     assert list(vocabulary.bundled_catalogs.values()) == ["catalogs/base@4.json", "catalogs/orkestrator@1.json"]
-    assert vocabulary.host_parts == ("args", "arg", "deps", "dep", "ask", "returns", "status", "timeline")
+    assert vocabulary.host_parts == ("args", "arg", "deps", "dep", "ask", "returns", "status", "timeline", "label", "description", "message", "control", "field")
     assert vocabulary.bind_kinds["FLOAT"] >= {"FLOAT", "INT"} and vocabulary.bind_kinds["BOOL"] == {"BOOL"}
     assert "ANY" not in vocabulary.bind_kinds, "an ANY control writes any local"
     assert "FLOAT" in vocabulary.arg_kinds["INT"] and "INT" not in vocabulary.arg_kinds["FLOAT"]
@@ -100,7 +100,28 @@ def test_an_effect_is_a_command_or_only_the_viewers() -> None:
     assert sorted(function.name for function in functions if function.command) == [
         "assign.start", "task.answer", "task.cancel", "task.interrupt", "task.pause", "task.resume", "task.step",
     ]
-    assert sorted(function.name for function in functions if function.effect and not function.command) == ["query.fetch_more", "query.refetch", "ui.copy"]
+    assert sorted(function.name for function in functions if function.effect and not function.command) == [
+        "port.clear", "port.reset", "port.set", "port.touch", "query.fetch_more", "query.refetch", "ui.copy",
+    ]
+
+
+def test_a_port_blok_is_a_field_of_a_form() -> None:
+    """It reads its port, the form and the agents, writes through the port's own effects, and calls no agent."""
+    vocabulary = load_vocabulary()
+    port = vocabulary.kinds["port"]
+
+    assert port.roots == {"self", "deps", "args", "port", "queries", "subscriptions", "viewer"}
+    assert (port.contexts, port.locals, port.calls) == (("PANEL",), True, False)
+    assert [name for name, kind in vocabulary.kinds.items() if not kind.calls] == ["port"]
+    assert [name for name, kind in vocabulary.kinds.items() if "port" in kind.roots] == ["port"]
+    assert [field.key for field in vocabulary.records["port"].fields] == [
+        "value", "key", "label", "description", "kind", "identifier", "nullable", "default", "choices", "unit",
+        "editable", "error", "invalid", "touched", "dirty",
+    ]
+    effects = {name: function for name, function in vocabulary.functions.items() if name.startswith("port.")}
+    assert list(effects) == ["port.set", "port.clear", "port.reset", "port.touch"]
+    assert all(function.effect and not function.command and function.needs == "port" for function in effects.values())
+    assert [name for name, function in vocabulary.functions.items() if function.needs is not None] == list(effects)
 
 
 def test_what_is_not_portable_is_listed() -> None:

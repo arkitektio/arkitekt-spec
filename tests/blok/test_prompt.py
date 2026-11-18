@@ -40,13 +40,13 @@ def test_the_prompt_lists_every_component_drawn_in_its_context_and_every_functio
     for component in drawn_in(view, "PANEL", "custom"):
         assert component.name in listed, component.name
     assert view.component("Model") is not None and "Model" not in listed
-    assert "timeline" in listed and not {"args", "arg", "deps", "dep", "ask", "returns", "status"} & listed
+    assert "timeline" in listed and not {"args", "arg", "deps", "dep", "ask", "returns", "status", "label", "message", "control", "field"} & listed
     for function in view.functions.values():
         if not function.effect:
             assert function_signature(function) in prompt
-        elif function.name.split(".")[0] not in ("task", "assign"):
+        elif function.name.split(".")[0] not in ("task", "assign", "port"):
             assert effect_signature(function) in prompt
-    for effect in ("task.answer", "task.cancel", "assign.start"):
+    for effect in ("task.answer", "task.cancel", "assign.start", "port.set"):
         assert effect_signature(view.functions[effect]) not in prompt, f"{effect} is listed for a blok that has no such root"
     assert "queries.<name>.refetch()" in prompt
 

@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from arkitekt_spec.actions import AgentDependencyInput, ComponentNodeInput
+from arkitekt_spec.actions import AgentDependencyInput, ComponentNodeInput, PortMatchInput
 from arkitekt_spec.blok.bsx import parse_bsx
 from arkitekt_spec.blok.catalogs import BlokView, blok_view, default_view
 from arkitekt_spec.blok.declared import blok_catalog
@@ -204,6 +204,8 @@ class Check:
     """The kinds the mount takes; empty: any."""
     catalog: bool = True
     """Whether it is checked against a catalog at all, or held to the language alone."""
+    port: Mapping[str, JSON] | None = None
+    """The port a port blok is mounted on, as a match: what ``port.value`` is typed as."""
 
 
 _ROBOT: Mapping[str, JSON] = {
@@ -246,6 +248,9 @@ _TO: Mapping[str, JSON] = {
     "action_dependencies": [{"key": "move", "demand": {"arg_matches": [{"key": "to", "kind": "INT"}]}}],
 }
 _PANEL = '<Blok kind="agent" context="panel">'
+_PORT = '<Blok kind="port" context="panel">'
+_EXPOSURE: Mapping[str, JSON] = {"key": "exposure", "kind": "FLOAT", "nullable": False}
+_REGION: Mapping[str, JSON] = {"key": "region", "kind": "MODEL", "children": [{"key": "x", "kind": "INT"}, {"key": "y", "kind": "INT"}]}
 
 CHECKS: Sequence[Check] = (
     Check('a clean agent blok', '<Blok kind="agent" context="panel"><Card><Text>{self.arm.mode}</Text><Button onClick={self.move_to(position: 1) into move}>Go</Button><Progress value={move.progress} /></Card></Blok>', (), dependencies=(_SELF,)),
@@ -324,6 +329,16 @@ CHECKS: Sequence[Check] = (
     Check("an assign blok places the run's dependencies", '<Blok kind="assign" context="panel"><Space room="room:lab"><Placed dep="robot" /></Space></Blok>', (), dependencies=(_ROBOT,)),
     Check('an assign blok has no task', '<Blok kind="assign" context="panel"><Text>{task.status}</Text></Blok>', ("roots.not_in_kind",)),
     Check("starting a run is an assign blok's", '<Blok kind="action" context="panel"><args /><Button onClick={assign.start()}>Start</Button></Blok>', ('catalog.kind', 'assign.kind')),
+    Check('a port blok', f'{_PORT}<label /><Slider bind={{port.value}} max={{args.limit}} /><Button onClick={{port.set(args.limit)}}>Longest</Button><Button onClick={{port.reset()}}>Reset</Button><Text>{{deps.robot.arm.mode}}</Text><message /></Blok>', (), dependencies=(_ROBOT,), args=('limit', 'exposure'), kinds=('port',), port=_EXPOSURE),
+    Check('a port blok keeps a draft', f'{_PORT}<local name="draft" default={{0}} /><Slider bind={{draft}} /><Button onClick={{port.set(draft)}}>Take</Button></Blok>', (), dependencies=(), kinds=('port',), port=_EXPOSURE),
+    Check('a port blok calls no agent', f'{_PORT}<Button onClick={{deps.robot.move_to(position: 1)}}>Go</Button></Blok>', ("calls.not_in_kind",), dependencies=(_ROBOT,), kinds=('port',), port=_EXPOSURE),
+    Check('a port blok calls not itself either', f'{_PORT}<Button onClick={{self.focus() into run}}>Focus</Button></Blok>', ("calls.not_in_kind",), dependencies=(), kinds=('port',), port=_EXPOSURE),
+    Check('a port blok writes the value of its port', f'{_PORT}<Slider bind={{port.touched}} /></Blok>', ("port.bind",), dependencies=(), kinds=('port',), port=_EXPOSURE),
+    Check('a port blok reads the other arguments, and does not write them', f'{_PORT}<Text>{{args.gain}}</Text><Slider bind={{args.limit}} /></Blok>', ("args.unknown", "local.unknown"), dependencies=(), args=('limit', 'exposure'), kinds=('port',), port=_EXPOSURE),
+    Check('the value of a port is typed as the port', f'{_PORT}<Text>{{port.value.x}}</Text><Text>{{port.value.z}}</Text><Text>{{port.frob}}</Text></Blok>', ("path.unknown", "path.unknown"), dependencies=(), kinds=('port',), port=_REGION),
+    Check('a port blok is a panel with no task', '<Blok kind="port" context="panel"><Text>{task.status}</Text></Blok>', ("roots.not_in_kind",), dependencies=(), kinds=('port',)),
+    Check("setting a port is a port blok's", '<Blok kind="agent" context="panel"><Button onClick={port.set(1)}>Set</Button><label /></Blok>', ("roots.not_in_kind", "catalog.kind")),
+    Check('a port blok is mounted on a port', f'{_PORT}<control /></Blok>', ("kind.placement",), kinds=('agent',)),
     Check('an unknown component', '<Blok kind="agent" context="panel"><Frobnicator /></Blok>', ("catalog.unknown_component",)),
     Check('an unknown prop', '<Blok kind="agent" context="panel"><Button frob={1} /></Blok>', ("catalog.props",)),
     Check('a component outside its context', '<Blok kind="agent" context="panel"><Model /></Blok>', ('catalog.props', 'catalog.placement', 'catalog.placement')),
@@ -449,6 +464,7 @@ def _mount(check: Check) -> dict[str, JSON]:
         "dependencies": [dict(dependency) for dependency in check.dependencies] if check.dependencies is not None else None,
         "args": list(check.args) if check.args is not None else None,
         "catalog": check.catalog,
+        "port": dict(check.port) if check.port is not None else None,
     }
 
 
@@ -475,6 +491,7 @@ def _check_scope(check: Check) -> "BlokScope":
         kinds=check.kinds,
         dependencies=tuple(AgentDependencyInput.model_validate(dict(d)) for d in check.dependencies) if check.dependencies is not None else None,
         args=check.args,
+        port=PortMatchInput.model_validate(dict(check.port)) if check.port is not None else None,
     )
 
 

@@ -57,7 +57,7 @@ def _acme(**overrides: object) -> str:
 def test_the_base_catalog_is_one_list_named_by_its_address() -> None:
     base = base_catalog()
 
-    assert (base.id, base.name, base.version, base.minor, base.extends) == (BASE_ID, "base", 4, 1, None)
+    assert (base.id, base.name, base.version, base.minor, base.extends) == (BASE_ID, "base", 4, 2, None)
     assert load_vocabulary().base_catalog == BASE_ID
     names = [component.name for component in base.components]
     assert len(names) == len(set(names))
@@ -71,7 +71,7 @@ def test_the_base_catalog_holds_every_family() -> None:
     assert set(groups) == {"language", "ui", "html", "shadcn", "structure", "run", "scene", "logo"}
     assert groups["language"] == {"if", "else", "foreach", "match", "case", "default", "fragment", "suspense", "fallback", "error", "Blok", "local", "query", "subscription", "var", "#text"}
     assert groups["html"] == {"div", "p", "span"}
-    assert groups["run"] == {"args", "arg", "deps", "dep", "ask", "returns", "status", "timeline"}
+    assert groups["run"] == {"args", "arg", "deps", "dep", "ask", "returns", "status", "timeline", "label", "description", "message", "control", "field"}
     assert {"Button", "List", "Time"} <= groups["ui"] and {"Chart", "Drawer", "BentoGrid", "Combobox", "DatePicker"} <= groups["shadcn"]
     assert {"Scene", "Space", "Placed", "Route"} <= groups["scene"] and "Logo" in groups["logo"]
     assert {"StructureDisplay", "StructurePicker", "StructureViewer"} == groups["structure"]
@@ -85,6 +85,7 @@ def test_the_host_parts_say_the_kinds_they_belong_to() -> None:
         "args": ("assign",), "arg": ("assign",), "deps": ("assign",), "dep": ("assign",),
         "ask": ("task", "action"), "returns": ("task", "action"), "status": ("task", "action"),
         "timeline": ("agent", "custom", "task", "action"),
+        "label": ("port",), "description": ("port",), "message": ("port",), "control": ("port",), "field": ("port",),
     }
     assert {name: view.components[name].kinds for name in ("Space", "Placed", "Route")} == dict.fromkeys(("Space", "Placed", "Route"), ("action", "assign"))
     assert view.components["Scene"].kinds == () and view.components["Button"].kinds == ()

@@ -1065,6 +1065,7 @@
             {
               "discriminator": {
                 "mapping": {
+                  "BLOK": "#/$defs/BlokAssignWidgetInput",
                   "CHOICE": "#/$defs/ChoiceAssignWidgetInput",
                   "CUSTOM": "#/$defs/CustomAssignWidgetInput",
                   "PROXY": "#/$defs/ProxyAssignWidgetInput",
@@ -1076,6 +1077,9 @@
                 "propertyName": "kind"
               },
               "oneOf": [
+                {
+                  "$ref": "#/$defs/BlokAssignWidgetInput"
+                },
                 {
                   "$ref": "#/$defs/ChoiceAssignWidgetInput"
                 },
@@ -1254,6 +1258,100 @@
       ],
       "title": "AssetKind",
       "type": "string"
+    },
+    "BlokAssignWidgetInput": {
+      "additionalProperties": false,
+      "description": "A port blok as the port's widget: BSX the form draws where the port's control would be.",
+      "properties": {
+        "fallback": {
+          "anyOf": [
+            {
+              "discriminator": {
+                "mapping": {
+                  "BLOK": "#/$defs/BlokAssignWidgetInput",
+                  "CHOICE": "#/$defs/ChoiceAssignWidgetInput",
+                  "CUSTOM": "#/$defs/CustomAssignWidgetInput",
+                  "PROXY": "#/$defs/ProxyAssignWidgetInput",
+                  "SEARCH": "#/$defs/SearchAssignWidgetInput",
+                  "SLIDER": "#/$defs/SliderAssignWidgetInput",
+                  "STATE_CHOICE": "#/$defs/StateChoiceAssignWidgetInput",
+                  "STRING": "#/$defs/StringAssignWidgetInput"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/BlokAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/ChoiceAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/CustomAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/ProxyAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/SearchAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/SliderAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/StateChoiceAssignWidgetInput"
+                },
+                {
+                  "$ref": "#/$defs/StringAssignWidgetInput"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Widget to render where the UI draws no port bloks; the port's own kind's widget when left out.",
+          "title": "Fallback"
+        },
+        "follow_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Port path of another port whose value this widget follows and mirrors.",
+          "title": "Follow Value"
+        },
+        "kind": {
+          "const": "BLOK",
+          "default": "BLOK",
+          "title": "Kind",
+          "type": "string"
+        },
+        "source": {
+          "description": "The port blok as v2 BSX: one `<Blok kind=\"port\" context=\"panel\">`. It reads the port as `port`, the form's other arguments as `args` and the agents a run would get as `self` and `deps`; it writes `port.value` and calls no agent.",
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "vocab": {
+          "const": 2,
+          "default": 2,
+          "description": "The blok language version the source speaks; 2 is the only one.",
+          "title": "Vocab",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "title": "BlokAssignWidgetInput",
+      "type": "object"
     },
     "BlokDemoInput": {
       "additionalProperties": false,
@@ -2082,6 +2180,7 @@
             {
               "discriminator": {
                 "mapping": {
+                  "BLOK": "#/$defs/BlokAssignWidgetInput",
                   "CHOICE": "#/$defs/ChoiceAssignWidgetInput",
                   "CUSTOM": "#/$defs/CustomAssignWidgetInput",
                   "PROXY": "#/$defs/ProxyAssignWidgetInput",
@@ -2093,6 +2192,9 @@
                 "propertyName": "kind"
               },
               "oneOf": [
+                {
+                  "$ref": "#/$defs/BlokAssignWidgetInput"
+                },
                 {
                   "$ref": "#/$defs/ChoiceAssignWidgetInput"
                 },

@@ -2,7 +2,7 @@
  "id": "https://arkitekt.live/catalogs/base/v4",
  "name": "base",
  "version": 4,
- "minor": 1,
+ "minor": 2,
  "extends": null,
  "description": "The base catalog: everything every renderer draws. The language's own elements (control flow, async boundaries, the Blok element, the declarations, text), the html components, the structure and run parts a host supplies, the scene and the logo shapes. A renderer speaks it whole, in the contexts it draws; functions and effects are in vocabulary.json.",
  "components": [
@@ -30,7 +30,8 @@
       "custom",
       "task",
       "action",
-      "assign"
+      "assign",
+      "port"
      ]
     },
     {
@@ -10662,6 +10663,98 @@
     "task",
     "action"
    ]
+  },
+  {
+   "name": "label",
+   "group": "run",
+   "description": "The port's label, as the form draws it. A port blok only: the form draws its own above the blok unless the blok places this one.",
+   "context": "PANEL",
+   "children_context": null,
+   "inherits_context": false,
+   "accepts_children": false,
+   "downstream_of": [],
+   "not_downstream_of": [],
+   "text_prop": null,
+   "props": [],
+   "kinds": [
+    "port"
+   ],
+   "since": 2
+  },
+  {
+   "name": "description",
+   "group": "run",
+   "description": "The port's description, as the form draws it. A port blok only.",
+   "context": "PANEL",
+   "children_context": null,
+   "inherits_context": false,
+   "accepts_children": false,
+   "downstream_of": [],
+   "not_downstream_of": [],
+   "text_prop": null,
+   "props": [],
+   "kinds": [
+    "port"
+   ],
+   "since": 2
+  },
+  {
+   "name": "message",
+   "group": "run",
+   "description": "What the form says is wrong with the port's value (`port.error`), as the form draws it; nothing while the value is fine. A port blok only: the form draws its own below the blok unless the blok places this one.",
+   "context": "PANEL",
+   "children_context": null,
+   "inherits_context": false,
+   "accepts_children": false,
+   "downstream_of": [],
+   "not_downstream_of": [],
+   "text_prop": null,
+   "props": [],
+   "kinds": [
+    "port"
+   ],
+   "since": 2
+  },
+  {
+   "name": "control",
+   "group": "run",
+   "description": "The control the form would draw for this port without a blok: its kind's own, bound to the port. A port blok places it to draw around the standard control instead of replacing it. A port blok only.",
+   "context": "PANEL",
+   "children_context": null,
+   "inherits_context": false,
+   "accepts_children": false,
+   "downstream_of": [],
+   "not_downstream_of": [],
+   "text_prop": null,
+   "props": [],
+   "kinds": [
+    "port"
+   ],
+   "since": 2
+  },
+  {
+   "name": "field",
+   "group": "run",
+   "description": "One child port of the port (a field of a MODEL), as its own widget draws it, bound below the port's value. A port blok only.",
+   "context": "PANEL",
+   "children_context": null,
+   "inherits_context": false,
+   "accepts_children": false,
+   "downstream_of": [],
+   "not_downstream_of": [],
+   "text_prop": null,
+   "props": [
+    {
+     "key": "key",
+     "kind": "STRING",
+     "required": true,
+     "description": "The key of the child port."
+    }
+   ],
+   "kinds": [
+    "port"
+   ],
+   "since": 2
   },
   {
    "name": "Animate",

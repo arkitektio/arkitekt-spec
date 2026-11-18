@@ -63,13 +63,18 @@ class _SelfReads:
         self.states: set[str] = set()
         self.actions: set[str] = set()
         self.assets: set[str] = set()
+        self.agent: bool = False
+        """Whether it reads anything of ``self`` at all, the agent's own fields (``self.connected``) included."""
 
     def read(self, path: str) -> None:
         vocabulary = load_vocabulary()
         parts = path.split(".")
         if parts[0] == "deps" and len(parts) > 1 and parts[1] == SELF_KEY:
             parts = parts[1:]
-        if parts[0] != SELF_KEY or len(parts) < 2:
+        if parts[0] != SELF_KEY:
+            return
+        self.agent = True
+        if len(parts) < 2:
             return
         head = parts[1]
         if head == vocabulary.tasks_segment:
