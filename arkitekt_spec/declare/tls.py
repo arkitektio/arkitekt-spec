@@ -13,8 +13,11 @@ aliases it resolves of such an instance (``Alias.certificates``), and:
   - :func:`bundle_file` — a file of the public roots plus the certificates, for a client that
     takes a path (duckdb's ``ca_cert_file``). Changes nothing else.
   - :func:`trust_natively` — points ``SSL_CERT_FILE`` at such a file, for a client that only
-    reads its roots from there (obstore, LiveKit: rustls). Process-wide: OpenSSL's default
-    paths, httpx and child processes read it too, so call it only where that client is built.
+    reads its roots from there (LiveKit: rustls). Process-wide: OpenSSL's default paths, httpx
+    and child processes read it too, so call it only where that client is built. Not for
+    obstore: from 0.11 it verifies with the platform's verifier, which never reads
+    ``SSL_CERT_FILE`` on macOS or Windows; its stores take the certificates themselves
+    (``root_certificate`` + ``disable_system_certificates``, see ``create_s3_store``).
 
   Both make the certificate an extra root beside the public ones: weaker than pinning (a
   public CA could vouch for the hub's names too), but what those clients offer.
