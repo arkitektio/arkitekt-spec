@@ -80,8 +80,12 @@ class Alias(BaseModel):
     )
     public: bool = False
     """Whether this alias is reachable from outside the deployment's own
-    network. Informational: the server decides which aliases to hand out,
-    the client just tries them in order."""
+    network. Informational."""
+    priority: int | None = None
+    """Where the hub's owner ranks this alias for the client asking, lower first:
+    the alias's own priority, its reach's default, or a rule for this client. A
+    client follows it unless its own alias policy says otherwise; the server
+    sends the aliases already in this order. Older servers do not send it."""
     kind: str | None = None
     """How the server reaches the instance: ``"absolute"``, ``"mesh"`` (only
     reachable over the deployment's tailnet) or ``"docker"`` (only reachable
