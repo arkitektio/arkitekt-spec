@@ -81,6 +81,13 @@ or format="HH:mm"; time.diff(start: a, end: b) is the seconds between two times 
 fmt.duration(seconds: s) writes them out.
 - Colours are theme roles ({colours}, with opacity like border-info/30), never palette \
 colours (bg-green-500) or hex. Conditional classes: className={{["px-2", run.running && "animate-pulse"]}}.
+- An agent blok reaches other agents through the dependencies of one of its own actions: \
+<dependencies key="cells" like="self.analyze" /> (a child of <Blok>, after its locals), then \
+cells.<dependency>.<state>.<field> and cells.<dependency>.<action>(...). Which agent each is \
+bound to is the viewer's choice: place <deppicker key="cells.microscope" />, or build one over \
+cells.options.microscope ({{id, name, connected, picked}} each) and \
+onClick={{cells.pick(microscope: o.id)}}. Start the action on them with \
+self.analyze() with cells into run.
 - A dependency is an agent the blok reads and calls under a key: deps.<key>.<slot>, where a \
 slot is one of its actions (called) or states (read). Declare every dependency you read, with \
 what you read and call of it. One no agent is bound to reads as failed (error deps.unbound) and \

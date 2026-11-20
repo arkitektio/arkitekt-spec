@@ -33,7 +33,7 @@ def test_then_replaces_now_in_every_kind_but_the_action_logo() -> None:
 def test_catalogs_are_versioned_and_kinds_compatible() -> None:
     vocabulary = load_vocabulary()
 
-    assert (vocabulary.vocab, vocabulary.minor) == (2, 5)
+    assert (vocabulary.vocab, vocabulary.minor) == (2, 6)
     assert vocabulary.base_catalog == "https://arkitekt.live/catalogs/base/v4"
     assert list(vocabulary.bundled_catalogs.values()) == ["catalogs/base@4.json", "catalogs/orkestrator@1.json"]
     assert vocabulary.host_parts == ("args", "arg", "deps", "dep", "ask", "returns", "status", "timeline", "label", "description", "message", "control", "field")
@@ -52,7 +52,8 @@ def test_the_query_record_fetches_more() -> None:
 def test_the_root_matrix_is_the_designs() -> None:
     kinds = load_vocabulary().kinds
 
-    assert "deps" not in kinds["agent"].roots and "self" in kinds["agent"].roots
+    # An agent blok's deps are the ones it declares itself (`<dependencies>`).
+    assert {"self", "deps"} <= kinds["agent"].roots and "task" not in kinds["agent"].roots
     assert "self" not in kinds["custom"].roots and "deps" in kinds["custom"].roots
     assert {"self", "deps", "args", "task"} <= kinds["task"].roots
     assert kinds["action"].contexts == ("PANEL", "SCENE", "LOGO")
@@ -101,7 +102,7 @@ def test_an_effect_is_a_command_or_only_the_viewers() -> None:
         "assign.start", "task.answer", "task.cancel", "task.interrupt", "task.pause", "task.resume", "task.step",
     ]
     assert sorted(function.name for function in functions if function.effect and not function.command) == [
-        "port.clear", "port.reset", "port.set", "port.touch", "query.fetch_more", "query.refetch", "ui.copy",
+        "deps.pick", "port.clear", "port.reset", "port.set", "port.touch", "query.fetch_more", "query.refetch", "ui.copy",
     ]
 
 

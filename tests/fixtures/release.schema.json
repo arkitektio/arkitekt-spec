@@ -673,6 +673,19 @@
           "title": "Dependency",
           "type": "string"
         },
+        "given": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "`with <key>`: the dependencies the blok declares under that key (`<dependencies key=... />`), whose agents the run gets. Only on a call to `self`.",
+          "title": "Given"
+        },
         "operation": {
           "description": "The target function name registered on that specific agent's worker thread loop.",
           "title": "Operation",

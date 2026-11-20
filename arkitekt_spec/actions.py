@@ -715,6 +715,10 @@ class AgentProbeInput(ActionModel):
     arguments: tuple[ActionArgumentInput, ...] | None = Field(
         default=None, description="Key-value arguments map compiled for the target agent call."
     )
+    given: str | None = Field(
+        default=None,
+        description="`with <key>`: the dependencies the blok declares under that key (`<dependencies key=... />`), whose agents the run gets. Only on a call to `self`.",
+    )
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )

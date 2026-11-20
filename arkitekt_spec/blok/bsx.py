@@ -44,6 +44,7 @@ from arkitekt_spec.actions import (
 )
 from arkitekt_spec.blok.catalogs import BlokView, blok_view, default_view, known_catalog
 from arkitekt_spec.blok.expr import (
+    PICK_VERB,
     Call,
     Compare,
     Expr,
@@ -83,6 +84,9 @@ LOCAL_NAME = "name"
 REFETCH_FUNCTION = "query.refetch"
 FETCH_MORE_FUNCTION = "query.fetch_more"
 QUERY_SUGAR = {"refetch": REFETCH_FUNCTION, "fetch_more": FETCH_MORE_FUNCTION}
+PICK_FUNCTION = "deps.pick"
+"""What ``<key>.pick(<dependency>: <agent id>)`` is stored as."""
+DEPENDENCIES = "dependencies"
 """``queries.<name>.<verb>(...)``: the effect each verb desugars to."""
 
 _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_.:-]*")
@@ -129,6 +133,16 @@ class _Markup:
         self.source = source
         self.locate = locate
         self.index = 0
+        self.references: set[str] = set()
+        """The keys of the `<dependencies>` read so far: what a later expression may read through."""
+
+    def declares(self, element: _Element) -> None:
+        """A `<dependencies key="cells" />` is read through from here on (`cells.microscope`)."""
+        if element.name != DEPENDENCIES:
+            return
+        key = next((attribute.value for attribute in element.attributes if attribute.name == "key"), None)
+        if isinstance(key, str) and _LOCAL.fullmatch(key):
+            self.references.add(key)
 
     def fail(self, code: str, offset: int | None = None, **fields: object) -> BlokError:
         line, column = self.locate(self.index if offset is None else offset)
@@ -190,9 +204,11 @@ class _Markup:
                 raise self.fail("bsx.unclosed", offset, component=element.name)
             if self.at("/>"):
                 self.index += 2
+                self.declares(element)
                 return element
             if self.at(">"):
                 self.index += 1
+                self.declares(element)
                 self.content(element)
                 return element
             if not had_space:
@@ -228,7 +244,7 @@ class _Markup:
             self.index = end + 1
             if not inner.strip():
                 raise self.fail("expr.syntax", start, detail=f"the value of {name} is empty")
-            expression = parse_attribute(inner, base=start, locate=self.locate)
+            expression = parse_attribute(inner, base=start, locate=self.locate, references=frozenset(self.references))
             return _Attribute(name=name, value=expression, offset=offset)
         raise self.fail("bsx.syntax", detail=f'{name}= takes "a string" or {{an expression}}')
 
@@ -287,7 +303,7 @@ class _Markup:
                 stripped = inner.strip()
                 if not stripped or (stripped.startswith("/*") and stripped.endswith("*/")):
                     continue
-                element.children.append(_Container(expression=parse_expression(inner, base=start, locate=self.locate), offset=offset))
+                element.children.append(_Container(expression=parse_expression(inner, base=start, locate=self.locate, references=frozenset(self.references)), offset=offset))
                 continue
             if self.at("}"):
                 raise self.fail("bsx.syntax", detail="unexpected '}' in text; write {'}'}")
@@ -537,7 +553,7 @@ class _Lowering:
             agent = self.agent_call(expression)
             if agent is not None:
                 return ComponentPropInput(key=key, agent_call=agent)
-            effect = self.query_effect(expression)
+            effect = self.pick_effect(expression) or self.query_effect(expression)
             if effect is not None:
                 return ComponentPropInput(key=key, util_call=effect)
             return ComponentPropInput(key=key, util_call=self.util_call(expression, effect_allowed=True))
@@ -568,14 +584,19 @@ class _Lowering:
     # -- calls
 
     def agent_call(self, call: Call) -> AgentProbeInput | None:
-        """A task call (``self.<action>(...)``, ``deps.<key>.<action>(...)``), or None."""
+        """A task call (``self.<action>(...)``, ``deps.<key>.<action>(...)``; one through declared
+        dependencies, ``cells.microscope.jog(...)``, was read as the latter), or None."""
         callee = call.callee
         if callee[0] == "self" and len(callee) == 2:
             dependency, operation = "self", callee[1]
         elif callee[0] == "deps" and len(callee) == 3:
             dependency, operation = callee[1], callee[2]
         else:
+            if call.given is not None:
+                raise self.fail("callback.with", call.offset)
             return None
+        if call.given is not None and dependency != "self":
+            raise self.fail("callback.with", call.offset)
         arguments: list[ActionArgumentInput] = []
         seen: set[str] = set()
         for argument in call.arguments:
@@ -585,7 +606,31 @@ class _Lowering:
                 raise self.fail("expr.duplicate_key", argument.offset, key=argument.name)
             seen.add(argument.name)
             arguments.append(self.argument(argument.name, argument.value))
-        return AgentProbeInput(dependency=dependency, operation=operation, arguments=tuple(arguments) if arguments else None)
+        if call.given is None:
+            # Left unset, so a call without `with` is stored as it always was.
+            return AgentProbeInput(dependency=dependency, operation=operation, arguments=tuple(arguments) if arguments else None)
+        return AgentProbeInput(dependency=dependency, operation=operation, arguments=tuple(arguments) if arguments else None, given=call.given)
+
+    def pick_effect(self, call: Call) -> UtilCallInput | None:
+        """``cells.pick(microscope: id, ...)`` as its effect (``deps.pick``), or None."""
+        callee = call.callee
+        if len(callee) != 2 or callee[1] != PICK_VERB or callee[0] not in self.markup.references:
+            return None
+        picks: list[ActionArgumentInput] = []
+        seen: set[str] = set()
+        for argument in call.arguments:
+            if argument.name is None:
+                raise self.fail("callback.positional", argument.offset, call=call.name)
+            if argument.name in seen:
+                raise self.fail("expr.duplicate_key", argument.offset, key=argument.name)
+            seen.add(argument.name)
+            picks.append(self.argument(argument.name, argument.value))
+        if not picks:
+            raise self.fail("expr.arguments", call.offset, function=call.name, detail="pick names the dependency to bind: pick(<dependency>: <agent id>)")
+        return UtilCallInput(
+            operation=PICK_FUNCTION,
+            arguments=(ActionArgumentInput(key="key", value_literal=callee[0]), ActionArgumentInput(key="picks", value_dict=tuple(picks))),
+        )
 
     def query_effect(self, call: Call) -> UtilCallInput | None:
         """``queries.<name>.refetch()`` / ``.fetch_more(k: v, ...)`` as its effect, or None."""
@@ -826,4 +871,4 @@ def parse_argument(key: str | None, text: str, *, view: BlokView | None = None) 
     return _Lowering(view or default_view(), locate, _Markup(text, locate)).argument(key, expression)
 
 
-__all__ = ["FETCH_MORE_FUNCTION", "MAX_SOURCE_BYTES", "QUERY_SUGAR", "REFETCH_FUNCTION", "jsx_text", "parse_argument", "parse_bsx", "parse_bsx_with_spans", "source_catalog"]
+__all__ = ["FETCH_MORE_FUNCTION", "MAX_SOURCE_BYTES", "PICK_FUNCTION", "QUERY_SUGAR", "REFETCH_FUNCTION", "jsx_text", "parse_argument", "parse_bsx", "parse_bsx_with_spans", "source_catalog"]

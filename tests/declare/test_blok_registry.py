@@ -5,9 +5,11 @@ import inspect
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Protocol
 
 import pytest
 
+from arkitekt_spec.actions import Execution
 from arkitekt_spec.blok.vocabulary import BlokError
 from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.blok.registry import resolved_locals
@@ -106,9 +108,47 @@ def test_a_records_returns_are_typed_by_the_action(registry: AppRegistry) -> Non
         built(registry, "bad")
 
 
-def test_an_agent_blok_reads_no_other_agent(registry: AppRegistry) -> None:
-    with pytest.raises(BlokError, match="roots.not_in_kind"):
+def test_an_agent_blok_reads_no_agent_it_does_not_declare(registry: AppRegistry) -> None:
+    with pytest.raises(BlokError, match="deps.unknown"):
         registry.register_blok("panel", panel("<Text text={deps.robot.mode} />"))
+
+
+def test_declared_dependencies_are_those_of_a_workflow(registry: AppRegistry) -> None:
+    """``<dependencies key="cells" like="self.<action>" />``: the blok reads and calls that
+    action's dependencies through the key, held to what the action demands of them. They are
+    the viewer's to bind, so the blok sends none of them."""
+
+    class Stage(Protocol):
+        position: str
+
+    @registry.declare(app="openuc")
+    class Microscope(Protocol):
+        stage: Stage
+
+        def jog(self, dx: float) -> None:
+            """Jog"""
+            ...
+
+    @registry.register(execution=Execution.WORKFLOW)
+    def analyze(microscope: Microscope) -> None:
+        """Analyze."""
+
+    cells = '<dependencies key="cells" like="self.analyze" />'
+    registry.register_blok(
+        "panel",
+        panel(
+            cells
+            + "<Card><Text>{cells.microscope.stage.position}</Text><Button onClick={cells.microscope.jog(dx: 1)}>Right</Button>"
+            + '<foreach items={cells.options.microscope} let="o" key={o.id}><Button onClick={cells.pick(microscope: o.id)}>{o.name}</Button></foreach>'
+            + "<Button onClick={self.analyze() with cells into run}>Go</Button></Card>"
+        ),
+    )
+
+    assert [dependency.key for dependency in built(registry).dependencies] == ["self"]
+
+    registry.register_blok("bad", panel(cells + "<Button onClick={cells.microscope.fly()}>Fly</Button>"))
+    with pytest.raises(BlokError, match="deps.unknown_action"):
+        built(registry, "bad")
 
 
 def test_locals_are_declared_and_bound(registry: AppRegistry) -> None:

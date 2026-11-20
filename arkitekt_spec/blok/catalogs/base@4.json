@@ -2,7 +2,7 @@
  "id": "https://arkitekt.live/catalogs/base/v4",
  "name": "base",
  "version": 4,
- "minor": 2,
+ "minor": 3,
  "extends": null,
  "description": "The base catalog: everything every renderer draws. The language's own elements (control flow, async boundaries, the Blok element, the declarations, text), the html components, the structure and run parts a host supplies, the scene and the logo shapes. A renderer speaks it whole, in the contexts it draws; functions and effects are in vocabulary.json.",
  "components": [
@@ -259,6 +259,36 @@
      "description": "Its value."
     }
    ]
+  },
+  {
+   "name": "dependencies",
+   "group": "language",
+   "description": "Declares the dependencies of one of the app's own actions for an agent blok: read and called through its key (cells.<dependency>), picked by the viewer, and handed to a run of that action with `with <key>`. A child of <Blok>; draws nothing.",
+   "context": "PANEL",
+   "children_context": null,
+   "inherits_context": true,
+   "accepts_children": false,
+   "downstream_of": [],
+   "not_downstream_of": [],
+   "text_prop": null,
+   "props": [
+    {
+     "key": "key",
+     "kind": "STRING",
+     "required": true,
+     "description": "The key they are read through, bare: cells.<dependency>."
+    },
+    {
+     "key": "like",
+     "kind": "STRING",
+     "required": true,
+     "description": "The action whose dependencies they are: self.<action>."
+    }
+   ],
+   "kinds": [
+    "agent"
+   ],
+   "since": 3
   },
   {
    "name": "#text",
@@ -10580,6 +10610,30 @@
    "kinds": [
     "assign"
    ]
+  },
+  {
+   "name": "deppicker",
+   "group": "run",
+   "description": "The ready-made picker of the agent a declared dependency is bound to: the agents that fit, the chosen one shown, always changeable. An agent blok only.",
+   "context": "PANEL",
+   "children_context": null,
+   "inherits_context": false,
+   "accepts_children": false,
+   "downstream_of": [],
+   "not_downstream_of": [],
+   "text_prop": null,
+   "props": [
+    {
+     "key": "key",
+     "kind": "STRING",
+     "required": true,
+     "description": "One dependency (`cells.microscope`), or the key alone (`cells`) for every dependency declared under it that no other picker places."
+    }
+   ],
+   "kinds": [
+    "agent"
+   ],
+   "since": 3
   },
   {
    "name": "ask",

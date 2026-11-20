@@ -57,7 +57,7 @@ def _acme(**overrides: object) -> str:
 def test_the_base_catalog_is_one_list_named_by_its_address() -> None:
     base = base_catalog()
 
-    assert (base.id, base.name, base.version, base.minor, base.extends) == (BASE_ID, "base", 4, 2, None)
+    assert (base.id, base.name, base.version, base.minor, base.extends) == (BASE_ID, "base", 4, 3, None)
     assert load_vocabulary().base_catalog == BASE_ID
     names = [component.name for component in base.components]
     assert len(names) == len(set(names))
@@ -69,9 +69,9 @@ def test_the_base_catalog_holds_every_family() -> None:
         groups.setdefault(str(component.group), set()).add(component.name)
 
     assert set(groups) == {"language", "ui", "html", "shadcn", "structure", "run", "scene", "logo"}
-    assert groups["language"] == {"if", "else", "foreach", "match", "case", "default", "fragment", "suspense", "fallback", "error", "Blok", "local", "query", "subscription", "var", "#text"}
+    assert groups["language"] == {"if", "else", "foreach", "match", "case", "default", "fragment", "suspense", "fallback", "error", "Blok", "local", "query", "subscription", "var", "dependencies", "#text"}
     assert groups["html"] == {"div", "p", "span"}
-    assert groups["run"] == {"args", "arg", "deps", "dep", "ask", "returns", "status", "timeline", "label", "description", "message", "control", "field"}
+    assert groups["run"] == {"args", "arg", "deps", "dep", "deppicker", "ask", "returns", "status", "timeline", "label", "description", "message", "control", "field"}
     assert {"Button", "List", "Time"} <= groups["ui"] and {"Chart", "Drawer", "BentoGrid", "Combobox", "DatePicker"} <= groups["shadcn"]
     assert {"Scene", "Space", "Placed", "Route"} <= groups["scene"] and "Logo" in groups["logo"]
     assert {"StructureDisplay", "StructurePicker", "StructureViewer"} == groups["structure"]

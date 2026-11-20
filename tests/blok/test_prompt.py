@@ -68,7 +68,7 @@ def test_the_roots_are_the_kinds() -> None:
     custom, agent = roots_text("custom"), roots_text("agent")
 
     assert "- deps:" in custom and "- self:" not in custom
-    assert "- self:" in agent and "- deps:" not in agent
+    assert "- self:" in agent and "- task:" not in agent
 
 
 def test_the_records_come_from_the_vocabulary() -> None:

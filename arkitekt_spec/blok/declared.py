@@ -31,8 +31,9 @@ LOCAL_COMPONENT = "local"
 QUERY_COMPONENT = "query"
 SUBSCRIPTION_COMPONENT = "subscription"
 VAR_COMPONENT = "var"
+DEPENDENCIES_COMPONENT = "dependencies"
 DECLARATION_COMPONENTS = frozenset(
-    {LOCAL_COMPONENT, QUERY_COMPONENT, SUBSCRIPTION_COMPONENT, VAR_COMPONENT}
+    {LOCAL_COMPONENT, QUERY_COMPONENT, SUBSCRIPTION_COMPONENT, VAR_COMPONENT, DEPENDENCIES_COMPONENT}
 )
 """The components that declare what a blok owns and draw nothing."""
 NAME_PROP = "name"
@@ -380,6 +381,37 @@ def _declared(node: ComponentNodeInput) -> BlokQueryInput | BlokSubscriptionInpu
         ) from None
 
 
+@dataclass(frozen=True)
+class DeclaredDependencies:
+    """A ``<dependencies key="cells" like="self.<action>" />`` of an agent blok: the
+    dependencies of one of the app's own actions, each read and called as
+    ``deps.<key>.<dependency>`` and handed to a run of that action with ``with <key>``."""
+
+    key: str
+    node: str
+    like: str | None
+    """As written; None when it is missing or no literal."""
+
+    @property
+    def action(self) -> str | None:
+        """The action when ``like`` reads ``self.<action>``."""
+        parts = self.like.split(".") if self.like else []
+        return parts[1] if len(parts) == 2 and parts[0] == "self" and parts[1] else None
+
+
+def declared_dependencies(tree: ComponentNodeInput) -> tuple[DeclaredDependencies, ...]:
+    """The keyed ``<dependencies>`` children of a blok's ``<Blok>``, in order."""
+    declared: list[DeclaredDependencies] = []
+    for child in tree.children or ():
+        if child.component != DEPENDENCIES_COMPONENT:
+            continue
+        literals = {prop.key: prop.static_value for prop in child.props or ()}
+        key, like = literals.get(KEY_PROP), literals.get(LIKE_PROP)
+        if isinstance(key, str) and key:
+            declared.append(DeclaredDependencies(key=key, node=child.id, like=like if isinstance(like, str) else None))
+    return tuple(declared)
+
+
 def declared_queries(tree: ComponentNodeInput) -> tuple[BlokQueryInput, ...]:
     """The readable ``<query>`` children of a blok's ``<Blok>``, in order."""
     return tuple(
@@ -405,6 +437,7 @@ def declared_subscriptions(tree: ComponentNodeInput) -> tuple[BlokSubscriptionIn
 __all__ = [
     "BLOK_COMPONENT",
     "DECLARATION_COMPONENTS",
+    "DEPENDENCIES_COMPONENT",
     "LIKE_PROP",
     "LOCAL_COMPONENT",
     "NAME_PROP",
@@ -412,12 +445,14 @@ __all__ = [
     "SUBSCRIPTION_COMPONENT",
     "VAR_COMPONENT",
     "BlokHeader",
+    "DeclaredDependencies",
     "blok_catalog",
     "blok_context",
     "blok_header",
     "blok_kind",
     "content",
     "declaration_problem",
+    "declared_dependencies",
     "declared_local",
     "declared_locals",
     "declared_queries",

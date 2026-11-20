@@ -52,13 +52,13 @@ def test_the_hint_says_what_the_kind_does_about_an_undeclared_dependency(kind: s
     assert findings[0].message.endswith(f"Fix: {hint}.")
 
 
-def test_an_agent_blok_reads_no_deps_at_all() -> None:
-    """An agent blok has no ``deps`` root: the kind refuses it before any key is looked up, so
-    its ``deps.unknown`` hint (``agent bloks read only `self```) is only the checker's fallback."""
+def test_an_agent_blok_reads_only_the_dependencies_it_declares() -> None:
+    """An agent blok's dependencies are in its own tree: one it does not declare is unknown
+    wherever it is mounted, and the hint says how to declare it."""
     findings = check_blok_tree(parse_bsx('<Blok kind="agent" context="panel"><Text text={deps.laser.power} /></Blok>'), BlokScope(dependencies=()))
 
-    assert [finding.code for finding in findings] == ["roots.not_in_kind"]
-    assert dependency_hint("laser", "agent") == "agent bloks read only `self`"
+    assert [finding.code for finding in findings] == ["deps.unknown"]
+    assert dependency_hint("laser", "agent") == 'declare it in the blok: <dependencies key="laser" like="self.<action>" />, then read laser.<dependency>'
 
 
 def test_a_string_on_a_typed_prop_says_how_to_write_it() -> None:

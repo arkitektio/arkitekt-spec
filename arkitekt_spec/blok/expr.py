@@ -3,7 +3,7 @@
 The same grammar is implemented in Rust (takt) and TypeScript (orkestrator) and held to one
 corpus, so it is written here without Python's :mod:`ast`::
 
-    callback   := expression ('into' name)?
+    callback   := expression ('with' name)? ('into' name)?
     expression := ternary
     ternary    := coalesce ('?' expression ':' expression)?
     coalesce   := or ('??' or)*
@@ -26,7 +26,7 @@ operands, as ``&&`` and ``||`` are one call over theirs; a parenthesized group s
 with a code of its own (arithmetic, subscripts, lambdas, assignments, sequences, ``await``).
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from arkitekt_spec.blok.vocabulary import BlokError
 
@@ -86,6 +86,9 @@ class Call:
     callee: tuple[str, ...]
     arguments: tuple[Argument, ...]
     offset: int
+    given: str | None = None
+    """``with cells`` on a task call: the dependencies the blok declares under that key
+    (``<dependencies key="cells" />``), whose agents the run gets."""
 
     @property
     def name(self) -> str:
@@ -307,8 +310,16 @@ class Locator:
 # --------------------------------------------------------------------------- parser
 
 
+REFERENCE_SEPARATOR = "__"
+"""How a read through a declared ``<dependencies key="cells" />`` is stored: ``cells.microscope``
+is the dependency ``cells__microscope`` of the blok (``deps.cells__microscope``), one segment."""
+PICK_VERB = "pick"
+"""``cells.pick(microscope: id)``: the one call a reference itself takes."""
+
+
 class _Parser:
-    def __init__(self, text: str, base: int, locate: Locator) -> None:
+    def __init__(self, text: str, base: int, locate: Locator, references: frozenset[str] = frozenset()) -> None:
+        self.references = references
         self.lexer = _Lexer(text, base, locate)
         self.tokens = self.lexer.tokens()
         self.index = 0
@@ -373,6 +384,13 @@ class _Parser:
         if self.token.kind == "name" and self.token.value == "await":
             raise self.fail("callback.await")
         expression = self.expression()
+        if self.token.kind == "name" and self.token.value == "with":
+            with_ = self.advance()
+            name = self.token
+            if not isinstance(expression, Call) or name.kind != "name" or name.value == "into":
+                raise self.fail("callback.with", with_.offset)
+            self.advance()
+            expression = replace(expression, given=name.value)
         if self.token.kind == "name" and self.token.value == "into":
             into = self.advance()
             if not isinstance(expression, Call):
@@ -499,6 +517,10 @@ class _Parser:
             segments.append(self.advance().value)
         if self.is_op("=>"):
             raise self.fail("expr.lambda")
+        # A read or a call through declared dependencies (`cells.microscope.stage`) is one of
+        # the blok's dependencies, `deps.cells__microscope`; `cells.pick(...)` stays as written.
+        if segments[0] in self.references and len(segments) > 1 and not (self.is_op("(") and segments[1:] == [PICK_VERB]):
+            segments = ["deps", f"{segments[0]}{REFERENCE_SEPARATOR}{segments[1]}", *segments[2:]]
         if not self.is_op("("):
             return Path(segments=tuple(segments), offset=first.offset)
         self.advance()
@@ -557,7 +579,7 @@ class _Parser:
         return ObjectExpr(entries=tuple(entries), offset=offset)
 
 
-def parse_expression(text: str, *, base: int = 0, locate: Locator | None = None) -> Expr:
+def parse_expression(text: str, *, base: int = 0, locate: Locator | None = None, references: frozenset[str] = frozenset()) -> Expr:
     """Parse a value expression (no ``into``).
 
     Args:
@@ -568,7 +590,7 @@ def parse_expression(text: str, *, base: int = 0, locate: Locator | None = None)
     Raises:
         BlokError: With an ``expr.*`` or ``callback.*`` code.
     """
-    parser = _Parser(text, base, locate or Locator(text))
+    parser = _Parser(text, base, locate or Locator(text), references)
     if parser.token.kind == "end":
         raise parser.fail("expr.syntax", detail="the expression is empty")
     expression = parser.expression()
@@ -576,19 +598,21 @@ def parse_expression(text: str, *, base: int = 0, locate: Locator | None = None)
     return expression
 
 
-def parse_attribute(text: str, *, base: int = 0, locate: Locator | None = None) -> Expr:
+def parse_attribute(text: str, *, base: int = 0, locate: Locator | None = None, references: frozenset[str] = frozenset()) -> Expr:
     """Parse an attribute's expression: a value, or a callback (``<call> into <name>``).
 
     Raises:
         BlokError: With an ``expr.*`` or ``callback.*`` code.
     """
-    parser = _Parser(text, base, locate or Locator(text))
+    parser = _Parser(text, base, locate or Locator(text), references)
     if parser.token.kind == "end":
         raise parser.fail("expr.syntax", detail="the expression is empty")
     return parser.callback()
 
 
 __all__ = [
+    "PICK_VERB",
+    "REFERENCE_SEPARATOR",
     "Argument",
     "Call",
     "Compare",

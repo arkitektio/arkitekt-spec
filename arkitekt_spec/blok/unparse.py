@@ -25,13 +25,15 @@ from arkitekt_spec.blok.bsx import (
     FETCH_MORE_FUNCTION,
     FOREACH,
     LEGACY_IMPLICIT_TEXTS,
+    PICK_FUNCTION,
     REFETCH_FUNCTION,
     TEMPLATE_FUNCTION,
     TEXT_NODE,
     TEXT_VALUE,
 )
 from arkitekt_spec.blok.catalogs import BlokView, default_view
-from arkitekt_spec.blok.declared import LOCAL_COMPONENT, NAME_PROP
+from arkitekt_spec.blok.declared import LOCAL_COMPONENT, NAME_PROP, declared_dependencies
+from arkitekt_spec.blok.expr import PICK_VERB, REFERENCE_SEPARATOR
 from arkitekt_spec.blok.vocabulary import JSON, load_vocabulary
 
 LINE_WIDTH = 100
@@ -46,6 +48,9 @@ _COMPARISONS = {"cmp.eq": "==", "cmp.ne": "!=", "cmp.gt": ">", "cmp.gte": ">=", 
 
 
 class _Printer:
+    references: frozenset[str] = frozenset()
+    """The keys of the `<dependencies>` the tree declares: what it reads through, bare."""
+
     def __init__(self, view: BlokView, indent: int) -> None:
         self.view = view
         self.indent = indent
@@ -125,7 +130,7 @@ class _Printer:
         if prop.dynamic_value is not None:
             if prop.dynamic_value.literal is not None or prop.dynamic_value.path is None or prop.static_value is not None:
                 return None
-            return "{" + prop.dynamic_value.path + "}"
+            return "{" + self.path(prop.dynamic_value.path) + "}"
         call = prop.util_call
         if call is not None and call.operation == TEMPLATE_FUNCTION:
             parts = _template_parts(call)
@@ -157,7 +162,7 @@ class _Printer:
             raise ValueError(f"<{node.component}> ({node.id}): {key} declares {prop.declares_value!r}, which BSX cannot spell")
         if prop.util_call is not None:
             call = prop.util_call
-            sugar = self.query_sugar(call)
+            sugar = self.pick_sugar(call) or self.query_sugar(call)
             if sugar is not None:
                 return f"{key}={{{sugar}}}"
             if key == CLASS_NAME and call.operation == CLASSES_FUNCTION and call.arguments and len(call.arguments) == 1:
@@ -168,7 +173,7 @@ class _Printer:
         if prop.dynamic_value is not None:
             if prop.dynamic_value.literal is not None or prop.dynamic_value.path is None:
                 raise ValueError(f"<{node.component}> ({node.id}): {key} has a fallback literal, which BSX cannot spell")
-            return f"{key}={{{prop.dynamic_value.path}}}"
+            return f"{key}={{{self.path(prop.dynamic_value.path)}}}"
         value = prop.static_value
         if value is True:
             return key
@@ -208,14 +213,42 @@ class _Printer:
                 variables.append(f"{variable.key}: {self.argument(variable, 0)}")
         return f"queries.{named.value_literal}.fetch_more({', '.join(variables)})"
 
+    def path(self, path: str) -> str:
+        """``path`` as BSX writes it: one through declared dependencies (stored
+        ``deps.cells__microscope.stage``) reads ``cells.microscope.stage``."""
+        parts = path.split(".")
+        if len(parts) > 1 and parts[0] == "deps":
+            key, separator, name = parts[1].partition(REFERENCE_SEPARATOR)
+            if separator and key in self.references:
+                return ".".join((key, name, *parts[2:]))
+        return path
+
+    def pick_sugar(self, call: UtilCallInput) -> str | None:
+        """``deps.pick`` as BSX writes it (``cells.pick(microscope: id)``), or None when
+        the call is not one the sugar spells."""
+        if call.operation != PICK_FUNCTION:
+            return None
+        arguments = call.arguments or ()
+        if len(arguments) != 2 or arguments[0].key != "key" or arguments[1].key != "picks":
+            return None
+        key, picks = arguments[0].value_literal, arguments[1].value_dict
+        if not isinstance(key, str) or key not in self.references or not picks:
+            return None
+        written: list[str] = []
+        for pick in picks:
+            if pick.key is None or not _IDENTIFIER.fullmatch(pick.key):
+                return None
+            written.append(f"{pick.key}: {self.argument(pick, 0)}")
+        return f"{key}.{PICK_VERB}({', '.join(written)})"
+
     def agent_call(self, call: AgentProbeInput) -> str:
-        callee = f"self.{call.operation}" if call.dependency == "self" else f"deps.{call.dependency}.{call.operation}"
+        callee = f"self.{call.operation}" if call.dependency == "self" else self.path(f"deps.{call.dependency}.{call.operation}")
         arguments: list[str] = []
         for argument in call.arguments or ():
             if argument.key is None or not _IDENTIFIER.fullmatch(argument.key):
                 raise ValueError(f"{callee}: a task call names its arguments, not {argument.key!r}")
             arguments.append(f"{argument.key}: {self.argument(argument, 0)}")
-        return f"{callee}({', '.join(arguments)})"
+        return f"{callee}({', '.join(arguments)})" + (f" with {call.given}" if call.given else "")
 
     def expression_of_call(self, call: UtilCallInput, needed: int) -> str:
         text, precedence = self.call(call)
@@ -267,7 +300,7 @@ class _Printer:
         if argument.agent_call is not None:
             raise ValueError("a task call is a callback's one thing, never an argument")
         if argument.value_path is not None:
-            return argument.value_path
+            return self.path(argument.value_path)
         if argument.util_call is not None:
             return self.expression_of_call(argument.util_call, needed)
         if argument.value_list is not None:
@@ -373,7 +406,9 @@ def to_bsx(node: ComponentNodeInput, *, view: BlokView | None = None, indent: in
             into, implicit Text where the parser would not make it).
     """
     lines: list[str] = []
-    _Printer(view or default_view(), indent).node(node, f"{node.component}[0]", 0, lines)
+    printer = _Printer(view or default_view(), indent)
+    printer.references = frozenset(declared.key for declared in declared_dependencies(node))
+    printer.node(node, f"{node.component}[0]", 0, lines)
     return "\n".join(lines)
 
 

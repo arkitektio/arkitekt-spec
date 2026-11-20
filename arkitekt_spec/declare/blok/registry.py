@@ -302,6 +302,8 @@ def build_declared_bloks(app_registry: "AppRegistry") -> dict[str, BlokImplement
         if declaration.kind == "agent":
             dependency = self_dependency(self_reads(declaration.component), app_registry)
         dependencies = (dependency,) if dependency is not None else ()
+        # What a `<dependencies like="self.<action>" />` declares: each action's own dependencies.
+        workflows = {interface: tuple(implementation.dependencies or ()) for interface, implementation in app_registry.implementations.items()}
         query_values = type_queries(
             owner,
             declared_queries(declaration.component),
@@ -322,6 +324,7 @@ def build_declared_bloks(app_registry: "AppRegistry") -> dict[str, BlokImplement
             query_values=query_values,
             assets=frozenset(app_registry.registered_assets),
             arg_ports=self_arg_ports(app_registry),
+            workflows=workflows,
         )
         # What the declaration already told (registering it) is not told again.
         for finding in check_blok_tree(declaration.component, scope, checked_view(view)):

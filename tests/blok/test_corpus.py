@@ -17,7 +17,7 @@ def test_the_corpus_says_what_it_was_parsed_with() -> None:
     corpus = build_v2()
 
     assert corpus["vocab"] == 2
-    assert corpus["minor"] == 5
+    assert corpus["minor"] == 6
     assert corpus["catalogs"] == {
         "base": "https://arkitekt.live/catalogs/base/v4",
         "bundled": {

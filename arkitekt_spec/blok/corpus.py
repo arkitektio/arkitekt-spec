@@ -46,6 +46,10 @@ VALID: Sequence[tuple[str, str]] = (
     ("an explicit id", '<Card id="ot2-monitor"><Button /></Card>'),
     ("ids by name and occurrence", "<Card>\n  <Button />\n  <Text />\n  <Button />\n</Card>"),
     ("a literal is a literal", '<Card className="p-4"><Text text="@fff" /></Card>'),
+    ("declared dependencies", '<Blok kind="agent" context="panel"><dependencies key="cells" like="self.analyze" /><Text>{cells.microscope.stage.position}</Text><Button onClick={cells.microscope.jog(dx: 1) into moved}>Right</Button></Blok>'),
+    ("a call with its dependencies", '<Blok kind="agent" context="panel"><dependencies key="cells" like="self.analyze" /><Button onClick={self.analyze(tiles: 3) with cells}>Go</Button><Button onClick={self.analyze() with cells into run}>Again</Button></Blok>'),
+    ("the options of a dependency, and a pick", '<Blok kind="agent" context="panel"><dependencies key="cells" like="self.analyze" /><foreach items={cells.options.microscope} let="o" key={o.id}><Button variant={o.picked ? "default" : "outline"} onClick={cells.pick(microscope: o.id)}>{o.name}</Button></foreach></Blok>'),
+    ("a name that is no reference reads as written", "<Card><Text>{cells.microscope.stage}</Text></Card>"),
     ("a structure identifier", '<StructurePicker identifier="@mikro/arraydataset" />'),
     ("a bare attribute is true", '<Button disabled />'),
     ("entities", '<Text text="&lt;b&gt; &amp; &#x41; &quot;q&quot;" />'),
@@ -153,6 +157,12 @@ REFUSED: Sequence[tuple[str, str, str]] = (
     ("a task call inside an expression", "<Text text={str.upper(self.go(x: 1))} />", "callback.nested"),
     ("an effect inside an expression", "<Text text={str.upper(ui.copy(x))} />", "callback.nested"),
     ("into a path", "<Button onClick={task.status into run} />", "callback.into"),
+    ("with on a path", "<Button onClick={task.status with cells} />", "callback.with"),
+    ("with on a function", "<Button onClick={str.upper(value: x) with cells} />", "callback.with"),
+    ("with on a dependency's call", "<Button onClick={deps.stage.move(x: 1) with cells} />", "callback.with"),
+    ("with no key", "<Button onClick={self.run() with} />", "callback.with"),
+    ("with an object", "<Button onClick={self.run() with {a: deps.b}} />", "callback.with"),
+    ("a pick of nothing", '<Blok kind="agent" context="panel"><dependencies key="cells" like="self.analyze" /><Button onClick={cells.pick()} /></Blok>', "expr.arguments"),
     ("into on a function", "<Button onClick={str.upper(x) into run} />", "callback.into"),
     ("arithmetic", "<Text text={a + 1} />", "expr.arithmetic"),
     ("negating a path", "<Text text={-a} />", "expr.arithmetic"),
@@ -206,6 +216,9 @@ class Check:
     """Whether it is checked against a catalog at all, or held to the language alone."""
     port: Mapping[str, JSON] | None = None
     """The port a port blok is mounted on, as a match: what ``port.value`` is typed as."""
+    workflows: Mapping[str, tuple[Mapping[str, JSON], ...]] | None = None
+    """Per action of the blok's own agent, that action's dependencies: what an agent blok's
+    ``<dependency>`` borrows from; None: not known where it is checked."""
 
 
 _ROBOT: Mapping[str, JSON] = {
@@ -247,14 +260,46 @@ _TO: Mapping[str, JSON] = {
     "key": "self",
     "action_dependencies": [{"key": "move", "demand": {"arg_matches": [{"key": "to", "kind": "INT"}]}}],
 }
+_MICROSCOPE: Mapping[str, JSON] = {
+    "key": "microscope",
+    "app": "openuc",
+    "action_dependencies": [{"key": "jog", "demand": {"arg_matches": [{"key": "dx", "kind": "FLOAT"}]}}],
+    "state_dependencies": [{"key": "stage", "demand": {"matches": [{"key": "position", "kind": "STRING"}]}}],
+}
+_CAMERA_ONLY: Mapping[str, JSON] = {"key": "camera", "app": "openuc", "action_dependencies": [{"key": "snap", "demand": {}}]}
+_OTHER_APP: Mapping[str, JSON] = {**_MICROSCOPE, "key": "stage", "app": "thorlabs"}
+_WORKFLOWS: Mapping[str, tuple[Mapping[str, JSON], ...]] = {
+    "analyze": (_MICROSCOPE, _CAMERA_ONLY),
+    "scan": (_OTHER_APP,),
+    "plain": (),
+    "awkward": ({**_MICROSCOPE, "key": "options"},),
+}
+_CELLS = '<Blok kind="agent" context="panel"><dependencies key="cells" like="self.analyze" />'
 _PANEL = '<Blok kind="agent" context="panel">'
 _PORT = '<Blok kind="port" context="panel">'
 _EXPOSURE: Mapping[str, JSON] = {"key": "exposure", "kind": "FLOAT", "nullable": False}
 _REGION: Mapping[str, JSON] = {"key": "region", "kind": "MODEL", "children": [{"key": "x", "kind": "INT"}, {"key": "y", "kind": "INT"}]}
 
 CHECKS: Sequence[Check] = (
+    Check('an agent blok reads, calls and hands over the dependencies it declares', f'{_CELLS}<Card><Text>{{cells.microscope.stage.position}}</Text><Text>{{cells.microscope.connected ? "on" : "off"}}</Text><Button onClick={{cells.microscope.jog(dx: 100) into moved}}>Right</Button><Button onClick={{cells.camera.snap()}}>Snap</Button><Button onClick={{self.analyze() with cells into run}}>Analyze</Button></Card></Blok>', (), workflows=_WORKFLOWS),
+    Check('custom pickers of declared dependencies', f'{_CELLS}<Card><foreach items={{cells.options.microscope}} let="o" key={{o.id}}><Button disabled={{!o.connected}} variant={{o.picked ? "default" : "outline"}} onClick={{cells.pick(microscope: o.id)}}>{{o.name}}</Button></foreach><deppicker key="cells.camera" /><deppicker key="cells" /></Card></Blok>', (), workflows=_WORKFLOWS),
+    Check('declared dependencies, their action not known here', f'{_CELLS}<Card><Text>{{cells.anything.at_all}}</Text><Text>{{list.len(value: cells.options.whatever)}}</Text><Button onClick={{cells.pick(whatever: "1")}} /><Button onClick={{self.analyze() with cells}} /><deppicker key="cells.whatever" /></Card></Blok>', (), dependencies=None),
+    Check('declared dependencies are held to their action', f'{_CELLS}<Card><Text>{{cells.microscope.camera.live}}</Text><Button onClick={{cells.microscope.fly()}} /><Text>{{cells.laser.power}}</Text><Button onClick={{cells.laser.fire()}} /></Card></Blok>', ("deps.unknown_state", "deps.unknown_action", "deps.unknown", "deps.unknown"), workflows=_WORKFLOWS),
+    Check('an option has four fields', f'{_CELLS}<foreach items={{cells.options.microscope}} let="o" key={{o.id}}><Text>{{o.stage}}</Text></foreach></Blok>', ("path.unknown",), workflows=_WORKFLOWS),
+    Check('options and a pick of no dependency', f'{_CELLS}<Card><Text>{{list.len(value: cells.options.laser)}}</Text><Button onClick={{cells.pick(laser: "1")}} /><deppicker key="cells.laser" /><deppicker key="other" /></Card></Blok>', ("deps.unknown", "deps.unknown", "deps.unknown", "deps.unknown"), workflows=_WORKFLOWS),
+    Check('dependencies like no action of the app', '<Blok kind="agent" context="panel"><dependencies key="cells" like="self.nothing" /><Text>{cells.microscope.stage.position}</Text></Blok>', ("dependencies.like",), workflows=_WORKFLOWS),
+    Check('dependencies like an action with none', '<Blok kind="agent" context="panel"><dependencies key="cells" like="self.plain" /><Card /></Blok>', ("dependencies.like",), workflows=_WORKFLOWS),
+    Check('dependencies like an action with one called options', '<Blok kind="agent" context="panel"><dependencies key="cells" like="self.awkward" /><Card /></Blok>', ("dependencies.like",), workflows=_WORKFLOWS),
+    Check('dependencies like something else', '<Blok kind="agent" context="panel"><dependencies key="cells" like="self.analyze.microscope" /><Card /></Blok>', ("dependencies.like",), dependencies=None),
+    Check('dependencies without a like', '<Blok kind="agent" context="panel"><dependencies key="cells" /><Card /></Blok>', ("dependencies.like",), dependencies=None, catalog=False),
+    Check('dependencies declared twice', f'{_CELLS}<dependencies key="cells" like="self.scan" /><Card /></Blok>', ("dependencies.key",), workflows=_WORKFLOWS),
+    Check('dependencies keyed self', '<Blok kind="agent" context="panel"><dependencies key="self" like="self.analyze" /><Card /></Blok>', ("dependencies.key",), workflows=_WORKFLOWS),
+    Check('dependencies below the top', '<Blok kind="agent" context="panel"><Card><dependencies key="cells" like="self.analyze" /></Card></Blok>', ("dependencies.position",), workflows=_WORKFLOWS, catalog=False),
+    Check('dependencies in an action blok', '<Blok kind="action" context="panel"><dependencies key="cells" like="self.analyze" /><Card /></Blok>', ("dependencies.position",), catalog=False),
+    Check('with the dependencies of another action', f'{_CELLS}<Button onClick={{self.scan() with cells}} /></Blok>', ("with.mismatch",), workflows=_WORKFLOWS),
+    Check('with dependencies the blok does not declare', f'{_CELLS}<Button onClick={{self.analyze() with other}} /></Blok>', ("deps.unknown",), workflows=_WORKFLOWS),
     Check('a clean agent blok', '<Blok kind="agent" context="panel"><Card><Text>{self.arm.mode}</Text><Button onClick={self.move_to(position: 1) into move}>Go</Button><Progress value={move.progress} /></Card></Blok>', (), dependencies=(_SELF,)),
-    Check('deps in an agent blok', '<Blok kind="agent" context="panel"><Text text={deps.robot.arm.mode} /></Blok>', ("roots.not_in_kind",), dependencies=(_ROBOT,)),
+    Check('an undeclared dependency in an agent blok', '<Blok kind="agent" context="panel"><Text text={deps.robot.arm.mode} /></Blok>', ("deps.unknown",), dependencies=(_ROBOT,)),
     Check('self in a custom blok', '<Blok kind="custom" context="panel"><Text text={self.arm.mode} /></Blok>', ("roots.not_in_kind",), dependencies=(_ROBOT,)),
     Check('task in an agent blok', '<Blok kind="agent" context="panel"><Text text={task.status} /></Blok>', ("roots.not_in_kind",)),
     Check('an action logo reads only task', '<Blok kind="action" context="logo"><Logo><Path d="M0 0" fill={task.running ? "brand" : "muted"} stroke={viewer.user.id} /></Logo></Blok>', ("roots.not_in_kind",)),
@@ -417,7 +462,7 @@ CHECKS: Sequence[Check] = (
     # Mounted nowhere: what a mount provides is taken as written.
     Check("unmounted, dependencies are open", '<Blok kind="action" context="panel"><Text>{deps.robot.arm.mode}</Text><Button onClick={deps.stage.move(x: 1)} /></Blok>', (), dependencies=None),
     Check("unmounted, a placed key is open", '<Blok kind="action" context="scene"><Space room="room:lab"><Placed dep="arm" /></Space></Blok>', (), dependencies=None),
-    Check("unmounted, the kind's roots still hold", '<Blok kind="agent" context="panel"><Text>{deps.robot.arm.mode}</Text></Blok>', ("roots.not_in_kind",), dependencies=None),
+    Check("unmounted, an agent blok still reads only the dependencies it declares", '<Blok kind="agent" context="panel"><Text>{deps.robot.arm.mode}</Text></Blok>', ("deps.unknown",), dependencies=None),
     Check("unmounted, a local is still checked", '<Blok kind="action" context="panel"><local name="show" default={true} persist /><Switch bind={shw} /></Blok>', ("local.unknown", "roots.unknown", "local.unused_persist"), dependencies=None),
     Check("unmounted, like borrows nothing", '<Blok kind="action" context="panel"><local name="p" like="deps.robot.move_to.position" /><Text>{p}</Text></Blok>', (), dependencies=None),
     # Locals in scope.
@@ -465,6 +510,7 @@ def _mount(check: Check) -> dict[str, JSON]:
         "args": list(check.args) if check.args is not None else None,
         "catalog": check.catalog,
         "port": dict(check.port) if check.port is not None else None,
+        "workflows": {action: [dict(dependency) for dependency in dependencies] for action, dependencies in check.workflows.items()} if check.workflows is not None else None,
     }
 
 
@@ -492,13 +538,17 @@ def _check_scope(check: Check) -> "BlokScope":
         dependencies=tuple(AgentDependencyInput.model_validate(dict(d)) for d in check.dependencies) if check.dependencies is not None else None,
         args=check.args,
         port=PortMatchInput.model_validate(dict(check.port)) if check.port is not None else None,
+        workflows={action: tuple(AgentDependencyInput.model_validate(dict(d)) for d in dependencies) for action, dependencies in check.workflows.items()}
+        if check.workflows is not None
+        else None,
     )
 
 
 def _resolved(check: Check, view: BlokView | None) -> dict[str, JSON]:
     from arkitekt_spec.declare.blok.infer import resolve_locals
+    from arkitekt_spec.declare.blok.validate import bound_scope
 
-    scope = _check_scope(check)
+    scope = bound_scope(_parse(check), _check_scope(check))
     locals_ = resolve_locals(_parse(check), scope.dependencies, view)
     return {"locals": {node: each.local.model_dump(mode="json", exclude_none=True) for node, each in locals_.items()}}
 
