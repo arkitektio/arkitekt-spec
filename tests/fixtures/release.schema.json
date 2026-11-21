@@ -4028,6 +4028,19 @@
           "description": "The service type that fills the key, in reverse-domain form (e.g. 'live.arkitekt.mikro').",
           "title": "Service",
           "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The versions of the service the app was written for, as a specifier ('>=12.1,<14'). Advisory: the platform says when its instance is outside it, and hands it out anyway.",
+          "title": "Version"
         }
       },
       "required": [

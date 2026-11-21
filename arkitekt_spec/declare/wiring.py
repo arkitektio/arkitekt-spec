@@ -288,11 +288,15 @@ class Require:
         service: The service that fills the key, in reverse domain naming.
         description: What it is, shown to the user when access is asked for.
         optional: Whether the client still works without it.
+        version: The versions of the service the client was written for, as a
+            specifier (``">=12.1"``). Advisory: a floor, raised only when the client
+            starts to use something older servers lack.
     """
 
     service: str
     description: str | None = None
     optional: bool = False
+    version: str | None = None
 
     def to_requirement(self, key: str) -> Requirement:
         """Build the requirement this marks, keyed by the parameter's name.
@@ -308,6 +312,7 @@ class Require:
             service=self.service,
             optional=self.optional,
             description=self.description,
+            version=self.version,
         )
 
 

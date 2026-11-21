@@ -29,6 +29,12 @@ class Requirement(WireModel):
     description: str | None = Field(
         default=None, description="Why the app needs the service, shown to the user."
     )
+    version: str | None = Field(
+        default=None,
+        description="The versions of the service the app was written for, as a specifier "
+        "('>=12.1,<14'). Advisory: the platform says when its instance is outside it, "
+        "and hands it out anyway.",
+    )
 
 
 class AppManifest(WireModel):
