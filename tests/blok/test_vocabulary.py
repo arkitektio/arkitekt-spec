@@ -33,7 +33,7 @@ def test_then_replaces_now_in_every_kind_but_the_action_logo() -> None:
 def test_catalogs_are_versioned_and_kinds_compatible() -> None:
     vocabulary = load_vocabulary()
 
-    assert (vocabulary.vocab, vocabulary.minor) == (2, 6)
+    assert (vocabulary.vocab, vocabulary.minor) == (2, 7)
     assert vocabulary.base_catalog == "https://arkitekt.live/catalogs/base/v4"
     assert list(vocabulary.bundled_catalogs.values()) == ["catalogs/base@4.json", "catalogs/orkestrator@1.json"]
     assert vocabulary.host_parts == ("args", "arg", "deps", "dep", "ask", "returns", "status", "timeline", "label", "description", "message", "control", "field")
@@ -54,7 +54,8 @@ def test_the_root_matrix_is_the_designs() -> None:
 
     # An agent blok's deps are the ones it declares itself (`<dependencies>`).
     assert {"self", "deps"} <= kinds["agent"].roots and "task" not in kinds["agent"].roots
-    assert "self" not in kinds["custom"].roots and "deps" in kinds["custom"].roots
+    # A custom blok writes its bound agents `agents.<key>`; they are stored `deps.<key>`.
+    assert not {"self", "deps"} & kinds["custom"].roots and kinds["custom"].reads("deps")
     assert {"self", "deps", "args", "task"} <= kinds["task"].roots
     assert kinds["action"].contexts == ("PANEL", "SCENE", "LOGO")
     # Before a run there is no task to read, and no past to travel to.

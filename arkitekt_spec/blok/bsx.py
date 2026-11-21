@@ -44,6 +44,7 @@ from arkitekt_spec.actions import (
 )
 from arkitekt_spec.blok.catalogs import BlokView, blok_view, default_view, known_catalog
 from arkitekt_spec.blok.expr import (
+    AGENTS_ROOT,
     PICK_VERB,
     Call,
     Compare,
@@ -79,8 +80,10 @@ TEMPLATE_FUNCTION = "str.template"
 ELSE = "else"
 IF = "if"
 FOREACH = "foreach"
+BLOK = "Blok"
 LOCAL = "local"
 LOCAL_NAME = "name"
+LIKE = "like"
 REFETCH_FUNCTION = "query.refetch"
 FETCH_MORE_FUNCTION = "query.fetch_more"
 QUERY_SUGAR = {"refetch": REFETCH_FUNCTION, "fetch_more": FETCH_MORE_FUNCTION}
@@ -135,9 +138,13 @@ class _Markup:
         self.index = 0
         self.references: set[str] = set()
         """The keys of the `<dependencies>` read so far: what a later expression may read through."""
+        self.custom = False
+        """Whether the root is a custom blok: its bound agents are written `agents.<key>`."""
 
     def declares(self, element: _Element) -> None:
         """A `<dependencies key="cells" />` is read through from here on (`cells.microscope`)."""
+        if element.name == BLOK:
+            self.custom = any(attribute.name == "kind" and attribute.value == "custom" for attribute in element.attributes)
         if element.name != DEPENDENCIES:
             return
         key = next((attribute.value for attribute in element.attributes if attribute.name == "key"), None)
@@ -244,7 +251,7 @@ class _Markup:
             self.index = end + 1
             if not inner.strip():
                 raise self.fail("expr.syntax", start, detail=f"the value of {name} is empty")
-            expression = parse_attribute(inner, base=start, locate=self.locate, references=frozenset(self.references))
+            expression = parse_attribute(inner, base=start, locate=self.locate, references=frozenset(self.references), custom=self.custom)
             return _Attribute(name=name, value=expression, offset=offset)
         raise self.fail("bsx.syntax", detail=f'{name}= takes "a string" or {{an expression}}')
 
@@ -303,7 +310,7 @@ class _Markup:
                 stripped = inner.strip()
                 if not stripped or (stripped.startswith("/*") and stripped.endswith("*/")):
                     continue
-                element.children.append(_Container(expression=parse_expression(inner, base=start, locate=self.locate, references=frozenset(self.references)), offset=offset))
+                element.children.append(_Container(expression=parse_expression(inner, base=start, locate=self.locate, references=frozenset(self.references), custom=self.custom), offset=offset))
                 continue
             if self.at("}"):
                 raise self.fail("bsx.syntax", detail="unexpected '}' in text; write {'}'}")
@@ -520,6 +527,8 @@ class _Lowering:
         if isinstance(value, bool):
             return ComponentPropInput(key=attribute.name, static_value=value)
         if isinstance(value, str):
+            if attribute.name == LIKE and component in (LOCAL, DEPENDENCIES) and self.markup.custom:
+                value = self.custom_like(value, attribute.offset)
             if attribute.name in ("let", "index") and component == FOREACH:
                 return ComponentPropInput(key=attribute.name, static_value=value, declares_value=value)
             return ComponentPropInput(key=attribute.name, static_value=value)
@@ -528,6 +537,13 @@ class _Lowering:
         if attribute.name == "index" and component == FOREACH:
             raise self.fail("bsx.index", attribute.offset, index="{...}")
         return self.value(attribute.name, value, attribute.offset)
+
+    def custom_like(self, like: str, offset: int) -> str:
+        """A custom blok's ``like="agents.<key>..."`` as it is stored: ``deps.<key>...``."""
+        root, _, rest = like.partition(".")
+        if root == "deps":
+            raise self.fail("roots.custom_deps", offset, path=like)
+        return f"deps.{rest}" if root == AGENTS_ROOT and rest else like
 
     def value(self, key: str, expression: Expr, offset: int) -> ComponentPropInput:
         if isinstance(expression, Into):
@@ -585,7 +601,8 @@ class _Lowering:
 
     def agent_call(self, call: Call) -> AgentProbeInput | None:
         """A task call (``self.<action>(...)``, ``deps.<key>.<action>(...)``; one through declared
-        dependencies, ``cells.microscope.jog(...)``, was read as the latter), or None."""
+        dependencies, ``cells.microscope.jog(...)``, or to a custom blok's ``agents.<key>``, was
+        read as the latter), or None."""
         callee = call.callee
         if callee[0] == "self" and len(callee) == 2:
             dependency, operation = "self", callee[1]
@@ -595,8 +612,6 @@ class _Lowering:
             if call.given is not None:
                 raise self.fail("callback.with", call.offset)
             return None
-        if call.given is not None and dependency != "self":
-            raise self.fail("callback.with", call.offset)
         arguments: list[ActionArgumentInput] = []
         seen: set[str] = set()
         for argument in call.arguments:

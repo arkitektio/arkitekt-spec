@@ -310,6 +310,8 @@ class Locator:
 # --------------------------------------------------------------------------- parser
 
 
+AGENTS_ROOT = "agents"
+"""How a custom blok writes an agent it is bound to: ``agents.<key>``, stored ``deps.<key>``."""
 REFERENCE_SEPARATOR = "__"
 """How a read through a declared ``<dependencies key="cells" />`` is stored: ``cells.microscope``
 is the dependency ``cells__microscope`` of the blok (``deps.cells__microscope``), one segment."""
@@ -318,8 +320,10 @@ PICK_VERB = "pick"
 
 
 class _Parser:
-    def __init__(self, text: str, base: int, locate: Locator, references: frozenset[str] = frozenset()) -> None:
+    def __init__(self, text: str, base: int, locate: Locator, references: frozenset[str] = frozenset(), custom: bool = False) -> None:
         self.references = references
+        self.custom = custom
+        """In a custom blok: its bound agents are written ``agents.<key>`` (stored ``deps.<key>``)."""
         self.lexer = _Lexer(text, base, locate)
         self.tokens = self.lexer.tokens()
         self.index = 0
@@ -521,6 +525,10 @@ class _Parser:
         # the blok's dependencies, `deps.cells__microscope`; `cells.pick(...)` stays as written.
         if segments[0] in self.references and len(segments) > 1 and not (self.is_op("(") and segments[1:] == [PICK_VERB]):
             segments = ["deps", f"{segments[0]}{REFERENCE_SEPARATOR}{segments[1]}", *segments[2:]]
+        elif self.custom and segments[0] == AGENTS_ROOT:
+            segments[0] = "deps"
+        elif self.custom and segments[0] == "deps":
+            raise self.fail("roots.custom_deps", first.offset, path=".".join(segments))
         if not self.is_op("("):
             return Path(segments=tuple(segments), offset=first.offset)
         self.advance()
@@ -579,7 +587,7 @@ class _Parser:
         return ObjectExpr(entries=tuple(entries), offset=offset)
 
 
-def parse_expression(text: str, *, base: int = 0, locate: Locator | None = None, references: frozenset[str] = frozenset()) -> Expr:
+def parse_expression(text: str, *, base: int = 0, locate: Locator | None = None, references: frozenset[str] = frozenset(), custom: bool = False) -> Expr:
     """Parse a value expression (no ``into``).
 
     Args:
@@ -590,7 +598,7 @@ def parse_expression(text: str, *, base: int = 0, locate: Locator | None = None,
     Raises:
         BlokError: With an ``expr.*`` or ``callback.*`` code.
     """
-    parser = _Parser(text, base, locate or Locator(text), references)
+    parser = _Parser(text, base, locate or Locator(text), references, custom)
     if parser.token.kind == "end":
         raise parser.fail("expr.syntax", detail="the expression is empty")
     expression = parser.expression()
@@ -598,13 +606,13 @@ def parse_expression(text: str, *, base: int = 0, locate: Locator | None = None,
     return expression
 
 
-def parse_attribute(text: str, *, base: int = 0, locate: Locator | None = None, references: frozenset[str] = frozenset()) -> Expr:
+def parse_attribute(text: str, *, base: int = 0, locate: Locator | None = None, references: frozenset[str] = frozenset(), custom: bool = False) -> Expr:
     """Parse an attribute's expression: a value, or a callback (``<call> into <name>``).
 
     Raises:
         BlokError: With an ``expr.*`` or ``callback.*`` code.
     """
-    parser = _Parser(text, base, locate or Locator(text), references)
+    parser = _Parser(text, base, locate or Locator(text), references, custom)
     if parser.token.kind == "end":
         raise parser.fail("expr.syntax", detail="the expression is empty")
     return parser.callback()

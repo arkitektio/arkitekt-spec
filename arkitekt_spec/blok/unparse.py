@@ -20,11 +20,14 @@ from arkitekt_spec.actions import (
     UtilCallInput,
 )
 from arkitekt_spec.blok.bsx import (
+    BLOK,
     CLASS_NAME,
     CLASSES_FUNCTION,
+    DEPENDENCIES,
     FETCH_MORE_FUNCTION,
     FOREACH,
     LEGACY_IMPLICIT_TEXTS,
+    LIKE,
     PICK_FUNCTION,
     REFETCH_FUNCTION,
     TEMPLATE_FUNCTION,
@@ -33,7 +36,7 @@ from arkitekt_spec.blok.bsx import (
 )
 from arkitekt_spec.blok.catalogs import BlokView, default_view
 from arkitekt_spec.blok.declared import LOCAL_COMPONENT, NAME_PROP, declared_dependencies
-from arkitekt_spec.blok.expr import PICK_VERB, REFERENCE_SEPARATOR
+from arkitekt_spec.blok.expr import AGENTS_ROOT, PICK_VERB, REFERENCE_SEPARATOR
 from arkitekt_spec.blok.vocabulary import JSON, load_vocabulary
 
 LINE_WIDTH = 100
@@ -50,6 +53,8 @@ _COMPARISONS = {"cmp.eq": "==", "cmp.ne": "!=", "cmp.gt": ">", "cmp.gte": ">=", 
 class _Printer:
     references: frozenset[str] = frozenset()
     """The keys of the `<dependencies>` the tree declares: what it reads through, bare."""
+    custom: bool = False
+    """Whether the tree is a custom blok: its bound agents (stored `deps.<key>`) are written `agents.<key>`."""
 
     def __init__(self, view: BlokView, indent: int) -> None:
         self.view = view
@@ -178,6 +183,8 @@ class _Printer:
         if value is True:
             return key
         if isinstance(value, str):
+            if self.custom and key == LIKE and node.component in (LOCAL_COMPONENT, DEPENDENCIES) and value.startswith("deps."):
+                value = f"{AGENTS_ROOT}.{value.removeprefix('deps.')}"
             return f"{key}={_quoted(value)}"
         if isinstance(value, (list, dict)) and key == CLASS_NAME:
             raise ValueError(f"<{node.component}> ({node.id}): a static className list reads back as str.classes")
@@ -221,6 +228,8 @@ class _Printer:
             key, separator, name = parts[1].partition(REFERENCE_SEPARATOR)
             if separator and key in self.references:
                 return ".".join((key, name, *parts[2:]))
+            if self.custom:
+                return ".".join((AGENTS_ROOT, *parts[1:]))
         return path
 
     def pick_sugar(self, call: UtilCallInput) -> str | None:
@@ -408,6 +417,7 @@ def to_bsx(node: ComponentNodeInput, *, view: BlokView | None = None, indent: in
     lines: list[str] = []
     printer = _Printer(view or default_view(), indent)
     printer.references = frozenset(declared.key for declared in declared_dependencies(node))
+    printer.custom = node.component == BLOK and any(prop.key == "kind" and prop.static_value == "custom" for prop in node.props or ())
     printer.node(node, f"{node.component}[0]", 0, lines)
     return "\n".join(lines)
 

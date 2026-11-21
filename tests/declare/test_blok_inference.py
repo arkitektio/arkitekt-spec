@@ -27,19 +27,19 @@ class CreateBlok(CreateBlokInputTrait):
 
 def test_a_custom_blok_must_declare_the_dependencies_it_reads() -> None:
     with pytest.raises(ValidationError, match=r"'stage' is not a dependency of the blok .*Fix: dependencies=\[AgentDependencyInput\(key=\"stage\"\)\]"):
-        CreateBlok(source=f"{CUSTOM}<Button onClick={{deps.stage.home()}} /></Blok>")
+        CreateBlok(source=f"{CUSTOM}<Button onClick={{agents.stage.home()}} /></Blok>")
 
 
 def test_a_declared_dependency_says_its_demands() -> None:
     robot = AgentDependencyInput(key="robot", state_dependencies=())
     with pytest.raises(ValidationError, match="deps.unknown_state"):
-        CreateBlok(source=f"{CUSTOM}<Text text={{deps.robot.arm.mode}} /></Blok>", dependencies=[robot])
+        CreateBlok(source=f"{CUSTOM}<Text text={{agents.robot.arm.mode}} /></Blok>", dependencies=[robot])
 
 
 @pytest.mark.parametrize(
     ("kind", "source", "hint"),
     [
-        ("custom", "<Text text={deps.laser.power} />", 'dependencies=[AgentDependencyInput(key="laser")]'),
+        ("custom", "<Text text={agents.laser.power} />", 'dependencies=[AgentDependencyInput(key="laser")]'),
         ("task", "<Text text={deps.laser.power} />", 'dependencies=[AgentDependencyInput(key="laser")]'),
         ("action", "<Text text={deps.laser.power} />", "add a dependency parameter `laser` to the action"),
         ("action", "<Button onClick={deps.laser.fire()} />", "add a dependency parameter `laser` to the action"),

@@ -67,7 +67,7 @@ def test_an_effect_on_the_task_is_listed_only_where_the_blok_reads_one() -> None
 def test_the_roots_are_the_kinds() -> None:
     custom, agent = roots_text("custom"), roots_text("agent")
 
-    assert "- deps:" in custom and "- self:" not in custom
+    assert "- agents:" in custom and "- deps:" not in custom and "- self:" not in custom
     assert "- self:" in agent and "- task:" not in agent
 
 

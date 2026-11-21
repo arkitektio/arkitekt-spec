@@ -263,7 +263,7 @@
   {
    "name": "dependencies",
    "group": "language",
-   "description": "Declares the dependencies of one of the app's own actions for an agent blok: read and called through its key (cells.<dependency>), picked by the viewer, and handed to a run of that action with `with <key>`. A child of <Blok>; draws nothing.",
+   "description": "Declares the dependencies of one action, for an agent blok one of the app's own, for a custom blok one of an agent it is bound to: read and called through its key (cells.<dependency>), picked by the viewer, and handed to a run of that action with `with <key>`. A child of <Blok>; draws nothing.",
    "context": "PANEL",
    "children_context": null,
    "inherits_context": true,
@@ -282,11 +282,12 @@
      "key": "like",
      "kind": "STRING",
      "required": true,
-     "description": "The action whose dependencies they are: self.<action>."
+     "description": "The action whose dependencies they are: self.<action>, in a custom blok agents.<name>.<action>."
     }
    ],
    "kinds": [
-    "agent"
+    "agent",
+    "custom"
    ],
    "since": 3
   },
@@ -10614,7 +10615,7 @@
   {
    "name": "deppicker",
    "group": "run",
-   "description": "The ready-made picker of the agent a declared dependency is bound to: the agents that fit, the chosen one shown, always changeable. An agent blok only.",
+   "description": "The ready-made picker of the agent a declared dependency is bound to: the agents that fit, the chosen one shown, always changeable. In an agent or a custom blok.",
    "context": "PANEL",
    "children_context": null,
    "inherits_context": false,
@@ -10631,7 +10632,8 @@
     }
    ],
    "kinds": [
-    "agent"
+    "agent",
+    "custom"
    ],
    "since": 3
   },

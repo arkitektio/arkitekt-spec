@@ -108,13 +108,17 @@ def _first_sentence(text: str | None) -> str:
     return head + ("." if dot else "")
 
 
-def syntax() -> str:
-    """The hand-written part: how BSX reads, with the roots and colour roles filled in."""
+def syntax(kind: str = "agent") -> str:
+    """The hand-written part: how BSX reads, with the roots and colour roles filled in. For a
+    custom blok the agents it is bound to are written as it writes them: ``agents.<key>``."""
     vocabulary = load_vocabulary()
     kinds = ", ".join(vocabulary.kinds)
     contexts = ", ".join(vocabulary.blok.contexts)
     colours = " ".join(f"bg-{role}" for role in vocabulary.theme.status_roles[:3]) or "bg-muted"
-    return SYNTAX.format(vocab=vocabulary.vocab, kinds=kinds, contexts=contexts, colours=f"bg-muted, text-muted-foreground, {colours}")
+    text = SYNTAX.format(vocab=vocabulary.vocab, kinds=kinds, contexts=contexts, colours=f"bg-muted, text-muted-foreground, {colours}")
+    if kind != "custom":
+        return text
+    return text.replace("deps.", "agents.").replace("agents.unbound", "deps.unbound").replace('like="self.analyze"', 'like="agents.<key>.analyze"').replace("self.analyze()", "agents.<key>.analyze()")
 
 
 def roots_text(kind: str) -> str:
@@ -261,7 +265,7 @@ def functions_text(view: BlokView, kind: str | None = None) -> str:
         function
         for function in view.functions.values()
         # An effect named after a root (task.cancel, assign.start) only where the blok reads it.
-        if function.effect and (roots is None or function.name.split(".", 1)[0] not in load_vocabulary().data_roots or function.name.split(".", 1)[0] in roots)
+        if function.effect and (roots is None or function.name.split(".", 1)[0] not in load_vocabulary().data_roots or (kind is not None and load_vocabulary().kinds[kind].reads(function.name.split(".", 1)[0])))
     ]
     lines = ["Functions (call with named arguments, `?` optional):"]
     lines += [f"- {function_signature(function)}" for function in pure]
@@ -290,7 +294,7 @@ def blok_prompt(
         examples: Sources shown as they are; the caller checks they validate.
     """
     resolved = view or default_view()
-    sections = [syntax(), roots_text(kind), records_text(kind), components_text(resolved, context, components, kind), functions_text(resolved, kind)]
+    sections = [syntax(kind), roots_text(kind), records_text(kind), components_text(resolved, context, components, kind), functions_text(resolved, kind)]
     for example in examples:
         sections.append(f"An example:\n```xml\n{example}\n```")
     return "\n\n".join(sections)
