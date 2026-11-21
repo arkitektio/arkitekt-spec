@@ -289,8 +289,8 @@ class Require:
         description: What it is, shown to the user when access is asked for.
         optional: Whether the client still works without it.
         version: The versions of the service the client was written for, as a
-            specifier (``">=12.1"``). Advisory: a floor, raised only when the client
-            starts to use something older servers lack.
+            specifier (``">=12.1,<13"``). Advisory. A client takes it from what its
+            release was tested against (:func:`arkitekt_spec.declare.tested.tested_against`).
     """
 
     service: str
