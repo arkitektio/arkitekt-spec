@@ -32,6 +32,7 @@ from arkitekt_spec.declare.protocol.types import (
     StartupFunction,
 )
 from arkitekt_spec.declare.state.utils import (
+    get_resolved_return_annotation,
     get_return_length,
     is_empty_type,
     prepare_previous_state_variables,
@@ -84,10 +85,16 @@ class StartupWithVariables(WithVariables):
 
     def validate_returns(self, func: AnyFunction) -> None:
         allowed_return_types = self.state_returns.count + self.context_returns.count
-        if get_return_length(inspect.signature(func)) > allowed_return_types:
+        # Resolved, so a string ``-> None`` counts as no return, like a missing one.
+        return_length = get_return_length(
+            inspect.signature(func).replace(
+                return_annotation=get_resolved_return_annotation(func)
+            )
+        )
+        if return_length > allowed_return_types:
             raise ValueError(
                 f"Startup function {func.__name__} has more return values than the context and state variables. "
-                f"Expected at most {allowed_return_types} return values, but got {get_return_length(inspect.signature(func))}."
+                f"Expected at most {allowed_return_types} return values, but got {return_length}."
             )
 
 
@@ -157,15 +164,9 @@ class ShutdownWithVariables(WithVariables):
     hook_kind = "Shutdown"
 
     def validate_returns(self, func: AnyFunction) -> None:
-        # Resolve the hints first: an unresolved ``-> None`` annotation is the literal
-        # None, which get_return_length would count as a return value.
-        try:
-            hints = get_type_hints(func, include_extras=True)
-        except Exception:
-            hints = {}
-        returns = hints.get("return", inspect.signature(func).return_annotation)
+        returns = get_resolved_return_annotation(func)
 
-        if not (is_none_type(returns) or is_empty_type(returns)):
+        if not (returns is None or is_none_type(returns) or is_empty_type(returns)):
             raise ValueError(
                 f"Shutdown function {func.__name__} must not return anything, but returns {returns}. "
                 "The agent is tearing down, so returned states and contexts would never be used."

@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from arkitekt_spec.declare.structures.registry import StructureRegistry
 
 
-def is_empty_type(cls: type) -> bool:
+def is_empty_type(cls: object) -> bool:
     """Check if the annotation is an empty type.
 
     Args:
@@ -55,12 +55,32 @@ def get_return_length(signature: inspect.Signature) -> int:
 
     if is_tuple(returns):
         return len(get_non_null_variants(returns))
-    if is_none_type(returns):
+    # An unresolved ``-> None`` is the literal None, a resolved one NoneType: both
+    # say the function returns nothing, exactly like no annotation at all.
+    if returns is None or is_none_type(returns):
         return 0
     if is_empty_type(returns):
         return 0
     else:
         return 1
+
+
+def get_resolved_return_annotation(function: AnyFunction) -> object:
+    """The return annotation of ``function``, resolved like its parameters are.
+
+    String annotations (``from __future__ import annotations``) are resolved through
+    :func:`typing.get_type_hints`; when they cannot be, the raw annotation is kept.
+
+    Args:
+        function: The function to inspect.
+    Returns:
+        The return annotation, ``inspect.Signature.empty`` when it has none.
+    """
+    try:
+        hints = get_type_hints(function, include_extras=True)
+    except Exception:
+        hints = {}
+    return hints.get("return", inspect.signature(function).return_annotation)
 
 
 def prepare_state_variables(
