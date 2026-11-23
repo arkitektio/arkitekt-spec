@@ -34,7 +34,7 @@ class StartupHook(Protocol):
     It is run in the order they are registered.
     """
 
-    async def arun(self, app_context: Any) -> StartupHookReturns:
+    async def arun(self, app_context: object) -> StartupHookReturns:
         """Should return a dictionary of state variables"""
         ...
 
@@ -51,7 +51,7 @@ class ShutdownHook(Protocol):
         agent: "StateHolder",
         contexts: dict[str, Any],
         states: dict[str, Any],
-        app_context: Any,
+        app_context: object,
     ) -> None:
         """Run the shutdown hook in the event loop"""
         ...
@@ -88,17 +88,17 @@ class HooksRegistry(BaseModel):
                 "when it connects."
             )
 
-    def register_background(self, name: str, task: Any) -> None:
+    def register_background(self, name: str, task: object) -> None:
         """Register a background task in the registry."""
         self._refuse_if_frozen("a background worker")
         self.background_worker[name] = task
 
-    def register_startup(self, name: str, hook: Any) -> None:
+    def register_startup(self, name: str, hook: object) -> None:
         """Register a startup hook in the registry."""
         self._refuse_if_frozen("a startup hook")
         self.startup_hooks[name] = hook
 
-    def register_shutdown(self, name: str, hook: Any) -> None:
+    def register_shutdown(self, name: str, hook: object) -> None:
         """Register a shutdown hook in the registry."""
         self._refuse_if_frozen("a shutdown hook")
         self.shutdown_hooks[name] = hook

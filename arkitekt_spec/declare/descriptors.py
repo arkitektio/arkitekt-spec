@@ -18,9 +18,14 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Mapping, Sequence
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-from arkitekt_spec.actions import ProvidesInput, RequiresInput
+from arkitekt_spec.actions import (
+    ActionArgumentInput,
+    ProvidesInput,
+    RequiresInput,
+    UtilCallInput,
+)
 from arkitekt_spec.rules import iter_call_arguments
 
 if TYPE_CHECKING:
@@ -31,7 +36,7 @@ Constraint = RequiresInput | ProvidesInput
 Number = int | float
 
 
-def _hardware_value(hardware: Mapping[str, Any], name: str) -> Any:
+def _hardware_value(hardware: Mapping[str, Any], name: str) -> object:
     """One of ``AGENT_HARDWARE`` from what an agent says: the GPU values are derived."""
     if name == "gpu_count":
         return len(hardware["gpus"]) if "gpus" in hardware else None
@@ -62,18 +67,22 @@ def _fits_read(
 
 
 def _fits_number(
-    argument: Any, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]
+    argument: ActionArgumentInput,
+    descriptors: Mapping[str, Any],
+    hardware: Mapping[str, Any],
 ) -> Number | None:
     if argument.value_path is not None:
         return _fits_read(argument.value_path, descriptors, hardware)
+    # check_fits() admitted the formula: a literal is a number, a nested call has
+    # keyed arguments.
     if argument.util_call is None:
-        return argument.value_literal
+        return cast("Number | None", argument.value_literal)
     operands: dict[str, Number] = {}
-    for nested in argument.util_call.arguments:
+    for nested in cast("Sequence[ActionArgumentInput]", argument.util_call.arguments):
         operand = _fits_number(nested, descriptors, hardware)
         if operand is None:
             return None
-        operands[nested.key] = operand
+        operands[cast(str, nested.key)] = operand
     match argument.util_call.operation:
         case "math.add":
             return operands["a"] + operands["b"]
@@ -94,8 +103,12 @@ def _fits_number(
     return None
 
 
+def _values(argument: ActionArgumentInput) -> Sequence[ActionArgumentInput]:
+    return cast("Sequence[ActionArgumentInput]", argument.value_list)
+
+
 def fits_holds(
-    call: Any, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]
+    call: UtilCallInput, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]
 ) -> bool:
     """Whether an object fits, the way the database predicate that matches actions answers it.
 
@@ -103,16 +116,17 @@ def fits_holds(
     (:func:`arkitekt_spec.rules.check_fits`). A comparison on a missing value is false.
     """
     arguments = {argument.key: argument for argument in call.arguments or ()}
+    # check_fits() admitted the formula: ``values`` of a logic call is a list of calls.
     match call.operation:
         case "logic.all":
             return all(
-                fits_holds(item.util_call, descriptors, hardware)
-                for item in arguments["values"].value_list
+                fits_holds(cast(UtilCallInput, item.util_call), descriptors, hardware)
+                for item in _values(arguments["values"])
             )
         case "logic.any":
             return any(
-                fits_holds(item.util_call, descriptors, hardware)
-                for item in arguments["values"].value_list
+                fits_holds(cast(UtilCallInput, item.util_call), descriptors, hardware)
+                for item in _values(arguments["values"])
             )
     a = _fits_number(arguments["a"], descriptors, hardware)
     b = _fits_number(arguments["b"], descriptors, hardware)
@@ -131,7 +145,7 @@ def fits_holds(
 
 
 def fits_can_be_tested(
-    call: Any, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]
+    call: UtilCallInput, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]
 ) -> bool:
     """Whether everything a formula reads is known here.
 
@@ -226,7 +240,7 @@ def unfulfilled(
 _MISSING = object()
 
 
-def resolve_pointer(document: Any, pointer: str) -> Any:
+def resolve_pointer(document: object, pointer: str) -> object:
     """The value at an RFC 6901 pointer, or ``_MISSING`` when the document has none.
 
     ``""`` is the whole document; ``/a/0`` is key ``a``, then index 0. ``~1`` and ``~0``

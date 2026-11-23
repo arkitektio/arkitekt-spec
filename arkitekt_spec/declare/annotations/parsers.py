@@ -29,6 +29,8 @@ from arkitekt_spec.declare.traits.calls import resolve_base_arguments
 from arkitekt_spec.declare.widgets import is_assign_widget_input, is_return_widget_input
 from arkitekt_spec.rules import OWN_VALUE
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class PortAnnotations:
@@ -189,7 +191,7 @@ try:
     parsers.append(extract_annotated_types)
 
 except ImportError:
-    logging.info("annotated_types not available, skipping related parser.")
+    logger.info("annotated_types not available, skipping related parser.")
 
 
 def extract_annotations(

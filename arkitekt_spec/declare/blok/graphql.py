@@ -13,9 +13,21 @@ import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from arkitekt_spec.actions import PortKind, PortMatchInput
+
+if TYPE_CHECKING:
+    from graphql import (
+        FieldNode,
+        FragmentDefinitionNode,
+        GraphQLCompositeType,
+        GraphQLInterfaceType,
+        GraphQLObjectType,
+        GraphQLOutputType,
+        GraphQLSchema,
+        SelectionSetNode,
+    )
 
 ITEM = "..."
 
@@ -77,7 +89,7 @@ def read_only_problem(document: str, kind: str = "query") -> str | None:
     return None
 
 
-def _build(sdl: str) -> Any:
+def _build(sdl: str) -> "GraphQLSchema":
     """The schema a service serves, taken as valid: a federation subgraph's SDL names directives
     (``@key``, ``@shareable``) it does not declare, which a strict build would refuse."""
     from graphql import build_schema
@@ -129,7 +141,7 @@ def schema_shape(sdl: str) -> dict[str, Any]:
     return types
 
 
-def _kind(named: Any) -> str:
+def _kind(named: object) -> str:
     from graphql import (
         GraphQLEnumType,
         GraphQLInputObjectType,
@@ -229,7 +241,10 @@ _SCALAR_KINDS: Mapping[str, PortKind] = {
 
 
 def _selection_children(
-    selection_set: Any, parent: Any, fragments: Mapping[str, Any], schema: Any
+    selection_set: "SelectionSetNode",
+    parent: "GraphQLCompositeType",
+    fragments: "Mapping[str, FragmentDefinitionNode]",
+    schema: "GraphQLSchema",
 ) -> tuple[PortMatchInput, ...]:
     """The fields a selection set answers with, by response key; fragments merged in."""
     from graphql import FieldNode, FragmentSpreadNode, InlineFragmentNode
@@ -244,7 +259,11 @@ def _selection_children(
                     key=key, kind=PortKind.STRING, nullable=False
                 )
                 continue
-            definition = parent.fields[name]
+            # validate() accepted the document: a field other than __typename is
+            # selected on a type that has fields.
+            definition = cast(
+                "GraphQLObjectType | GraphQLInterfaceType", parent
+            ).fields[name]
             children[key] = _field_match(
                 key, definition.type, selection, fragments, schema
             )
@@ -255,8 +274,10 @@ def _selection_children(
                 assert isinstance(selection, InlineFragmentNode)
                 fragment = selection
             condition = fragment.type_condition
+            # validate() accepted the fragment: its type condition names a
+            # composite type of the schema.
             narrowed = (
-                schema.get_type(condition.name.value)
+                cast("GraphQLCompositeType", schema.get_type(condition.name.value))
                 if condition is not None
                 else parent
             )
@@ -275,7 +296,11 @@ def _selection_children(
 
 
 def _field_match(
-    key: str, type_: Any, node: Any, fragments: Mapping[str, Any], schema: Any
+    key: str,
+    type_: "GraphQLOutputType",
+    node: "FieldNode",
+    fragments: "Mapping[str, FragmentDefinitionNode]",
+    schema: "GraphQLSchema",
 ) -> PortMatchInput:
     """One field's answer as a match: lists hold their item under ``...``, objects their selection."""
     from graphql import GraphQLEnumType, GraphQLList, GraphQLNonNull, GraphQLScalarType
@@ -299,5 +324,12 @@ def _field_match(
         key=key,
         kind=PortKind.DICT,
         nullable=nullable,
-        children=_selection_children(node.selection_set, type_, fragments, schema),
+        # validate() accepted the document: a field of a composite type has a
+        # selection set.
+        children=_selection_children(
+            cast("SelectionSetNode", node.selection_set),
+            cast("GraphQLCompositeType", type_),
+            fragments,
+            schema,
+        ),
     )

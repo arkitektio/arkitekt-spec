@@ -160,7 +160,9 @@ class PortCallParser:
             operands = [node.left, *node.comparators]
             parts = [
                 cls._desugar_comparison(op, left, right)
-                for op, left, right in zip(node.ops, operands, operands[1:])
+                for op, left, right in zip(
+                    node.ops, operands, operands[1:], strict=False
+                )
             ]
             return functools.reduce(
                 lambda acc, part: cls._base_call("and", a=acc, b=part), parts
@@ -390,7 +392,7 @@ class PortCallParser:
         # Dictionaries -> GraphQL Key/Value Arrays
         elif isinstance(node, ast.Dict):
             parsed_dict_list = []
-            for k_node, v_node in zip(node.keys, node.values):
+            for k_node, v_node in zip(node.keys, node.values, strict=True):
                 if (
                     not isinstance(k_node, ast.Constant)
                     or not isinstance(k_node.value, str)

@@ -50,7 +50,7 @@ def flavour(capabilities: list[dict[str, object]]) -> ReleaseFlavour:
 
 
 @pytest.mark.parametrize("raw", EVERY_KIND, ids=[c["kind"] for c in EVERY_KIND])
-def test_every_kind_reads_and_writes_back_unchanged(raw: dict[str, object]):
+def test_every_kind_reads_and_writes_back_unchanged(raw: dict[str, object]) -> None:
     capability = capability_adapter().validate_python(raw)
     assert type(capability) is CAPABILITY_KINDS[str(raw["kind"])]
     assert (
@@ -61,11 +61,15 @@ def test_every_kind_reads_and_writes_back_unchanged(raw: dict[str, object]):
     )
 
 
-def test_the_engine_socket_is_mounted_where_docker_clients_look_unless_said_otherwise():
+def test_the_engine_socket_is_mounted_where_docker_clients_look_unless_said_otherwise() -> (
+    None
+):
     assert ContainerEngineCapability(name="engine").target == "/var/run/docker.sock"
 
 
-def test_a_folder_is_read_only_and_a_capability_required_unless_said_otherwise():
+def test_a_folder_is_read_only_and_a_capability_required_unless_said_otherwise() -> (
+    None
+):
     folder = FolderCapability(name="data", target="/data")
     assert folder.read_only is True
     assert folder.required is True
@@ -105,20 +109,22 @@ def test_a_folder_is_read_only_and_a_capability_required_unless_said_otherwise()
         "a name with spaces",
     ],
 )
-def test_what_is_not_in_the_vocabulary_is_refused(raw: dict[str, object]):
+def test_what_is_not_in_the_vocabulary_is_refused(raw: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         capability_adapter().validate_python(raw)
 
 
 @pytest.mark.parametrize("cap", ["ALL", "SYS_ADMIN"])
-def test_a_linux_capability_that_is_privileged_in_all_but_name_is_refused(cap: str):
+def test_a_linux_capability_that_is_privileged_in_all_but_name_is_refused(
+    cap: str,
+) -> None:
     with pytest.raises(ValidationError, match="narrower"):
         capability_adapter().validate_python(
             {"kind": "linux_capability", "name": "root", "cap": cap}
         )
 
 
-def test_two_capabilities_of_one_name_are_refused():
+def test_two_capabilities_of_one_name_are_refused() -> None:
     with pytest.raises(ValidationError, match="Two capabilities are called `camera`"):
         flavour(
             [
@@ -138,7 +144,9 @@ def test_two_capabilities_of_one_name_are_refused():
         )
 
 
-def test_a_descriptor_carries_its_flavours_capabilities_through_the_registry_bytes():
+def test_a_descriptor_carries_its_flavours_capabilities_through_the_registry_bytes() -> (
+    None
+):
     release = ReleaseDescriptor(
         spec_version="8.0.0",
         manifest=AppManifest(identifier="plugin_engine", version="1.0.0"),
@@ -151,7 +159,7 @@ def test_a_descriptor_carries_its_flavours_capabilities_through_the_registry_byt
     )
 
 
-def test_a_flavour_without_capabilities_is_written_as_before_they_existed():
+def test_a_flavour_without_capabilities_is_written_as_before_they_existed() -> None:
     """The digest of a descriptor is its identity: one with nothing to grant keeps its bytes."""
     release = ReleaseDescriptor(
         spec_version="8.0.0",
@@ -161,7 +169,7 @@ def test_a_flavour_without_capabilities_is_written_as_before_they_existed():
     assert b"capabilities" not in dump_descriptor(release)
 
 
-def test_an_app_image_in_a_deployments_file_carries_capabilities_too():
+def test_an_app_image_in_a_deployments_file_carries_capabilities_too() -> None:
     file = load_deployments(
         {
             "spec_version": "8.0.0",

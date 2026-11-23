@@ -6,17 +6,18 @@ default a state demand inherits its ``app`` from the protocol's core app and its
 ``typing.Annotated``) redirects it to *another* state.
 """
 
-from typing import Annotated, Any
+from typing import Annotated
 
 from arkitekt_spec.actions import (
     AgentDependencyInput,
     StateDemandInput,
+    StateDependencyInput,
 )
 from arkitekt_spec.declare.declare import demand_state
 from arkitekt_spec.declare.structures.registry import StructureRegistry
 
 
-def _dependency_of(cls: Any) -> AgentDependencyInput:
+def _dependency_of(cls: type) -> AgentDependencyInput:
     """Declare ``cls`` on an app directed at ``mymicroscope`` and read the demand back."""
     registry = StructureRegistry()
     registry.declare(app="mymicroscope")(cls)
@@ -31,7 +32,9 @@ def _state_demand_for(
     return match.demand
 
 
-def _state_slot_for(dependency: AgentDependencyInput, slot_key: str):
+def _state_slot_for(
+    dependency: AgentDependencyInput, slot_key: str
+) -> StateDependencyInput:
     (match,) = [d for d in dependency.state_dependencies or () if d.key == slot_key]
     return match
 

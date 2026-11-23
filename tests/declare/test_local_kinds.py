@@ -6,6 +6,7 @@ from typing import Annotated
 
 import pytest
 
+from arkitekt_spec.actions import BlokLocalInput
 from arkitekt_spec.blok.vocabulary import BlokError
 from arkitekt_spec.declare.annotations.markers import Description
 from arkitekt_spec.declare.app import AppRegistry
@@ -39,7 +40,7 @@ def register_deconvolve(registry: AppRegistry) -> WrappedFunction[..., object]:
     return deconvolve  # pyright: ignore[reportReturnType]
 
 
-def built_local(registry: AppRegistry, name: str = "panel"):
+def built_local(registry: AppRegistry, name: str = "panel") -> BlokLocalInput:
     """The blok's one local, resolved as a server stores it."""
     return resolved_locals(registry.get_declared_bloks()[name], registry)[LOCAL]
 

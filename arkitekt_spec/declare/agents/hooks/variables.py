@@ -103,7 +103,7 @@ class WithVariables:
         self,
         contexts: dict[str, Any],
         states: dict[str, Any],
-        app_context: Any = None,
+        app_context: object = None,
         bound_app: BoundApp | None = None,
     ) -> dict[str, Any]:
         """Build the call kwargs from the agent's live contexts, states, app context and app.

@@ -68,7 +68,7 @@ class StartupWithVariables(WithVariables):
 
     def get_startup_kwargs(
         self,
-        app_context: Any,
+        app_context: object,
         bound_app: BoundApp | None,
         previous_states: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
@@ -237,7 +237,7 @@ TBackground = TypeVar("TBackground", bound=BackgroundFunction)
 TShutdown = TypeVar("TShutdown", bound=ShutdownFunction)
 
 
-def _require_function(function: Any) -> None:
+def _require_function(function: object) -> None:
     if not (
         inspect.iscoroutinefunction(function)
         or inspect.isfunction(function)

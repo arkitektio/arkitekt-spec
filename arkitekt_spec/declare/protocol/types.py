@@ -10,7 +10,7 @@ class AnyFunction(Protocol):
     This method will create the actor and return it.
     """
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:  # noqa: ANN401 -- any function: the wrapper that holds one awaits, iterates or returns its result by the function's kind
         """Create the actor and return it. This method will create the actor and
         return it.
         """
@@ -160,7 +160,7 @@ class StartupFunction(Protocol):
     This method will create the actor and return it.
     """
 
-    def __call__(self, app_context: Any) -> Awaitable[StartupTypes] | StartupTypes:
+    def __call__(self, app_context: Any) -> Awaitable[StartupTypes] | StartupTypes:  # noqa: ANN401 -- a callback Protocol: the user's function takes its own, narrower type
         """Create the actor and return it. This method will create the actor and
         return it.
         """
@@ -200,7 +200,7 @@ class AsyncStartupFunction(Protocol):
     This method will create the actor and return it.
     """
 
-    def __call__(self, app_context: Any) -> Awaitable[StartupTypes]:
+    def __call__(self, app_context: Any) -> Awaitable[StartupTypes]:  # noqa: ANN401 -- a callback Protocol: the user's function takes its own, narrower type
         """Create the actor and return it. This method will create the actor and
         return it.
         """
@@ -220,7 +220,7 @@ class ThreadedStartupFunction(Protocol):
     This method will create the actor and return it.
     """
 
-    def __call__(self, app_context: Any) -> StartupTypes:
+    def __call__(self, app_context: Any) -> StartupTypes:  # noqa: ANN401 -- a callback Protocol: the user's function takes its own, narrower type
         """Create the actor and return it. This method will create the actor and
         return it.
         """

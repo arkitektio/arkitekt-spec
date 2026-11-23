@@ -12,7 +12,7 @@ them as plain strings (``use_enum_values=True``).
 
 import re
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from typing import Any, Protocol, Self, cast
+from typing import Any, Protocol, TypeVar, cast
 
 from pydantic import BaseModel, field_validator, model_validator
 
@@ -57,6 +57,10 @@ ARGUMENT_BINDINGS = (
 
 #: The conventional key of a LIST or DICT item port.
 ITEM_KEY = "..."
+
+
+_Model = TypeVar("_Model", bound=BaseModel)
+"""A validated model, handed back by its after-validator."""
 
 
 class _Argument(Protocol):
@@ -436,7 +440,7 @@ class PortRules(BaseModel):
         raise ValueError(f"Default value must be JSON serializable, got: {value}")
 
     @model_validator(mode="after")
-    def _kind_structure(self) -> Self:
+    def _kind_structure(self: _Model) -> _Model:
         port: Any = self
         kind = _value(port.kind)
         children = port.children
@@ -478,7 +482,7 @@ class SliderRules(BaseModel):
     """A SLIDER widget: both bounds, in order."""
 
     @model_validator(mode="after")
-    def _bounds(self) -> Self:
+    def _bounds(self: _Model) -> _Model:
         widget: Any = self
         if widget.min is None or widget.max is None:
             raise ValueError(
@@ -495,7 +499,7 @@ class StateChoiceRules(BaseModel):
     """A STATE_CHOICE widget: exactly one pointer form."""
 
     @model_validator(mode="after")
-    def _one_pointer(self) -> Self:
+    def _one_pointer(self: _Model) -> _Model:
         widget: Any = self
         if (widget.state_path is None) == (widget.state_call is None):
             raise ValueError(
@@ -508,7 +512,7 @@ class ValidatorRules(BaseModel):
     """A port validator: a pure call over the port and its declared dependencies."""
 
     @model_validator(mode="after")
-    def _pure(self) -> Self:
+    def _pure(self: _Model) -> _Model:
         validator: Any = self
         check_pure_call(
             validator.call,
@@ -522,7 +526,7 @@ class FitsRules(BaseModel):
     """A ``Fits``: a formula a database predicate can express."""
 
     @model_validator(mode="after")
-    def _predicate(self) -> Self:
+    def _predicate(self: _Model) -> _Model:
         fits: Any = self
         check_fits(fits.call, f"Fits of {fits.port}")
         return self
@@ -532,7 +536,7 @@ class ImplementationRules(BaseModel):
     """An implementation: its formulas read the arguments of its own definition."""
 
     @model_validator(mode="after")
-    def _fits_single_structures(self) -> Self:
+    def _fits_single_structures(self: _Model) -> _Model:
         implementation: Any = self
         ports = {port.key: port for port in implementation.definition.args or ()}
         seen: set[str] = set()
@@ -553,7 +557,7 @@ class ImplementationRules(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _estimate_reads_its_arguments(self) -> Self:
+    def _estimate_reads_its_arguments(self: _Model) -> _Model:
         implementation: Any = self
         estimate = implementation.estimated_runtime
         if estimate is not None:
@@ -576,7 +580,7 @@ class EffectRules(BaseModel):
     """A port effect: a pure call over the port and its declared dependencies."""
 
     @model_validator(mode="after")
-    def _pure(self) -> Self:
+    def _pure(self: _Model) -> _Model:
         effect: Any = self
         check_pure_call(
             effect.call,
@@ -595,7 +599,7 @@ class DefinitionRules(BaseModel):
     """
 
     @model_validator(mode="after")
-    def _dependencies_resolve(self) -> Self:
+    def _dependencies_resolve(self: _Model) -> _Model:
         definition: Any = self
         roots = [*(definition.args or ()), *(definition.returns or ())]
 
@@ -638,7 +642,7 @@ class DefinitionRules(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _protocols_are_names(self) -> Self:
+    def _protocols_are_names(self: _Model) -> _Model:
         """A protocol hint is a name to filter on: one word, said once."""
         protocols: tuple[str, ...] = tuple(getattr(self, "protocols", None) or ())
         for protocol in protocols:
@@ -757,7 +761,7 @@ class BlokRules(BaseModel):
     """An agent's blok: sent as its tree or its source, its declarations well-formed."""
 
     @model_validator(mode="after")
-    def _manifest(self) -> Self:
+    def _manifest(self: _Model) -> _Model:
         blok: Any = self
         check_blok_declarations(blok)
         _check_blok_args(self)
@@ -768,7 +772,7 @@ class ActionBlokRules(BaseModel):
     """An action's blok: sent one way, in a context an action has a blok for."""
 
     @model_validator(mode="after")
-    def _manifest(self) -> Self:
+    def _manifest(self: _Model) -> _Model:
         blok: Any = self
         context = _value(blok.context)
         if context not in ("PANEL", "SCENE"):
@@ -781,7 +785,7 @@ class AskBlokRules(BaseModel):
     """An action's declared ask: a panel task blok, its args and returns each keyed once."""
 
     @model_validator(mode="after")
-    def _manifest(self) -> Self:
+    def _manifest(self: _Model) -> _Model:
         blok: Any = self
         check_blok_declarations(blok)
         for what, ports in (("args", blok.args), ("returns", blok.returns)):
@@ -796,7 +800,7 @@ class InformBlokRules(BaseModel):
     """An action's declared inform: a panel task blok, its args each keyed once."""
 
     @model_validator(mode="after")
-    def _manifest(self) -> Self:
+    def _manifest(self: _Model) -> _Model:
         blok: Any = self
         check_blok_declarations(blok)
         keys = [port.key for port in blok.args]
@@ -826,7 +830,7 @@ class AgentRules(BaseModel):
     """A whole agent declaration: unique interfaces, and every referenced lock provided."""
 
     @model_validator(mode="after")
-    def _invariants(self) -> Self:
+    def _invariants(self: _Model) -> _Model:
         agent: Any = self
         implementations: tuple[Any, ...] = tuple(agent.implementations or ())
         states: tuple[Any, ...] = tuple(agent.states or ())

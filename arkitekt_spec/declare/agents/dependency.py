@@ -85,7 +85,7 @@ def prepare_interaction_variables(
 
 
 def dependency_to_protocol(
-    cls: Any, structure_registry: "StructureRegistry"
+    cls: object, structure_registry: "StructureRegistry"
 ) -> DeclaredAgentProtocol[Any]:
     """The protocol the app declared for ``cls``."""
     return structure_registry.protocol_for(cls)

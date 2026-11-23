@@ -31,6 +31,7 @@ from arkitekt_spec.declare.service import (
     _MANIFEST,
     _OWN,
     _REGISTRY,
+    RunFakts,
     _Injection,
     _read_injections,
 )
@@ -103,7 +104,7 @@ class Provider(Generic[A]):
 
     async def build(
         self,
-        fakts: Any,
+        fakts: RunFakts | None,
         registry: "AppRegistry",
         clients: Mapping[str, Any],
     ) -> A:

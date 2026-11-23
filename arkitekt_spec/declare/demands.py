@@ -16,14 +16,15 @@ and a match's ``descriptors``.
 
 import inspect
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
-from arkitekt_spec.actions import PortMatchInput
+from arkitekt_spec.actions import ArgPortInput, PortMatchInput, ReturnPortInput
 
 if TYPE_CHECKING:
     from arkitekt_spec.declare.app import AppRegistry
+    from arkitekt_spec.declare.structures.types import StateDeclaration
 
 ACTION_MISSING = "dependency-action-missing"
 PORT_MISMATCH = "dependency-port-mismatch"
@@ -74,7 +75,7 @@ class DemandFinding:
         return f"{who}{self.subject}: {self.message}{where}"
 
 
-def _declared_at(obj: Any) -> tuple[str | None, int | None]:
+def _declared_at(obj: type | Callable[..., object]) -> tuple[str | None, int | None]:
     try:
         file = inspect.getsourcefile(obj)
         _, line = inspect.getsourcelines(obj)
@@ -83,12 +84,12 @@ def _declared_at(obj: Any) -> tuple[str | None, int | None]:
     return (os.path.abspath(file) if file else None), line
 
 
-def _kind(value: Any) -> str:
+def _kind(value: object) -> str:
     return str(getattr(value, "value", value))
 
 
 def _shown(
-    key: str | None, kind: Any, identifier: str | None, nullable: bool | None
+    key: str | None, kind: object, identifier: str | None, nullable: bool | None
 ) -> str:
     """A port or a match as a message names it: ``'name' (STRING, nullable)``."""
     details = [_kind(kind)] if kind is not None else []
@@ -100,7 +101,7 @@ def _shown(
     return f"{name} ({', '.join(details)})" if details else name
 
 
-def _fits(match: PortMatchInput, port: Any) -> bool:
+def _fits(match: PortMatchInput, port: ArgPortInput | ReturnPortInput) -> bool:
     """Whether ``port`` equals ``match`` in every field the match sets, children included."""
     if match.key is not None and match.key != port.key:
         return False
@@ -142,7 +143,7 @@ def unmet_match(matches: Sequence[PortMatchInput], ports: Sequence[Any]) -> str 
     return None
 
 
-def _state_of(provider: "AppRegistry", key: str) -> Any | None:
+def _state_of(provider: "AppRegistry", key: str) -> "StateDeclaration | None":
     """The provider's state a demand of ``key`` reaches: by key first, then by interface."""
     states = list(provider.structure_registry.states.values())
     for attribute in ("key", "interface"):

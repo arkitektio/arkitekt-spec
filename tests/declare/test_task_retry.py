@@ -4,13 +4,15 @@ Safe means the lost step never started, or the caller says so (``if_started=True
 running it again would do (``AgentLost.effects``) is information, never the decision.
 """
 
+from collections.abc import Callable
+
 import pytest
 
 from arkitekt_spec.declare.errors import AgentLost, ErrorCallError
 from arkitekt_spec.declare.task import Task, aretry, retry
 
 
-def flaky(*outcomes: BaseException | str):
+def flaky(*outcomes: BaseException | str) -> Callable[[int], str]:
     """A call that raises or returns the given outcomes in turn, counting its calls."""
     calls: list[int] = []
 

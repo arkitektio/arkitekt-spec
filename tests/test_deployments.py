@@ -21,13 +21,13 @@ from arkitekt_spec import (
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def test_golden_file_is_in_canonical_form():
+def test_golden_file_is_in_canonical_form() -> None:
     """The golden file is exactly what the spec writes: loading and dumping it is a no-op."""
     text = (FIXTURES / "deployments.yaml").read_text()
     assert dump_deployments(load_deployments(text)) == text
 
 
-def test_golden_file_reads_every_envelope_field():
+def test_golden_file_reads_every_envelope_field() -> None:
     file = load_deployments((FIXTURES / "deployments.yaml").read_text())
     (image,) = file.app_images
     assert image.manifest.description == image.inspection.description
@@ -48,19 +48,19 @@ def _versioned_legacy_file() -> dict:
     return data
 
 
-def test_a_file_that_names_no_spec_is_refused():
+def test_a_file_that_names_no_spec_is_refused() -> None:
     with pytest.raises(ValidationError, match="spec_version"):
         load_deployments((FIXTURES / "legacy_deployments.yaml").read_text())
 
 
-def test_the_action_language_is_typed_and_reads_both_spellings():
+def test_the_action_language_is_typed_and_reads_both_spellings() -> None:
     legacy = load_deployments(_versioned_legacy_file())
     definition = legacy.app_images[0].inspection.implementations[0].definition
     assert definition.key == "convert_omero"
     assert definition.is_dev is False  # read from camelCase `isDev`
 
 
-def test_an_unknown_envelope_key_is_ignored_not_refused():
+def test_an_unknown_envelope_key_is_ignored_not_refused() -> None:
     """A newer producer adds a field; an older reader must survive it."""
     inspection = Inspection.model_validate(
         {
@@ -73,38 +73,38 @@ def test_an_unknown_envelope_key_is_ignored_not_refused():
     assert inspection.description == "x"
 
 
-def test_a_selector_refuses_an_unknown_key():
+def test_a_selector_refuses_an_unknown_key() -> None:
     with pytest.raises(ValidationError):
         selector_adapter().validate_python({"kind": "cuda", "cudaCorez": 3})
 
 
-def test_a_selector_reads_both_spellings():
+def test_a_selector_reads_both_spellings() -> None:
     adapter = selector_adapter()
     assert adapter.validate_python(
         {"kind": "cuda", "cuda_cores": 3}
     ) == adapter.validate_python({"kind": "cuda", "cudaCores": 3})
 
 
-def test_a_label_selector_needs_its_key():
+def test_a_label_selector_needs_its_key() -> None:
     with pytest.raises(ValidationError):
         LabelSelector.model_validate({"kind": "label"})
 
 
-def test_empty_or_missing_file_is_an_empty_deployments_file():
+def test_empty_or_missing_file_is_an_empty_deployments_file() -> None:
     assert load_deployments(None) == DeploymentsFile(
         spec_version=current_spec_version()
     )
     assert load_deployments("") == DeploymentsFile(spec_version=current_spec_version())
 
 
-def test_plain_dump_stays_snake_case():
+def test_plain_dump_stays_snake_case() -> None:
     """Consumers store model_dump() as JSON; the default must not flip casing."""
     image = load_deployments((FIXTURES / "deployments.yaml").read_text()).app_images[0]
     assert "compute_capability" in image.selectors[0].model_dump()
     assert "image_string" in AppImage.model_dump(image)["image"]
 
 
-def test_json_schema_matches_the_committed_snapshot():
+def test_json_schema_matches_the_committed_snapshot() -> None:
     """A format change must show up in review: regenerate with `python -m arkitekt_spec`."""
     committed = json.loads((FIXTURES / "deployments.schema.json").read_text())
     assert json_schema() == committed

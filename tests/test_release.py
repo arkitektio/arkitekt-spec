@@ -47,13 +47,13 @@ def descriptor(**changes: object) -> ReleaseDescriptor:
     return ReleaseDescriptor.model_validate({**fields, **changes})
 
 
-def test_golden_descriptor_is_in_canonical_form():
+def test_golden_descriptor_is_in_canonical_form() -> None:
     """The golden file is exactly what the spec pushes: loading and dumping it is a no-op."""
     text = (FIXTURES / "release.json").read_bytes().strip()
     assert dump_descriptor(load_descriptor(text)) == text
 
 
-def test_golden_descriptor_reads_every_field():
+def test_golden_descriptor_reads_every_field() -> None:
     release = load_descriptor((FIXTURES / "release.json").read_bytes())
     (only,) = release.flavours
     assert release.manifest.identifier == "starmist"
@@ -65,7 +65,7 @@ def test_golden_descriptor_reads_every_field():
     assert [r.key for r in only.inspection.requirements] == ["mikro", "rekuest"]
 
 
-def test_a_release_names_the_spec_that_wrote_it_and_its_inspections():
+def test_a_release_names_the_spec_that_wrote_it_and_its_inspections() -> None:
     declaration = AppDeclaration(
         manifest=AppManifest(identifier="starmist", version="0.1.0")
     )
@@ -84,7 +84,7 @@ def test_a_release_names_the_spec_that_wrote_it_and_its_inspections():
 
 
 @pytest.mark.parametrize("version", [None, 1])
-def test_a_release_that_names_no_spec_is_refused(version: int | None):
+def test_a_release_that_names_no_spec_is_refused(version: int | None) -> None:
     data = json.loads(dump_descriptor(descriptor()))
     del data["spec_version"]
     if version is not None:
@@ -93,36 +93,36 @@ def test_a_release_that_names_no_spec_is_refused(version: int | None):
         load_descriptor(json.dumps(data))
 
 
-def test_a_release_whose_inspection_names_no_spec_is_refused():
+def test_a_release_whose_inspection_names_no_spec_is_refused() -> None:
     data = json.loads(dump_descriptor(descriptor()))
     del data["flavours"][0]["inspection"]["spec_version"]
     with pytest.raises(ValidationError, match="spec_version"):
         load_descriptor(json.dumps(data))
 
 
-def test_a_flavour_refuses_an_image_named_by_tag():
+def test_a_flavour_refuses_an_image_named_by_tag() -> None:
     with pytest.raises(ValidationError, match="named by digest"):
         flavour(image="ghcr.io/org/starmist:0.1.0-vanilla")
 
 
-def test_a_release_names_each_flavour_once():
+def test_a_release_names_each_flavour_once() -> None:
     with pytest.raises(ValidationError, match="repeated"):
         descriptor(flavours=[flavour("gpu"), flavour("gpu")])
 
 
-def test_an_unknown_descriptor_key_is_ignored_not_refused():
+def test_an_unknown_descriptor_key_is_ignored_not_refused() -> None:
     data = json.loads(dump_descriptor(descriptor()))
     data["somethingNewer"] = 1
     assert load_descriptor(json.dumps(data)) == descriptor()
 
 
-def test_the_same_release_always_has_the_same_bytes():
+def test_the_same_release_always_has_the_same_bytes() -> None:
     one = descriptor(flavours=[flavour("a"), flavour("b")])
     again = load_descriptor(dump_descriptor(one))
     assert dump_descriptor(again) == dump_descriptor(one)
 
 
-def test_a_release_manifest_is_recognised_by_its_config():
+def test_a_release_manifest_is_recognised_by_its_config() -> None:
     blob = dump_descriptor(descriptor())
     manifest = release_manifest(blob)
     assert manifest["config"]["mediaType"] == RELEASE_MEDIA_TYPE
@@ -143,7 +143,7 @@ def test_a_release_manifest_is_recognised_by_its_config():
         },
     ],
 )
-def test_an_image_is_not_taken_for_a_release(manifest: object):
+def test_an_image_is_not_taken_for_a_release(manifest: object) -> None:
     assert descriptor_digest(manifest) is None
 
 
@@ -162,7 +162,7 @@ def test_an_image_is_not_taken_for_a_release(manifest: object):
 )
 def test_a_repository_reference_splits_like_docker_does(
     reference: str, expected: tuple[str, str]
-):
+) -> None:
     assert parse_repository(reference) == expected
 
 
@@ -170,12 +170,14 @@ def test_a_repository_reference_splits_like_docker_does(
     "reference",
     ["ghcr.io/org/app:1.0.0", "ghcr.io/org/app@sha256:abc", "ghcr.io/Org/App", ""],
 )
-def test_a_repository_reference_refuses_anything_but_a_repository(reference: str):
+def test_a_repository_reference_refuses_anything_but_a_repository(
+    reference: str,
+) -> None:
     with pytest.raises(ValueError):
         parse_repository(reference)
 
 
-def test_tags():
+def test_tags() -> None:
     assert release_tag("1.4.0") == "1.4.0"
     assert image_tag("1.4.0", "gpu") == "1.4.0-gpu"
     assert channel_tag("feat/new-thing") == "feat-new-thing"
@@ -183,12 +185,12 @@ def test_tags():
     assert release_tag(channel_version("1.4.0", "3f2a9c1d77"))
 
 
-def test_a_version_that_cannot_be_a_tag_is_refused():
+def test_a_version_that_cannot_be_a_tag_is_refused() -> None:
     with pytest.raises(ValueError, match="cannot be a registry tag"):
         release_tag("1.4.0+local")
 
 
-def test_release_schema_matches_the_committed_snapshot():
+def test_release_schema_matches_the_committed_snapshot() -> None:
     """A format change must show up in review: regenerate with `python -m arkitekt_spec release`."""
     committed = json.loads((FIXTURES / "release.schema.json").read_text())
     assert release_json_schema() == committed

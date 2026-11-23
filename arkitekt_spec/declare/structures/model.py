@@ -10,7 +10,7 @@ import inspect
 import re
 from collections.abc import Callable
 from dataclasses import MISSING, dataclass, field
-from typing import Any, TypeVar, get_type_hints
+from typing import Any, TypeVar, get_type_hints, overload
 
 from fieldz import Field, fields  # type: ignore
 from pydantic import BaseModel
@@ -18,20 +18,62 @@ from pydantic import BaseModel
 from arkitekt_spec.actions import ValidatorInput
 
 T = TypeVar("T", bound=type[Any])
+V = TypeVar("V")
+
+
+@overload
+def model_field(
+    *,
+    default: V,
+    init: bool = True,
+    repr: bool = True,
+    compare: bool = True,
+    kw_only: bool = ...,
+    description: str | None = None,
+    validators: list[ValidatorInput] | None = None,
+    label: str | None = None,
+) -> V: ...
+
+
+@overload
+def model_field(
+    *,
+    default_factory: Callable[[], V],
+    init: bool = True,
+    repr: bool = True,
+    compare: bool = True,
+    kw_only: bool = ...,
+    description: str | None = None,
+    validators: list[ValidatorInput] | None = None,
+    label: str | None = None,
+) -> V: ...
+
+
+@overload
+def model_field(
+    *,
+    init: bool = True,
+    repr: bool = True,
+    compare: bool = True,
+    kw_only: bool = ...,
+    description: str | None = None,
+    validators: list[ValidatorInput] | None = None,
+    label: str | None = None,
+) -> Any: ...  # noqa: ANN401 -- a field without a default stands in for any annotation, as dataclasses.field's does
 
 
 def model_field(
     *,
-    default: Any = MISSING,
-    default_factory: Callable[[], Any] | Any = MISSING,
+    default: object = MISSING,
+    default_factory: Callable[[], object] | object = MISSING,
     init: bool = True,
     repr: bool = True,
     compare: bool = True,
-    kw_only: bool | Any = MISSING,
+    kw_only: bool | object = MISSING,
     description: str | None = None,
     validators: list[ValidatorInput] | None = None,
     label: str | None = None,
-) -> Any:  # a dataclass field, typed as the value it stands in for
+) -> object:  # a dataclass field, typed as the value it stands in for
     """A model field that carries a description, a label and validators to the port.
 
     The dataclass field of a model (``@app.model``), and the field specifier type
@@ -57,13 +99,15 @@ def model_field(
 
             threshold: float = model_field(default=0.5, description="Confidence cutoff")
     """
-    return field(  # type: ignore[call-overload]
+    # The overloads above say which of default / default_factory is given;
+    # dataclasses.field's own overloads cannot see that through this signature.
+    return field(  # pyright: ignore[reportCallIssue]
         default=default,
-        default_factory=default_factory,
+        default_factory=default_factory,  # pyright: ignore[reportArgumentType]
         init=init,
         repr=repr,
         compare=compare,
-        kw_only=kw_only,
+        kw_only=kw_only,  # pyright: ignore[reportArgumentType]
         metadata={"description": description, "validators": validators, "label": label},
     )
 

@@ -1,6 +1,6 @@
 """Predicates telling what an annotation means to an app: a state, a read-only state, a context."""
 
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 from arkitekt_spec.declare.definition.define import get_args, is_annotated
 from arkitekt_spec.declare.state.types import ReadOnlyAnnotation
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
-def is_state(cls: Any, structure_registry: "StructureRegistry | None") -> bool:
+def is_state(cls: object, structure_registry: "StructureRegistry | None") -> bool:
     """Whether ``cls`` is a class the app registered as a state.
 
     Without a registry nothing is: being a state is a declaration on an app,
@@ -20,7 +20,7 @@ def is_state(cls: Any, structure_registry: "StructureRegistry | None") -> bool:
     return structure_registry is not None and structure_registry.is_state(cls)
 
 
-def is_app_context(cls: Any, structure_registry: "StructureRegistry | None") -> bool:
+def is_app_context(cls: object, structure_registry: "StructureRegistry | None") -> bool:
     """Whether ``cls`` is a class the app declared as its app context.
 
     Without a registry nothing is: it is a declaration on an app (``@app.app_context``).
@@ -29,7 +29,7 @@ def is_app_context(cls: Any, structure_registry: "StructureRegistry | None") -> 
 
 
 def is_read_only_state(
-    cls: Any, structure_registry: "StructureRegistry | None"
+    cls: object, structure_registry: "StructureRegistry | None"
 ) -> bool:
     """Whether ``cls`` is a state of the app marked read-only, i.e. ``ReadOnly[SomeState]``.
 
@@ -47,17 +47,17 @@ def is_read_only_state(
     return any(isinstance(a, ReadOnlyAnnotation) for a in annotations)
 
 
-def get_read_only_state_type(cls: Any) -> type:
+def get_read_only_state_type(cls: object) -> type:
     """Unwrap ``ReadOnly[SomeState]`` to ``SomeState``."""
     real_type, *_ = get_args(cls)
     return real_type
 
 
-def get_state_name(cls: Any, structure_registry: "StructureRegistry") -> str:
+def get_state_name(cls: object, structure_registry: "StructureRegistry") -> str:
     """The interface the app registered the state class ``cls`` under."""
     return structure_registry.state_for(cls).interface
 
 
-def get_state_locks(cls: Any, structure_registry: "StructureRegistry") -> list[str]:
+def get_state_locks(cls: object, structure_registry: "StructureRegistry") -> list[str]:
     """The locks an action taking the state class ``cls`` holds."""
     return list(structure_registry.state_for(cls).required_locks)

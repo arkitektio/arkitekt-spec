@@ -11,6 +11,15 @@ from typing import Any, Protocol, runtime_checkable
 from arkitekt_spec.actions import PortKind
 
 
+class SerializableChoice(Protocol):
+    """One allowed value of a port that enumerates them."""
+
+    @property
+    def value(self) -> object:
+        """The value, as it travels."""
+        ...
+
+
 @runtime_checkable
 class SerializablePort(Protocol):
     """Structural type for the ports the serialization layer walks over.
@@ -53,17 +62,17 @@ class SerializablePort(Protocol):
         ...
 
     @property
-    def identifier(self) -> Any:
+    def identifier(self) -> str | None:
         """The structure identifier, for STRUCTURE ports."""
         ...
 
     @property
-    def children(self) -> Any:
+    def children(self) -> Any:  # noqa: ANN401 -- a fetched fragment nests its ports to a fixed depth, which a recursive Protocol cannot describe
         """Nested ports, one level down. ``Any``: the depth is bounded by the schema."""
         ...
 
     @property
-    def choices(self) -> Any:
+    def choices(self) -> "Sequence[SerializableChoice] | None":
         """The allowed values, for ports that enumerate them."""
         ...
 
@@ -109,7 +118,7 @@ class CallTarget(SerializableDefinition, Protocol):
     """What a call needs of an action: an id to name it and ports to serialize by."""
 
     @property
-    def id(self) -> Any:  # an ID scalar, which is a client-layer name
+    def id(self) -> str:  # an ID scalar, which is a client-layer name
         """What the agent socket calls this action."""
         ...
 
@@ -122,7 +131,7 @@ class ImplementationTarget(Protocol):
     """
 
     @property
-    def id(self) -> Any:  # an ID scalar
+    def id(self) -> str:  # an ID scalar
         """What the agent socket calls this implementation."""
         ...
 

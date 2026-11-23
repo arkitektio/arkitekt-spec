@@ -176,17 +176,17 @@ def is_dict(cls: TypeAnnotation) -> bool:
     return get_origin(cls) in (dict, dict, types.MappingProxyType)
 
 
-def get_dict_value_cls(cls: Any) -> Any:
+def get_dict_value_cls(cls: TypeAnnotation) -> TypeAnnotation:
     """Get the value class of a dict"""
     return get_args(cls)[1]
 
 
-def get_list_value_cls(cls: Any) -> Any:
+def get_list_value_cls(cls: TypeAnnotation) -> TypeAnnotation:
     """Get the value class of a list"""
     return get_args(cls)[0]
 
 
-def get_non_null_variants(cls: Any) -> list[Any]:
+def get_non_null_variants(cls: object) -> list[Any]:
     """Get the non-null variants of a union type"""
     return [arg for arg in get_args(cls) if arg is not type(None)]
 
@@ -229,7 +229,7 @@ def is_interactions_type(
 
 
 def dependency_to_dependency_input(
-    key: str, cls: Any, structure_registry: "StructureRegistry"
+    key: str, cls: object, structure_registry: "StructureRegistry"
 ) -> AgentDependencyInput:
     """The declared protocol ``cls`` as a dependency under ``key``.
 
@@ -292,7 +292,7 @@ def _port_cls_for(
 
 
 def convert_object_to_port(
-    cls: Any,
+    cls: object,
     key: str,
     registry: StructureRegistry,
     direction: PortDirection,
@@ -322,13 +322,13 @@ def convert_object_to_port(
 
 
 def _convert_object_to_port(
-    cls: Any,
+    cls: object,
     key: str,
     registry: StructureRegistry,
     direction: PortDirection,
     assign_widget: AssignWidgetInput | None = None,
     return_widget: ReturnWidgetInput | None = None,
-    default: Any | None = None,
+    default: object | None = None,
     label: str | None = None,
     description: str | None = None,
     nullable: bool = False,
@@ -361,7 +361,9 @@ def _convert_object_to_port(
         else {"provides": tuple(provides) if provides else None}
     )
 
-    def recurse(sub_cls: Any, sub_key: str, **overrides: Any) -> Any:
+    def recurse(
+        sub_cls: TypeAnnotation, sub_key: str, **overrides: Any
+    ) -> ArgPortInput | ReturnPortInput:
         return convert_object_to_port(
             sub_cls, sub_key, registry, direction, **overrides
         )
@@ -406,7 +408,10 @@ def _convert_object_to_port(
 
     fullfilled_model = registry.model_for(cls)
     if fullfilled_model is not None:
-        inspected_model = inspect_model_class(cls, fullfilled_model.identifier)
+        # A model was declared for it, so the annotation is the model class.
+        inspected_model = inspect_model_class(
+            cast("type[Any]", cls), fullfilled_model.identifier
+        )
         children = [
             recurse(
                 arg.cls,
@@ -494,7 +499,9 @@ def _convert_object_to_port(
         # typing.Literal[...] is autoconverted to an enum port. Route through
         # the registry before the primitive checks below so a literal with a
         # string/int default isn't mistaken for a plain STRING/INT port.
-        return registry.get_port_for_cls(cls, key, direction, **registry_kwargs)
+        return registry.get_port_for_cls(
+            cast("type[Any]", cls), key, direction, **registry_kwargs
+        )
 
     # The annotation decides the kind; the default's type only stands in for an
     # annotation that says nothing (``x: float = 1`` is a FLOAT, not an INT).
@@ -528,11 +535,15 @@ def _convert_object_to_port(
             dimension=dimension_of(cls),
         )
 
-    return registry.get_port_for_cls(cls, key, direction, **registry_kwargs)
+    # The registry takes any annotation it can resolve (a class, a Literal) and
+    # refuses the rest.
+    return registry.get_port_for_cls(
+        cast("type[Any]", cls), key, direction, **registry_kwargs
+    )
 
 
 def convert_object_to_argport(
-    cls: Any,
+    cls: object,
     key: str,
     registry: StructureRegistry,
     **kwargs: Any,
@@ -544,7 +555,7 @@ def convert_object_to_argport(
 
 
 def convert_object_to_returnport(
-    cls: Any,
+    cls: object,
     key: str,
     registry: StructureRegistry,
     **kwargs: Any,

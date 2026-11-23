@@ -1,6 +1,6 @@
 """Utils for Rekuest"""
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Protocol
 
 import inflection
 
@@ -8,8 +8,15 @@ if TYPE_CHECKING:
     from arkitekt_spec.declare.structures.registry import StructureRegistry
 
 
+class _Named(Protocol):
+    """A function or a class: something with a name."""
+
+    @property
+    def __name__(self) -> str: ...
+
+
 def is_local_var(
-    type_: Any, structure_registry: "StructureRegistry | None" = None
+    type_: object, structure_registry: "StructureRegistry | None" = None
 ) -> bool:
     """Check if the type is a local variable (context or state).
 
@@ -42,6 +49,6 @@ def is_local_var(
     )
 
 
-def interface_name(func: Any) -> str:
+def interface_name(func: _Named) -> str:
     """Infer an interface name from a function or class name (CamelCase → snake_case)."""
     return inflection.underscore(func.__name__)

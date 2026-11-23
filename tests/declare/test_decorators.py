@@ -6,9 +6,9 @@ from arkitekt_spec.declare.app import AppRegistry
 _REGISTRY = AppRegistry()
 
 
-def test_startup_decorator():
+def test_startup_decorator() -> None:
     @_REGISTRY.startup
-    def my_startup_hook():
+    def my_startup_hook():  # noqa: ANN202 -- a startup hook's return annotation is read, and `-> None` is refused as one return value
         pass
 
     @_REGISTRY.context
@@ -28,7 +28,7 @@ def test_startup_decorator():
         return Hallo(), HalloState()
 
 
-def test_shutdown_decorator():
+def test_shutdown_decorator() -> None:
     @_REGISTRY.context
     class Tschau:
         pass
@@ -38,7 +38,7 @@ def test_shutdown_decorator():
         pass
 
     @_REGISTRY.shutdown
-    def my_shutdown_hook():
+    def my_shutdown_hook() -> None:
         pass
 
     @_REGISTRY.shutdown

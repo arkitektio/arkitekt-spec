@@ -172,7 +172,7 @@ def make_enum_converter(cls: type[Enum]) -> Callable[[Any], str]:
     as a descriptor in Python 3.13+ so it bypasses normal Enum member wrapping).
     """
 
-    def converter(value: Any) -> str:
+    def converter(value: object) -> str:
         if isinstance(value, cls):
             return value.name
         # Fallback: search registered members by .value first.
@@ -227,7 +227,7 @@ def fullfilled_enum_from_cls(
     )
 
 
-def is_literal(cls: Any) -> bool:
+def is_literal(cls: object) -> bool:
     """Check whether an annotation is a ``typing.Literal[...]``."""
     return get_origin(cls) is Literal
 
@@ -244,7 +244,7 @@ def _literal_identifier(values: tuple[Any, ...]) -> Identifier:
     return validate_identifier(f"@literal/{re.sub(r'[^A-Za-z0-9_.-]', '_', slug)}")
 
 
-def _is_literal_member(value: Any, values: tuple[Any, ...]) -> bool:
+def _is_literal_member(value: object, values: tuple[Any, ...]) -> bool:
     """Whether ``value`` is one of the literal's members.
 
     Compared by type as well as equality, so ``True`` is not a member of
@@ -256,7 +256,7 @@ def _is_literal_member(value: Any, values: tuple[Any, ...]) -> bool:
 def _literal_default_converter(values: tuple[Any, ...]) -> Callable[[Any], str]:
     """Create a converter that maps a literal default to its choice name."""
 
-    def converter(value: Any) -> str:
+    def converter(value: object) -> str:
         if not _is_literal_member(value, values):
             raise StructureDefinitionError(
                 f"Default {value!r} is not one of the literal's members {values}"
@@ -266,7 +266,7 @@ def _literal_default_converter(values: tuple[Any, ...]) -> Callable[[Any], str]:
     return converter
 
 
-def fullfilled_enum_from_literal(cls: Any) -> FullFilledEnum:
+def fullfilled_enum_from_literal(cls: object) -> FullFilledEnum:
     """Build a FullFilledEnum from a ``typing.Literal[...]`` annotation.
 
     The Literal stays a Literal. It is the enum's ``cls``, and its members are

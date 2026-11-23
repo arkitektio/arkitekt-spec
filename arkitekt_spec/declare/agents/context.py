@@ -8,7 +8,7 @@ returning one publishes it; an action or hook annotated with it is handed it.
 
 import inspect
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, get_type_hints
+from typing import TYPE_CHECKING, get_type_hints
 
 from arkitekt_spec.declare.definition.define import get_non_null_variants, is_tuple
 from arkitekt_spec.declare.protocol.types import AnyFunction
@@ -17,7 +17,9 @@ if TYPE_CHECKING:
     from arkitekt_spec.declare.structures.registry import StructureRegistry
 
 
-def is_context(annotation: Any, structure_registry: "StructureRegistry | None") -> bool:
+def is_context(
+    annotation: object, structure_registry: "StructureRegistry | None"
+) -> bool:
     """Whether ``annotation`` is a class the app declared as a context.
 
     Without a registry nothing is: being a context is a declaration on an app,
@@ -26,12 +28,14 @@ def is_context(annotation: Any, structure_registry: "StructureRegistry | None") 
     return structure_registry is not None and structure_registry.is_context(annotation)
 
 
-def get_context_name(cls: Any, structure_registry: "StructureRegistry") -> str:
+def get_context_name(cls: object, structure_registry: "StructureRegistry") -> str:
     """The name the app keeps the context ``cls`` under."""
     return structure_registry.context_for(cls).name
 
 
-def get_context_locks(cls: Any, structure_registry: "StructureRegistry") -> list[str]:
+def get_context_locks(
+    cls: object, structure_registry: "StructureRegistry"
+) -> list[str]:
     """The locks the app requires while a parameter of ``cls`` is held."""
     return list(structure_registry.context_for(cls).locks)
 

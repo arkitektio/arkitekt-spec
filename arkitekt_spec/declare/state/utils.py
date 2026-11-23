@@ -1,7 +1,7 @@
 """Decorator to register a class as a state."""
 
 import inspect
-from typing import TYPE_CHECKING, Any, get_type_hints
+from typing import TYPE_CHECKING, Any, cast, get_type_hints
 
 from arkitekt_spec.declare.actors.types import (
     AnyFunction,
@@ -237,8 +237,9 @@ def prepare_injected_variables(
     }
 
     return PreparedInjectedVariables(
+        # is_client() said the unwrapped annotation is a client's class.
         service_client_variables={
-            key: unwrap_injectable(annotation)
+            key: cast(type, unwrap_injectable(annotation))
             for key, annotation in annotations.items()
             if structure_registry is not None
             and structure_registry.is_client(annotation)

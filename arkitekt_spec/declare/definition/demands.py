@@ -9,7 +9,7 @@ overrides that identity — letting a single method point at *another* action
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Annotated, Any, TypeVar, get_args, get_origin
+from typing import Annotated, TypeVar, get_args, get_origin
 
 ACTION_DEMAND_ATTR = "__rekuest_action_demand__"
 
@@ -190,14 +190,14 @@ def demand_state(
     )
 
 
-def unwrap_annotated(annotation: Any) -> Any:
+def unwrap_annotated(annotation: object) -> object:
     """Return the underlying type of an ``Annotated[...]`` hint (else the hint)."""
     if get_origin(annotation) is Annotated:
         return get_args(annotation)[0]
     return annotation
 
 
-def get_state_demand_override(annotation: Any) -> StateDemandOverride | None:
+def get_state_demand_override(annotation: object) -> StateDemandOverride | None:
     """The :class:`StateDemandOverride` in a state attribute's ``Annotated[...]`` metadata, if any."""
     if get_origin(annotation) is Annotated:
         for meta in get_args(annotation)[1:]:

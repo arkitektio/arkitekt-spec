@@ -39,7 +39,7 @@ from arkitekt_spec.declare.catalogs import (
 from arkitekt_spec.rules import OWN_VALUE, iter_call_arguments
 
 
-def _prop_calls(prop: Any) -> Iterator[UtilCallInput]:
+def _prop_calls(prop: object) -> Iterator[UtilCallInput]:
     """Every util call a component prop carries.
 
     Mirrors the server's ``_prop_calls``: the prop's own ``util_call``, plus every util

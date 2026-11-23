@@ -198,10 +198,11 @@ def _declared_interactions(
     return fields
 
 
-def _fits_markers(hint: Any) -> Iterator[Fits]:
+def _fits_markers(hint: object) -> Iterator[Fits]:
     """Every ``Fits`` in an annotation, however deep: where one sits wrongly, the rules say so."""
     if get_origin(hint) is Annotated:
-        yield from (marker for marker in hint.__metadata__ if isinstance(marker, Fits))
+        # get_args of an Annotated is its type and then its metadata.
+        yield from (marker for marker in get_args(hint)[1:] if isinstance(marker, Fits))
     for nested in get_args(hint):
         yield from _fits_markers(nested)
 

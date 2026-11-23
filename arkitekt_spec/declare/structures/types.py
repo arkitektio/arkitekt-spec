@@ -40,9 +40,16 @@ JSONSerializable = (
 class Expandable(Protocol):
     """A callable that takes a set of keyword arguments to initialize the object."""
 
-    def __init__(self, value: Any) -> None:
+    def __init__(self, value: Any) -> None:  # noqa: ANN401 -- a callback Protocol: the user's function takes its own, narrower type
         """Initialize the Expandable with the value."""
         ...
+
+
+class _Identified(Protocol):
+    """An object that travels as its ``id``."""
+
+    @property
+    def id(self) -> object: ...
 
 
 @runtime_checkable
@@ -50,7 +57,7 @@ class Shrinker(Protocol):
     """A callable that takes a value and returns a string representation of it that
     can be serialized to json."""
 
-    def __call__(self, value: Any, /) -> Awaitable[str]:
+    def __call__(self, value: Any, /) -> Awaitable[str]:  # noqa: ANN401 -- a callback Protocol: the user's function takes its own, narrower type
         """Convert a value to a string representation."""
 
         ...
@@ -61,7 +68,7 @@ class Predicator(Protocol):
     """A callable that takes a value and returns True if the value is of the
     correct type for the structure."""
 
-    def __call__(self, value: Any, /) -> bool:
+    def __call__(self, value: Any, /) -> bool:  # noqa: ANN401 -- a callback Protocol: the user's function takes its own, narrower type
         """Check if the value is of the correct type for the structure."""
 
         ...
@@ -215,7 +222,7 @@ class FullFilledStructure(BaseModel):
             )
         return self
 
-    async def expand(self, id: ID) -> Any:
+    async def expand(self, id: ID) -> object:
         """Expand ``id`` into the object it names.
 
         The degenerate case of :meth:`expand_many`, except where the structure
@@ -258,7 +265,7 @@ class FullFilledStructure(BaseModel):
             )
         return found
 
-    async def shrink(self, obj: Any) -> ID:
+    async def shrink(self, obj: object) -> ID:
         """Shrink ``obj`` to the id it travels as.
 
         Args:
@@ -268,7 +275,8 @@ class FullFilledStructure(BaseModel):
             Its id.
         """
         if self.ashrink is None:
-            return cast(ID, obj.id)
+            # Without a shrinker, a structure travels as its ``id``.
+            return cast(ID, cast("_Identified", obj).id)
         return await self.ashrink(obj)
 
 
@@ -298,7 +306,7 @@ class FullFilledEnum(BaseModel):
     default_returnwidget: ReturnWidgetInput | None
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
 
-    def expand(self, value: str | int) -> Any:
+    def expand(self, value: str | int) -> object:
         """The member a wire value names.
 
         A string is a choice name. An int is accepted for members whose value
@@ -315,7 +323,7 @@ class FullFilledEnum(BaseModel):
         raise KeyError(value)
 
 
-def _member_value(member: Any) -> Any:
+def _member_value(member: object) -> object:
     """The bare value of an enum member, or the literal value itself."""
     return member.value if isinstance(member, Enum) else member
 

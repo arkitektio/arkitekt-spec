@@ -20,7 +20,15 @@ import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Generator
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Protocol, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Literal,
+    Protocol,
+    TypeVar,
+    runtime_checkable,
+)
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
@@ -36,6 +44,8 @@ from arkitekt_spec.declare.targets import CallTarget, ImplementationTarget
 from arkitekt_spec.scalars import ActionHash
 
 logger = logging.getLogger("arkitekt.task")
+
+T = TypeVar("T")
 
 TASK_MARKER = "__arkitekt_task__"
 """The class attribute that makes a parameter receive the running task."""
@@ -345,12 +355,14 @@ class Task(Protocol):
         """Sleep for ``seconds``: the deadline is recorded, then slept until."""
         ...
 
-    def record(self, fn: Callable[[], Any], key: str | None = None) -> Any:
+    def record(self, fn: Callable[[], T], key: str | None = None) -> T:
         """Take a value from outside the task through ``fn``, recorded so a resumed
         workflow gets the same one back instead of calling ``fn`` again. JSON only."""
         ...
 
-    async def arecord(self, fn: Callable[[], Any], key: str | None = None) -> Any:
+    async def arecord(
+        self, fn: Callable[[], T | Awaitable[T]], key: str | None = None
+    ) -> T:
         """Take a value from outside the task through ``fn`` (awaited if it is a
         coroutine function), recorded so a resumed workflow gets the same one back."""
         ...
@@ -359,12 +371,12 @@ class Task(Protocol):
 
     def retry(
         self,
-        call: Callable[..., Any],
+        call: Callable[..., T],
         *args: Any,
         attempts: int = 3,
         if_started: bool = False,
         **kwargs: Any,
-    ) -> Any:
+    ) -> T:
         """Call ``call(*args, **kwargs)``, again when its agent is lost (``AgentLost``).
 
         Only when that is safe: when the lost step never started, or when you say so with
@@ -374,12 +386,12 @@ class Task(Protocol):
 
     async def aretry(
         self,
-        call: Callable[..., Any],
+        call: Callable[..., T | Awaitable[T]],
         *args: Any,
         attempts: int = 3,
         if_started: bool = False,
         **kwargs: Any,
-    ) -> Any:
+    ) -> T:
         """:meth:`retry`, awaiting ``call``."""
         ...
 
@@ -519,7 +531,7 @@ class Task(Protocol):
         target: CallTarget | ImplementationTarget,
         *args: Any,  # the action's own arguments
         **kwargs: Any,  # ditto, by keyword
-    ) -> Any:  # whatever the action returns
+    ) -> object:  # whatever the action returns
         """Call an action as a child of this task, blocking for its result.
 
         Raises:
@@ -540,7 +552,7 @@ class Task(Protocol):
         prompt: AssignPrompt | None = None,
         state_requires: list[StateRequirement] | None = None,
         **kwargs: Any,  # ditto, by keyword
-    ) -> Any:  # whatever the action returns
+    ) -> object:  # whatever the action returns
         """Call an action as a child of this task.
 
         ``target`` is an already-fetched ``Action`` or ``Implementation``: a task knows
@@ -565,7 +577,7 @@ class Task(Protocol):
         target: CallTarget | ImplementationTarget,
         *args: Any,  # the action's own arguments
         **kwargs: Any,  # ditto, by keyword
-    ) -> Generator[Any, None, None]:
+    ) -> Generator[object, None, None]:
         """Stream a generator action's yields as a child of this task, blocking between them.
 
         Raises:
@@ -585,7 +597,7 @@ class Task(Protocol):
         prompt: AssignPrompt | None = None,
         state_requires: list[StateRequirement] | None = None,
         **kwargs: Any,  # ditto, by keyword
-    ) -> AsyncIterator[Any]:
+    ) -> AsyncIterator[object]:
         """Stream a generator action's yields as a child of this task.
 
         Raises:
@@ -606,7 +618,7 @@ class Task(Protocol):
         cancel_timeout: float | None = None,
         prompt: AssignPrompt | None = None,
         state_requires: list[StateRequirement] | None = None,
-    ) -> Any:  # the backend's raw payload
+    ) -> object:  # the backend's raw payload
         """Call with already-serialized arguments, as a child of this task.
 
         Nothing is shrunk or expanded: ``kwargs`` goes out as it is, and what comes
@@ -630,7 +642,7 @@ class Task(Protocol):
         cancel_timeout: float | None = None,
         prompt: AssignPrompt | None = None,
         state_requires: list[StateRequirement] | None = None,
-    ) -> AsyncIterator[Any]:
+    ) -> AsyncIterator[object]:
         """Stream with already-serialized arguments, as a child of this task.
 
         Raises:
@@ -744,34 +756,38 @@ class LocalTask:
         """Sleep for ``seconds``."""
         await asyncio.sleep(max(0.0, seconds))
 
-    def record(self, fn: Callable[[], Any], key: str | None = None) -> Any:
+    def record(self, fn: Callable[[], T], key: str | None = None) -> T:
         """``fn()``; nothing records it."""
         return fn()
 
-    async def arecord(self, fn: Callable[[], Any], key: str | None = None) -> Any:
+    async def arecord(
+        self, fn: Callable[[], T | Awaitable[T]], key: str | None = None
+    ) -> T:
         """``fn()``, awaited if it is a coroutine function; nothing records it."""
         value = fn()
-        return await value if inspect.isawaitable(value) else value
+        if inspect.isawaitable(value):
+            return await value
+        return value
 
     def retry(
         self,
-        call: Callable[..., Any],
+        call: Callable[..., T],
         *args: Any,
         attempts: int = 3,
         if_started: bool = False,
         **kwargs: Any,
-    ) -> Any:
+    ) -> T:
         """Call it, again when its agent is lost and that is safe (see :meth:`Task.retry`)."""
         return retry(call, *args, attempts=attempts, if_started=if_started, **kwargs)
 
     async def aretry(
         self,
-        call: Callable[..., Any],
+        call: Callable[..., T | Awaitable[T]],
         *args: Any,
         attempts: int = 3,
         if_started: bool = False,
         **kwargs: Any,
-    ) -> Any:
+    ) -> T:
         """Await it, again when its agent is lost and that is safe (see :meth:`Task.retry`)."""
         return await aretry(
             call, *args, attempts=attempts, if_started=if_started, **kwargs
@@ -869,7 +885,7 @@ class LocalTask:
         target: CallTarget | ImplementationTarget,
         *args: Any,
         **kwargs: Any,
-    ) -> Any:
+    ) -> object:
         """Refuse: a local task cannot call.
 
         Raises:
@@ -889,7 +905,7 @@ class LocalTask:
         prompt: AssignPrompt | None = None,
         state_requires: list[StateRequirement] | None = None,
         **kwargs: Any,
-    ) -> Any:
+    ) -> object:
         """Refuse: a local task cannot call.
 
         Raises:
@@ -902,7 +918,7 @@ class LocalTask:
         target: CallTarget | ImplementationTarget,
         *args: Any,
         **kwargs: Any,
-    ) -> Generator[Any, None, None]:
+    ) -> Generator[object, None, None]:
         """Refuse: a local task cannot call.
 
         Raises:
@@ -922,7 +938,7 @@ class LocalTask:
         prompt: AssignPrompt | None = None,
         state_requires: list[StateRequirement] | None = None,
         **kwargs: Any,
-    ) -> AsyncIterator[Any]:
+    ) -> AsyncIterator[object]:
         """Refuse: a local task cannot call.
 
         Raises:
@@ -944,7 +960,7 @@ class LocalTask:
         cancel_timeout: float | None = None,
         prompt: AssignPrompt | None = None,
         state_requires: list[StateRequirement] | None = None,
-    ) -> Any:
+    ) -> object:
         """Refuse: a local task cannot call.
 
         Raises:
@@ -965,7 +981,7 @@ class LocalTask:
         cancel_timeout: float | None = None,
         prompt: AssignPrompt | None = None,
         state_requires: list[StateRequirement] | None = None,
-    ) -> AsyncIterator[Any]:
+    ) -> AsyncIterator[object]:
         """Refuse: a local task cannot call.
 
         Raises:
@@ -982,12 +998,12 @@ def _should_retry(
 
 
 def retry(
-    call: Callable[..., Any],
+    call: Callable[..., T],
     *args: Any,
     attempts: int = 3,
     if_started: bool = False,
     **kwargs: Any,
-) -> Any:
+) -> T:
     """Call ``call(*args, **kwargs)``, again when its agent is lost and that is safe.
 
     Safe means the lost step never started, or ``if_started=True``: you know running it
@@ -1004,17 +1020,19 @@ def retry(
 
 
 async def aretry(
-    call: Callable[..., Any],
+    call: Callable[..., T | Awaitable[T]],
     *args: Any,
     attempts: int = 3,
     if_started: bool = False,
     **kwargs: Any,
-) -> Any:
+) -> T:
     """:func:`retry`, awaiting ``call``."""
     for attempt in range(1, attempts + 1):
         try:
             value = call(*args, **kwargs)
-            return await value if inspect.isawaitable(value) else value
+            if inspect.isawaitable(value):
+                return await value
+            return value
         except AgentLost as lost:
             if not _should_retry(lost, attempt, attempts, if_started):
                 raise

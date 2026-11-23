@@ -13,6 +13,7 @@ from arkitekt_spec.actions import (
 )
 from arkitekt_spec.blok.bsx import parse_bsx
 from arkitekt_spec.blok.catalogs import default_view
+from arkitekt_spec.blok.vocabulary import Finding
 from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.blok.validate import (
     BlokScope,
@@ -113,7 +114,7 @@ def test_a_string_on_a_typed_prop_says_how_to_write_it() -> None:
     assert finding.message.endswith("write fullWidth={true}.")
 
 
-def validate_bsx_findings(source: str):
+def validate_bsx_findings(source: str) -> list[Finding]:
     tree = parse_bsx(f'<Blok kind="agent" context="panel">{source}</Blok>')
     return [
         finding

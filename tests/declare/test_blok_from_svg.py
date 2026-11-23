@@ -3,6 +3,7 @@
 import re
 import warnings
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any, Literal
 
 import pytest
@@ -164,7 +165,7 @@ def test_an_inkscape_file_is_flattened_through_its_cascade() -> None:
     register(source)
 
 
-def test_a_file_and_its_text_convert_alike(tmp_path) -> None:
+def test_a_file_and_its_text_convert_alike(tmp_path: Path) -> None:
     path = tmp_path / "crop.svg"
     path.write_text(LUCIDE)
     assert from_svg(path) == from_svg(LUCIDE) == from_svg(LUCIDE.encode())

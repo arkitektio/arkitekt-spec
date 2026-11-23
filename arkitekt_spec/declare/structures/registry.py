@@ -19,6 +19,7 @@ from typing import (
 if TYPE_CHECKING:
     from arkitekt_spec.declare.agents.types import BoundApp
     from arkitekt_spec.declare.declare import DeclaredAgentProtocol
+    from arkitekt_spec.declare.interactions import DeclaredInteractions
 
 from functools import partial
 
@@ -221,7 +222,7 @@ class _ClientsAsApp:
         self.clients = clients
         self.services = clients
 
-    def get(self, key: type) -> Any | None:
+    def get(self, key: type[T]) -> T | None:
         """The client of class ``key``, or ``None``."""
         for client in self.clients.values():
             if isinstance(client, key):
@@ -419,34 +420,33 @@ class StructureRegistry(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def _lookup(self, map_name: str, identifier: str) -> Any:
+    def _lookup(self, own: Mapping[str, T], identifier: str) -> T:
         """Look an identifier up in one of the identifier maps.
 
         There is no chain to fall back to: a registry holds exactly what its own
         app's services declared, and nothing else.
         """
-        own: dict[str, Any] = getattr(self, map_name)
         if identifier in own:
             return own[identifier]
         raise KeyError(identifier)
 
     def get_fullfilled_structure(self, identifier: str) -> FullFilledStructure:
         """Get the fullfilled structure for a given identifier."""
-        return self._lookup("identifier_structure_map", identifier)
+        return self._lookup(self.identifier_structure_map, identifier)
 
     def get_fullfilled_enum(self, identifier: str) -> FullFilledEnum:
         """Get the fullfilled enum for a given identifier."""
-        return self._lookup("identifier_enum_map", identifier)
+        return self._lookup(self.identifier_enum_map, identifier)
 
     def get_fullfilled_model(self, identifier: str) -> FullFilledModel:
         """Get the fullfilled model for a given identifier."""
-        return self._lookup("identifier_model_map", identifier)
+        return self._lookup(self.identifier_model_map, identifier)
 
     def get_fullfilled_memory_structure(
         self, identifier: str
     ) -> FullFilledMemoryStructure:
         """Get the fullfilled memory structure for a given identifier."""
-        return self._lookup("identifier_memory_structure_map", identifier)
+        return self._lookup(self.identifier_memory_structure_map, identifier)
 
     def declared_as_another(
         self, value: object, identifier: str
@@ -884,14 +884,14 @@ class StructureRegistry(BaseModel):
                 "A protocol class means one thing to an app."
             )
 
-    def protocol_for(self, cls: Any) -> "DeclaredAgentProtocol[Any]":
+    def protocol_for(self, cls: object) -> "DeclaredAgentProtocol[Any]":
         """The declared protocol kept under ``cls``.
 
         Raises:
             KeyError: If ``cls`` was not declared on this app.
         """
         try:
-            return self.protocols[cls]
+            return self.protocols[cast("type[Any]", cls)]
         except (KeyError, TypeError):
             shown = _display_name(cls)
             raise KeyError(
@@ -899,21 +899,21 @@ class StructureRegistry(BaseModel):
                 f"`@app.declare(...)` before naming it."
             ) from None
 
-    def is_protocol(self, annotation: Any) -> bool:
+    def is_protocol(self, annotation: object) -> bool:
         """Whether ``annotation`` is a class this app declared a protocol for."""
         try:
             return annotation in self.protocols
         except TypeError:  # unhashable annotation
             return False
 
-    def interactions_for(self, cls: Any) -> Any:
+    def interactions_for(self, cls: object) -> "DeclaredInteractions":
         """The interactions protocol (a ``DeclaredInteractions``) kept under ``cls``.
 
         Raises:
             KeyError: If ``cls`` was not declared on this app.
         """
         try:
-            return self.interactions[cls]
+            return self.interactions[cast("type[Any]", cls)]
         except (KeyError, TypeError):
             shown = _display_name(cls)
             raise KeyError(
@@ -921,28 +921,28 @@ class StructureRegistry(BaseModel):
                 f"`@app.interactions` before naming it."
             ) from None
 
-    def is_interactions(self, annotation: Any) -> bool:
+    def is_interactions(self, annotation: object) -> bool:
         """Whether ``annotation`` is a class this app declared an interactions protocol for."""
         try:
             return annotation in self.interactions
         except TypeError:  # unhashable annotation
             return False
 
-    def is_state(self, annotation: Any) -> bool:
+    def is_state(self, annotation: object) -> bool:
         """Whether ``annotation`` is a class this app registered as a state."""
         try:
             return annotation in self.states
         except TypeError:  # unhashable annotation
             return False
 
-    def state_for(self, cls: Any) -> StateDeclaration:
+    def state_for(self, cls: object) -> StateDeclaration:
         """What this app declared about the state class ``cls``.
 
         Raises:
             KeyError: If ``cls`` is not a state of this app.
         """
         try:
-            return self.states[cls]
+            return self.states[cast("type[Any]", cls)]
         except (KeyError, TypeError):
             shown = _display_name(cls)
             raise KeyError(
@@ -1058,15 +1058,15 @@ class StructureRegistry(BaseModel):
             return decorate(cls[0])
         return decorate
 
-    def model_for(self, cls: Any) -> FullFilledModel | None:
+    def model_for(self, cls: object) -> FullFilledModel | None:
         """The model this app declared for ``cls``, or ``None``."""
         try:
-            found = self.find_for_cls(cls)
+            found = self.find_for_cls(cast("type[Any]", cls))
         except TypeError:  # unhashable annotation
             return None
         return found if isinstance(found, FullFilledModel) else None
 
-    def is_context(self, annotation: Any) -> bool:
+    def is_context(self, annotation: object) -> bool:
         """Whether ``annotation`` is a class this app declared as a context."""
         try:
             return annotation in self.contexts
@@ -1104,7 +1104,7 @@ class StructureRegistry(BaseModel):
             return decorate(cls[0])
         return decorate
 
-    def is_app_context(self, annotation: Any) -> bool:
+    def is_app_context(self, annotation: object) -> bool:
         """Whether ``annotation`` is a class this app declared as its app context."""
         try:
             return annotation in self.app_contexts
@@ -1124,14 +1124,14 @@ class StructureRegistry(BaseModel):
                 f"an app has one, so {cls.__name__} cannot be another."
             )
 
-    def context_for(self, cls: Any) -> ContextDeclaration:
+    def context_for(self, cls: object) -> ContextDeclaration:
         """What this app declared about the context class ``cls``.
 
         Raises:
             KeyError: If ``cls`` is not a context of this app.
         """
         try:
-            return self.contexts[cls]
+            return self.contexts[cast("type[Any]", cls)]
         except (KeyError, TypeError):
             shown = _display_name(cls)
             raise KeyError(
@@ -1461,7 +1461,7 @@ class StructureRegistry(BaseModel):
         effects: list[EffectInput] | None = None,
         label: str | None = None,
         validators: list[ValidatorInput] | None = None,
-        default: Any = None,
+        default: object = None,
         assign_widget: AssignWidgetInput | None = None,
         return_widget: ReturnWidgetInput | None = None,
         requires: list[RequiresInput] | None = None,

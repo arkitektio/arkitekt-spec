@@ -24,7 +24,7 @@ def declaration(description: str | None = "Segments nuclei") -> AppDeclaration:
     )
 
 
-def test_the_inspection_says_what_the_declaration_says():
+def test_the_inspection_says_what_the_declaration_says() -> None:
     app = declaration()
     inspection = app.to_inspection(size=42)
 
@@ -34,6 +34,6 @@ def test_the_inspection_says_what_the_declaration_says():
     assert list(inspection.implementations) == list(app.implementations)
 
 
-def test_a_declaration_round_trips_as_json():
+def test_a_declaration_round_trips_as_json() -> None:
     app = declaration()
     assert AppDeclaration.model_validate_json(app.model_dump_json(by_alias=True)) == app

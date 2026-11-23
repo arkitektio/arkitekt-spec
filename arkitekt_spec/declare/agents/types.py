@@ -83,7 +83,7 @@ def resolve_service_clients(
     bound_app: "BoundApp | None",
     *,
     whose: str,
-    task: Any = None,
+    task: object = None,
 ) -> dict[str, Any]:
     """Fill each parameter with the app's client of the class it asked for.
 

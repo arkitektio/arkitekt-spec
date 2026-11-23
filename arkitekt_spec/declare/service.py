@@ -39,6 +39,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Generic,
+    Protocol,
     TypeVar,
     Union,
     get_args,
@@ -60,6 +61,25 @@ if TYPE_CHECKING:
     from arkitekt_spec.declare.structures.registry import StructureRegistry
 
 C = TypeVar("C")
+
+
+class RunFakts(Protocol):
+    """A run's fakts, as far as building a service or a provider reads them.
+
+    ``fakts.Fakts`` is one; the spec depends on no client, so it names only what it
+    calls.
+    """
+
+    async def aget_alias(self, fakts_key: str, /) -> object: ...
+
+    async def aget_alias_or_none(self, fakts_key: str, /) -> object: ...
+
+    async def aget_self_alias(self) -> object: ...
+
+    @property
+    def manifest(self) -> object: ...
+
+
 """What a service's function returns: its client."""
 
 
@@ -96,7 +116,7 @@ class _Injection:
         self.cls = cls
 
 
-def _wants_alias(inner: Any) -> tuple[bool, bool]:
+def _wants_alias(inner: object) -> tuple[bool, bool]:
     """Whether an annotation's inner type is an ``Alias``, and whether it is optional.
 
     Args:
@@ -119,7 +139,7 @@ def _wants_alias(inner: Any) -> tuple[bool, bool]:
 def _injection_for(
     function_name: str,
     name: str,
-    annotation: Any,
+    annotation: object,
     *,
     clients_of: "StructureRegistry | None" = None,
 ) -> _Injection:
@@ -371,7 +391,7 @@ class Service(Generic[C]):
     # Building                                                           #
     # ------------------------------------------------------------------ #
 
-    async def build(self, fakts: Any, registry: "AppRegistry") -> C:
+    async def build(self, fakts: RunFakts | None, registry: "AppRegistry") -> C:
         """Resolve this service's requirements and build its client, once.
 
         Each requirement is resolved here, when the run connects, and the

@@ -10,7 +10,7 @@ the server the app itself logged into. Reading those is declaration; resolving t
 import ipaddress
 import ssl as _ssl  # `Alias.ssl` (the field) shadows the module inside the class
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol, Self, runtime_checkable
+from typing import Literal, Protocol, Self, runtime_checkable
 
 from pydantic import BaseModel, Field, PrivateAttr
 
@@ -24,7 +24,7 @@ _TAILNET = ipaddress.IPv4Network("100.64.0.0/10")
 FAKTS_MARKER = "__arkitekt_fakts__"
 
 
-def is_fakts_client(annotation: Any) -> bool:
+def is_fakts_client(annotation: object) -> bool:
     """Whether a parameter annotation asks for the whole configuration client."""
     return (
         isinstance(annotation, type)

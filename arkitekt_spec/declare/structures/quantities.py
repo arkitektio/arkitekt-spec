@@ -17,13 +17,37 @@ both the question and the answer.
 
 import importlib.util
 import sys
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Protocol, TypeGuard
 
 if TYPE_CHECKING:
     from kanne import PintQuantity
 
 
-def _pint_quantity(load: bool = False) -> Any:
+class _Dimensioned(Protocol):
+    """A pint quantity, as far as this module reads one."""
+
+    @property
+    def dimensionality(self) -> object: ...
+
+
+class _KanneQuantity(Protocol):
+    """A kanne ``PintQuantity``, as far as this module reads one."""
+
+    @property
+    def quantity(self) -> _Dimensioned: ...
+
+    def to_pint_string(self) -> str: ...
+
+
+class _UnitRegistry(Protocol):
+    """kanne's pint unit registry, as far as this module calls it."""
+
+    def __call__(self, value: str, /) -> _Dimensioned: ...
+
+    def get_dimensionality(self, unit: str, /) -> object: ...
+
+
+def _pint_quantity(load: bool = False) -> "type[_KanneQuantity] | None":
     """kanne's ``PintQuantity``, when kanne is loaded; ``None`` otherwise.
 
     ``load`` imports an installed kanne that nobody imported yet. That is for a
@@ -37,14 +61,14 @@ def _pint_quantity(load: bool = False) -> Any:
     return getattr(module, "PintQuantity", None)
 
 
-def _registry() -> Any:
+def _registry() -> _UnitRegistry:
     """kanne's unit registry. Only called once kanne is known to be loaded."""
     from kanne.registry import get_global_registry
 
     return get_global_registry()
 
 
-def is_pint_quantity(cls: Any) -> bool:
+def is_pint_quantity(cls: object) -> "TypeGuard[type[PintQuantity]]":
     """Whether ``cls`` is a kanne dimension type (a :class:`~kanne.PintQuantity` subclass).
 
     Always ``False`` when kanne isn't installed, so callers need no separate guard.
@@ -111,7 +135,7 @@ def resolve_quantity_type(unit: str | None) -> "type[PintQuantity] | None":
     return _REFERENCE_UNIT_TO_TYPE.get(unit)
 
 
-def shrink_quantity(value: Any) -> str:
+def shrink_quantity(value: object) -> str:
     """Render a QUANTITY value as its abbreviated pint string for the wire (``"5 mV"``).
 
     Accepts a kanne :class:`~kanne.PintQuantity`, a raw ``pint.Quantity`` (formatted with
@@ -128,7 +152,7 @@ def shrink_quantity(value: Any) -> str:
         return str(value)
 
 
-def expand_quantity(value: Any, reference_unit: str | None) -> Any:
+def expand_quantity(value: object, reference_unit: str | None) -> "PintQuantity":
     """Parse a wire value into a live kanne quantity of the type identified by ``reference_unit``.
 
     Raises :class:`ValueError` if kanne isn't installed or no kanne type declares
@@ -148,7 +172,7 @@ def expand_quantity(value: Any, reference_unit: str | None) -> Any:
     return cls.validate(value)
 
 
-def matches_dimension(value: Any, dimension: str | None) -> bool:
+def matches_dimension(value: object, dimension: str | None) -> bool:
     """Whether ``value`` is a quantity whose pint dimensionality equals ``dimension``.
 
     Used to predicate a QUANTITY port (e.g. for union disambiguation) and, conceptually,
@@ -162,13 +186,15 @@ def matches_dimension(value: Any, dimension: str | None) -> bool:
     registry = _registry()
     try:
         if isinstance(value, quantity_type):
-            quantity = value.quantity
+            dimensionality = value.quantity.dimensionality
         elif isinstance(value, str):
-            quantity = registry(value)
-        elif getattr(value, "dimensionality", None) is not None:
-            quantity = value  # a raw pint.Quantity
+            dimensionality = registry(value).dimensionality
         else:
-            return False
-        return str(quantity.dimensionality) == dimension
+            dimensionality = getattr(
+                value, "dimensionality", None
+            )  # a raw pint.Quantity
+            if dimensionality is None:
+                return False
+        return str(dimensionality) == dimension
     except Exception:
         return False

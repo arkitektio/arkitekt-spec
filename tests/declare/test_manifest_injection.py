@@ -5,9 +5,6 @@ description) and nothing else fakts holds, so it takes an ``AppManifest`` -- a
 run hands it its fakts' manifest, which is one (fakts' login manifest subclasses it).
 """
 
-from types import SimpleNamespace
-from typing import Any
-
 import pytest
 
 from arkitekt_spec.declare.app import AppRegistry
@@ -30,15 +27,33 @@ class Agent:
     def __init__(self, manifest: AppManifest) -> None:
         self.manifest = manifest
 
-    async def aprovide(self, context: Any) -> None: ...
+    async def aprovide(self, context: object) -> None: ...
     async def aconnect(
-        self, context: Any = None, timeout: float | None = None
+        self, context: object = None, timeout: float | None = None
     ) -> None: ...
     async def aloop(self) -> None: ...
 
 
 MANIFEST = LoginManifest(identifier="app", version="1.0", description="does things")
-FAKTS = SimpleNamespace(manifest=MANIFEST)
+
+
+class Fakts:
+    """A run's fakts that only know the manifest: nothing here resolves an alias."""
+
+    def __init__(self, manifest: AppManifest) -> None:
+        self.manifest = manifest
+
+    async def aget_alias(self, fakts_key: str, /) -> object:
+        raise AssertionError(f"no alias is asked for here ({fakts_key})")
+
+    async def aget_alias_or_none(self, fakts_key: str, /) -> object:
+        raise AssertionError(f"no alias is asked for here ({fakts_key})")
+
+    async def aget_self_alias(self) -> object:
+        raise AssertionError("no alias is asked for here")
+
+
+FAKTS = Fakts(MANIFEST)
 
 
 @pytest.mark.asyncio

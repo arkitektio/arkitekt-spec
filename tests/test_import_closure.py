@@ -6,6 +6,7 @@ Checked in a subprocess: the test session itself may have loaded anything.
 import ast
 import subprocess
 import sys
+from pathlib import Path
 
 RUNTIMES = ("rekuest", "arkitekt", "rath", "koil", "fakts", "websockets", "graphql")
 
@@ -18,7 +19,7 @@ def _loaded_after(statement: str) -> set[str]:
     return set(ast.literal_eval(out.stdout.strip()))
 
 
-def test_the_declaration_layer_loads_no_runtime():
+def test_the_declaration_layer_loads_no_runtime() -> None:
     loaded = _loaded_after(
         "import arkitekt_spec, arkitekt_spec.declare.app, arkitekt_spec.declare.widgets"
     )
@@ -42,7 +43,7 @@ app.to_implement_agent_input()
 """
 
 
-def test_an_app_can_be_declared_with_the_spec_alone(tmp_path):
+def test_an_app_can_be_declared_with_the_spec_alone(tmp_path: Path) -> None:
     script = tmp_path / "app.py"
     script.write_text(APP)
     loaded = _loaded_after(f"exec(open({str(script)!r}).read())")

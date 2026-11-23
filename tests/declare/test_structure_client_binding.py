@@ -52,7 +52,9 @@ async def test_a_shrinker_that_names_no_client_is_handed_none() -> None:
     structure = bound(shrink_book)
     assert await structure.shrink(Book("7")) == "book-7"
     # The expander still gets its client.
-    assert (await structure.expand("7")).shelf == "central"
+    book = await structure.expand("7")
+    assert isinstance(book, Book)
+    assert book.shelf == "central"
 
 
 @pytest.mark.asyncio

@@ -9,6 +9,7 @@ from arkitekt_spec.declare.catalogs import (
     UNKNOWN_OPERATION,
     ArgumentSpec,
     Catalog,
+    CatalogView,
     ComponentSpec,
     OperationSpec,
     PropSpec,
@@ -53,12 +54,12 @@ NAMED_ONLY = Catalog(name="electron", operations=(), components=())
 """A catalog that exists as a name but registered nothing."""
 
 
-def electron_view():
+def electron_view() -> CatalogView:
     """The view for a fully registered ``electron``."""
     return resolve_catalogs([ELECTRON], authoritative=True)
 
 
-def base_view():
+def base_view() -> CatalogView:
     """Base only: no components, operations not authoritative."""
     return resolve_catalogs([], authoritative=False)
 

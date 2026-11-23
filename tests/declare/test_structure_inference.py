@@ -54,7 +54,7 @@ def test_explicit_class_covers_an_untyped_expander() -> None:
     registry = registry_with_client()
 
     @registry.structure("@things/thing", cls=Thing)
-    async def expand_thing(id: str, things: ThingClient) -> Any:
+    async def expand_thing(id: str, things: ThingClient) -> Any:  # noqa: ANN401 -- what this test is about: an expander annotated Any
         return await things.aget_thing(id)
 
     assert (
@@ -68,7 +68,7 @@ def test_no_class_anywhere_is_refused() -> None:
     with pytest.raises(StructureDefinitionError, match="does not say what it returns"):
 
         @registry.structure("@things/thing")
-        async def expand_thing(id: str, things: ThingClient):
+        async def expand_thing(id: str, things: ThingClient):  # noqa: ANN202 -- what this test is about: an expander that does not say what it returns
             return await things.aget_thing(id)
 
 

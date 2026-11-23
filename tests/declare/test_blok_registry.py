@@ -9,7 +9,7 @@ from typing import Protocol
 
 import pytest
 
-from arkitekt_spec.actions import Execution
+from arkitekt_spec.actions import BlokImplementationInput, Execution
 from arkitekt_spec.blok.vocabulary import BlokError
 from arkitekt_spec.declare.app import AppRegistry
 from arkitekt_spec.declare.blok.registry import resolved_locals
@@ -48,7 +48,7 @@ def registry() -> AppRegistry:
     return registry
 
 
-def built(registry: AppRegistry, name: str = "panel"):
+def built(registry: AppRegistry, name: str = "panel") -> BlokImplementationInput:
     return registry.get_declared_bloks()[name]
 
 

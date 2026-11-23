@@ -8,7 +8,7 @@ and structure registries.
 import hashlib
 import inspect
 import os
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import replace as dataclass_replace
 from pathlib import Path, PurePosixPath
 from typing import (
@@ -43,6 +43,7 @@ from arkitekt_spec.actions import (
     LockImplementationInput,
     PortGroupInput,
     PortKind,
+    ReturnPortInput,
     ReturnWidgetInput,
     StateImplementationInput,
     TestTargetInput,
@@ -106,6 +107,7 @@ from arkitekt_spec.declare.structures.registry import StructureRegistry
 from arkitekt_spec.declare.structures.types import (
     Describer,
     ExpanderT,
+    FullFilledStructure,
     ManyExpander,
     Shrinker,
     StateDeclaration,
@@ -121,7 +123,7 @@ if TYPE_CHECKING:
     from arkitekt_spec.declare.register import WrappedFunction
 
 
-def _function_origin(function: Any) -> DeclaredAt | None:
+def _function_origin(function: Callable[..., object]) -> DeclaredAt | None:
     """The line ``function`` is defined on, where a warning about it points; ``None`` for a callable object."""
     code = getattr(inspect.unwrap(function), "__code__", None)
     if code is None:
@@ -271,7 +273,7 @@ class AssetDeclaration(BaseModel):
 
 def _owner_among(
     services: "Mapping[str, Service[Any]]",
-) -> "Callable[[Any], str | None]":
+) -> "Callable[[FullFilledStructure], str | None]":
     """Name, for a structure, the one of ``services`` whose client expands it.
 
     The service whose function returns what the expander asks for owns the
@@ -280,7 +282,7 @@ def _owner_among(
     """
     names = list(services)
 
-    def owner(structure: Any) -> str | None:
+    def owner(structure: FullFilledStructure) -> str | None:
         if len(names) == 1:
             return names[0]
         for name in names:
@@ -324,7 +326,7 @@ def _refuse_unpersistable(
             "or a period in seconds above 0."
         )
 
-    def in_memory(port: Any) -> bool:
+    def in_memory(port: ReturnPortInput) -> bool:
         return port.kind == PortKind.MEMORY_STRUCTURE or any(
             in_memory(child) for child in port.children or ()
         )
@@ -617,7 +619,9 @@ class AppRegistry(BaseModel):
         """
         needed: dict[str, set[str]] = {}
 
-        def visit(interface: str, ports: Any) -> None:
+        def visit(
+            interface: str, ports: Iterable[ArgPortInput | ReturnPortInput] | None
+        ) -> None:
             for port in ports or ():
                 if port.kind == PortKind.STRUCTURE and port.identifier:
                     try:
@@ -637,7 +641,7 @@ class AppRegistry(BaseModel):
                         and structure.service
                     ):
                         needed.setdefault(structure.service, set()).add(interface)
-                visit(interface, getattr(port, "children", None))
+                visit(interface, port.children)
 
         for interface, implementation in self.implementations.items():
             visit(interface, implementation.definition.args)
@@ -1505,7 +1509,7 @@ class AppRegistry(BaseModel):
         }
         problems: list[str] = []
 
-        def check(port: Any, where: str) -> None:
+        def check(port: ArgPortInput | ReturnPortInput, where: str) -> None:
             known = resolvable.get(port.kind)
             if known is not None and port.identifier is not None:
                 if port.identifier not in known:
@@ -1780,7 +1784,7 @@ class AppRegistry(BaseModel):
         """The class a run's ``context=`` must be an instance of, or ``None``."""
         return self.structure_registry.app_context_class
 
-    def require_app_context(self, value: Any, *, whose: str) -> None:
+    def require_app_context(self, value: object, *, whose: str) -> None:
         """Refuse a run whose ``context=`` does not fit what this app declared.
 
         Called by whatever starts the agent (a run, a served FastAPI app, the

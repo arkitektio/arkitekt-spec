@@ -5,17 +5,16 @@ inherits its ``app`` from the protocol's core app and its ``key`` from the metho
 name. Applying :func:`demand` to a method redirects it to *another* action.
 """
 
-from typing import Any
-
 from arkitekt_spec.actions import (
     ActionDemandInput,
+    ActionDependencyInput,
     AgentDependencyInput,
 )
 from arkitekt_spec.declare.declare import demand
 from arkitekt_spec.declare.structures.registry import StructureRegistry
 
 
-def _dependency_of(cls: Any) -> AgentDependencyInput:
+def _dependency_of(cls: type) -> AgentDependencyInput:
     """Declare ``cls`` on an app directed at ``mymicroscope`` and read the demand back."""
     registry = StructureRegistry()
     # `bytes` is not a port kind of its own, so it is an object kept on the
@@ -31,7 +30,7 @@ def _demand_for(dependency: AgentDependencyInput, slot_key: str) -> ActionDemand
     return match.demand
 
 
-def _slot_for(dependency: AgentDependencyInput, slot_key: str):
+def _slot_for(dependency: AgentDependencyInput, slot_key: str) -> ActionDependencyInput:
     (match,) = [d for d in dependency.action_dependencies or () if d.key == slot_key]
     return match
 
