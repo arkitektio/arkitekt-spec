@@ -41,9 +41,20 @@ from arkitekt_spec.actions import (
     UtilCallInput,
 )
 from arkitekt_spec.blok.catalogs import BlokView
-from arkitekt_spec.blok.declared import LOCAL_COMPONENT, declared_local, local_like, local_problem
+from arkitekt_spec.blok.declared import (
+    LOCAL_COMPONENT,
+    declared_local,
+    local_like,
+    local_problem,
+)
 from arkitekt_spec.blok.vocabulary import JSON
-from arkitekt_spec.declare.blok.walk import BIND_PROP, Where, action_key_for, iter_nodes, walk_tree
+from arkitekt_spec.declare.blok.walk import (
+    BIND_PROP,
+    Where,
+    action_key_for,
+    iter_nodes,
+    walk_tree,
+)
 
 ArgPorts = Mapping[str, Mapping[str, Sequence[ArgPortInput]]]
 """Per dependency key (``self``), per action, its arg ports: what the SDK knows of its own actions."""
@@ -51,7 +62,16 @@ ArgPorts = Mapping[str, Mapping[str, Sequence[ArgPortInput]]]
 ITEM_KEY = "..."
 BIND_INFERRED = ("STRING", "INT", "FLOAT", "BOOL")
 """The bind kinds a local takes from its control; a LIST, DICT or ANY control tells too little."""
-TYPE_FIELDS = ("kind", "identifier", "nullable", "choices", "reference_unit", "proposed_units", "dimension", "children")
+TYPE_FIELDS = (
+    "kind",
+    "identifier",
+    "nullable",
+    "choices",
+    "reference_unit",
+    "proposed_units",
+    "dimension",
+    "children",
+)
 """What a local takes of an action's arg port when it is inferred from one: its type, nothing else."""
 
 
@@ -78,12 +98,21 @@ def default_type(default: object) -> dict[str, object] | None:
     scalar = _scalar_kind(default)
     if scalar is not None:
         return {"kind": scalar}
-    items: list[object] = list(default) if isinstance(default, list) else list(default.values()) if isinstance(default, dict) else []  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
+    items: list[object] = (
+        list(default)
+        if isinstance(default, list)
+        else list(default.values())
+        if isinstance(default, dict)
+        else []
+    )
     kinds = {_scalar_kind(item) for item in items}
     if len(kinds) != 1 or None in kinds:
         return None
     (item_kind,) = kinds
-    return {"kind": "LIST" if isinstance(default, list) else "DICT", "children": [{"key": ITEM_KEY, "kind": item_kind}]}
+    return {
+        "kind": "LIST" if isinstance(default, list) else "DICT",
+        "children": [{"key": ITEM_KEY, "kind": item_kind}],
+    }
 
 
 def match_type(match: PortMatchInput) -> dict[str, object] | None:
@@ -91,7 +120,11 @@ def match_type(match: PortMatchInput) -> dict[str, object] | None:
     too little to be a port."""
     if match.kind is None:
         return None
-    typed: dict[str, object] = {"kind": match.kind, "identifier": match.identifier, "nullable": bool(match.nullable)}
+    typed: dict[str, object] = {
+        "kind": match.kind,
+        "identifier": match.identifier,
+        "nullable": bool(match.nullable),
+    }
     if match.children:
         children: list[dict[str, object]] = []
         for child in match.children:
@@ -109,7 +142,9 @@ def port_type(port: ArgPortInput) -> dict[str, object]:
     return {key: value for key, value in dumped.items() if value is not None}
 
 
-def typed_local(local: BlokLocalInput, typed: Mapping[str, object]) -> BlokLocalInput | None:
+def typed_local(
+    local: BlokLocalInput, typed: Mapping[str, object]
+) -> BlokLocalInput | None:
     """``local`` with the type ``typed`` filling what it does not say: every field the local
     sets (its key, default, choices, nullable, widget, ...) wins over the inferred one. None when
     that makes no valid local (a QUANTITY without a unit, an ENUM without choices, ...)."""
@@ -122,7 +157,9 @@ def typed_local(local: BlokLocalInput, typed: Mapping[str, object]) -> BlokLocal
 
 def any_local(local: BlokLocalInput) -> BlokLocalInput:
     """``local`` resolved to ``ANY``."""
-    return BlokLocalInput.model_validate({**local.model_dump(exclude_none=True, exclude={"kind"}), "kind": LOCAL_ANY})
+    return BlokLocalInput.model_validate(
+        {**local.model_dump(exclude_none=True, exclude={"kind"}), "kind": LOCAL_ANY}
+    )
 
 
 @dataclass(frozen=True)
@@ -145,59 +182,124 @@ class _Uses:
     dependencies: Mapping[str, AgentDependencyInput]
     view: BlokView | None
     arg_ports: ArgPorts
-    arguments: dict[str, list[dict[str, object]]] = field(default_factory=dict[str, list[dict[str, object]]])
+    arguments: dict[str, list[dict[str, object]]] = field(
+        default_factory=dict[str, list[dict[str, object]]]
+    )
     binds: dict[str, list[str]] = field(default_factory=dict[str, list[str]])
 
-    def visit_component(self, node: ComponentNodeInput, ancestors: tuple[ComponentNodeInput, ...], scope: Mapping[str, str | None]) -> None:
+    def visit_component(
+        self,
+        node: ComponentNodeInput,
+        ancestors: tuple[ComponentNodeInput, ...],
+        scope: Mapping[str, str | None],
+    ) -> None:
         spec = self.view.component(node.component) if self.view is not None else None
         bind = spec.prop(BIND_PROP) if spec is not None else None
         for prop in node.props or ():
-            path = prop.dynamic_value.path if prop.key == BIND_PROP and prop.dynamic_value is not None else None
+            path = (
+                prop.dynamic_value.path
+                if prop.key == BIND_PROP and prop.dynamic_value is not None
+                else None
+            )
             local = scope.get(path) if path is not None else None
             if bind is not None and local is not None:
                 self.binds.setdefault(local, []).append(bind.kind)
 
-    def visit_path(self, path: str, where: Where, scope: Mapping[str, str | None]) -> None:
+    def visit_path(
+        self, path: str, where: Where, scope: Mapping[str, str | None]
+    ) -> None:
         return None
 
-    def visit_agent_call(self, call: AgentProbeInput, where: Where, scope: Mapping[str, str | None], into: str | None) -> None:
+    def visit_agent_call(
+        self,
+        call: AgentProbeInput,
+        where: Where,
+        scope: Mapping[str, str | None],
+        into: str | None,
+    ) -> None:
         action = action_key_for(call)
         for argument in call.arguments or ():
             path = argument.value_path
             local = scope.get(path) if path is not None else None
             if local is None or argument.key is None:
                 continue
-            typed = argument_type(call.dependency, action, argument.key, self.dependencies, self.arg_ports)
+            typed = argument_type(
+                call.dependency, action, argument.key, self.dependencies, self.arg_ports
+            )
             if typed is not None:
                 self.arguments.setdefault(local, []).append(typed)
 
-    def visit_util_call(self, call: UtilCallInput, where: Where, scope: Mapping[str, str | None], top: bool) -> None:
+    def visit_util_call(
+        self,
+        call: UtilCallInput,
+        where: Where,
+        scope: Mapping[str, str | None],
+        top: bool,
+    ) -> None:
         return None
 
-    def bind_let(self, name: str, items: ComponentPropInput | None, where: Where, scope: Mapping[str, str | None]) -> None:
+    def bind_let(
+        self,
+        name: str,
+        items: ComponentPropInput | None,
+        where: Where,
+        scope: Mapping[str, str | None],
+    ) -> None:
         return None
 
-    def bind_index(self, name: str, where: Where, scope: Mapping[str, str | None]) -> None:
+    def bind_index(
+        self, name: str, where: Where, scope: Mapping[str, str | None]
+    ) -> None:
         return None
 
     def bind_into(self, name: str, call: AgentProbeInput) -> None:
         return None
 
-    def bind_local(self, name: str, node: ComponentNodeInput, scope: Mapping[str, str | None]) -> str:
+    def bind_local(
+        self, name: str, node: ComponentNodeInput, scope: Mapping[str, str | None]
+    ) -> str:
         return node.id
 
 
 def argument_type(
-    dependency: str, action: str, argument: str, dependencies: Mapping[str, AgentDependencyInput], arg_ports: ArgPorts
+    dependency: str,
+    action: str,
+    argument: str,
+    dependencies: Mapping[str, AgentDependencyInput],
+    arg_ports: ArgPorts,
 ) -> dict[str, object] | None:
     """The type of an action's argument, as this side knows it: the full arg port the SDK has of
     its own actions, else the arg match of a dependency's demand; None when neither tells."""
-    port = next((each for each in arg_ports.get(dependency, {}).get(action, ()) if each.key == argument), None)
+    port = next(
+        (
+            each
+            for each in arg_ports.get(dependency, {}).get(action, ())
+            if each.key == argument
+        ),
+        None,
+    )
     if port is not None:
         return port_type(port)
     declared = dependencies.get(dependency)
-    demand = next((each.demand for each in (declared.action_dependencies or ()) if each.key == action), None) if declared is not None else None
-    match = next((each for each in (demand.arg_matches or ()) if each.key == argument), None) if demand is not None else None
+    demand = (
+        next(
+            (
+                each.demand
+                for each in (declared.action_dependencies or ())
+                if each.key == action
+            ),
+            None,
+        )
+        if declared is not None
+        else None
+    )
+    match = (
+        next(
+            (each for each in (demand.arg_matches or ()) if each.key == argument), None
+        )
+        if demand is not None
+        else None
+    )
     return match_type(match) if match is not None else None
 
 
@@ -216,27 +318,55 @@ def borrowed_type(
     elif parts[:1] == ["deps"] and len(parts) == 4:
         dependency, action, argument = parts[1], parts[2], parts[3]
     else:
-        return None, "is no argument: write self.<action>.<arg> or deps.<key>.<action>.<arg>"
-    port = next((each for each in arg_ports.get(dependency, {}).get(action, ()) if each.key == argument), None)
+        return (
+            None,
+            "is no argument: write self.<action>.<arg> or deps.<key>.<action>.<arg>",
+        )
+    port = next(
+        (
+            each
+            for each in arg_ports.get(dependency, {}).get(action, ())
+            if each.key == argument
+        ),
+        None,
+    )
     if port is not None:
         borrowed = port.model_dump(exclude=set(BORROW_EXCLUDED), exclude_none=True)
         if port.default is not None:
             borrowed["default"] = port.default
         return borrowed, None
     if dependency not in dependencies and dependency != "self":
-        return None, f"names the dependency {dependency!r}, which the mount does not have ({', '.join(sorted(dependencies)) or 'none'})"
+        return (
+            None,
+            f"names the dependency {dependency!r}, which the mount does not have ({', '.join(sorted(dependencies)) or 'none'})",
+        )
     known = arg_ports.get(dependency, {})
     declared = dependencies.get(dependency)
-    actions = {each.key: each for each in (declared.action_dependencies or ())} if declared is not None else {}
+    actions = (
+        {each.key: each for each in (declared.action_dependencies or ())}
+        if declared is not None
+        else {}
+    )
     if action not in known and action not in actions:
-        return None, f"names the action {action!r}, which {dependency} does not have ({', '.join(sorted({*known, *actions})) or 'none'})"
+        return (
+            None,
+            f"names the action {action!r}, which {dependency} does not have ({', '.join(sorted({*known, *actions})) or 'none'})",
+        )
     typed = argument_type(dependency, action, argument, dependencies, arg_ports)
     if typed is None:
-        return None, f"names the argument {argument!r}, which {dependency}.{action} does not have, or does not type"
+        return (
+            None,
+            f"names the argument {argument!r}, which {dependency}.{action} does not have, or does not type",
+        )
     return typed, None
 
 
-def resolve_local(local: BlokLocalInput, arguments: Sequence[Mapping[str, object]], binds: Sequence[str], borrowed: Mapping[str, object] | None = None) -> BlokLocalInput:
+def resolve_local(
+    local: BlokLocalInput,
+    arguments: Sequence[Mapping[str, object]],
+    binds: Sequence[str],
+    borrowed: Mapping[str, object] | None = None,
+) -> BlokLocalInput:
     """``local`` with its kind resolved by the rules of this module (a given kind is kept)."""
     if kind_given(local):
         return local
@@ -281,7 +411,12 @@ def resolve_locals(
         if like is not None and (dependencies is not None or ports):
             borrowed, problem = borrowed_type(like, by_key, ports)
         resolved[node.id] = ResolvedLocal(
-            local=resolve_local(local, uses.arguments.get(node.id, ()), uses.binds.get(node.id, ()), borrowed),
+            local=resolve_local(
+                local,
+                uses.arguments.get(node.id, ()),
+                uses.binds.get(node.id, ()),
+                borrowed,
+            ),
             like_problem=problem,
         )
     return resolved

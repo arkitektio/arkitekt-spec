@@ -88,14 +88,18 @@ def test_an_unpinned_alias_is_verified_by_the_public_roots(hub_server: int) -> N
 
 
 def test_plain_aliases_are_never_pinned() -> None:
-    assert not Alias(id="p", host="localhost", ssl=False, certificates=[HUB]).is_pinned()
+    assert not Alias(
+        id="p", host="localhost", ssl=False, certificates=[HUB]
+    ).is_pinned()
 
 
 def test_the_certificates_are_never_sent_or_cached() -> None:
     assert "certificates" not in alias(certificates=[HUB]).model_dump()
 
 
-def test_native_trust_keeps_the_public_roots_and_every_hub(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_native_trust_keeps_the_public_roots_and_every_hub(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.delenv("SSL_CERT_FILE", raising=False)
     monkeypatch.setattr(tls, "_base_bundle", None)
     monkeypatch.setattr(tls, "_native", {})

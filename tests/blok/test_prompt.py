@@ -19,7 +19,11 @@ def test_a_signature_names_the_text_prop_the_values_and_the_event() -> None:
 
     line = component_signature(button)
 
-    assert line.startswith("Button[label](") and '"outline"' in line and "className" not in line
+    assert (
+        line.startswith("Button[label](")
+        and '"outline"' in line
+        and "className" not in line
+    )
     assert line.endswith("— A clickable button.")
     assert "onChange: CALLBACK(event.value)" in component_signature(select)
 
@@ -31,33 +35,69 @@ def test_a_placement_rule_is_spelled_out() -> None:
     assert "inside match" in component_signature(case)
 
 
-def test_the_prompt_lists_every_component_drawn_in_its_context_and_every_function() -> None:
+def test_the_prompt_lists_every_component_drawn_in_its_context_and_every_function() -> (
+    None
+):
     view = default_view()
 
     prompt = blok_prompt(view, kind="custom", context="PANEL")
 
-    listed = {line[2:].split("(")[0].split("[")[0] for line in prompt.splitlines() if line.startswith("- ")}
+    listed = {
+        line[2:].split("(")[0].split("[")[0]
+        for line in prompt.splitlines()
+        if line.startswith("- ")
+    }
     for component in drawn_in(view, "PANEL", "custom"):
         assert component.name in listed, component.name
     assert view.component("Model") is not None and "Model" not in listed
-    assert "timeline" in listed and not {"args", "arg", "deps", "dep", "ask", "returns", "status", "label", "message", "control", "field"} & listed
+    assert (
+        "timeline" in listed
+        and not {
+            "args",
+            "arg",
+            "deps",
+            "dep",
+            "ask",
+            "returns",
+            "status",
+            "label",
+            "message",
+            "control",
+            "field",
+        }
+        & listed
+    )
     for function in view.functions.values():
         if not function.effect:
             assert function_signature(function) in prompt
         elif function.name.split(".")[0] not in ("task", "assign", "port"):
             assert effect_signature(function) in prompt
     for effect in ("task.answer", "task.cancel", "assign.start", "port.set"):
-        assert effect_signature(view.functions[effect]) not in prompt, f"{effect} is listed for a blok that has no such root"
+        assert effect_signature(view.functions[effect]) not in prompt, (
+            f"{effect} is listed for a blok that has no such root"
+        )
     assert "queries.<name>.refetch()" in prompt
 
 
 def test_an_assign_blok_is_told_the_parts_it_places_and_how_to_start() -> None:
     prompt = blok_prompt(kind="assign")
 
-    listed = {line[2:].split("(")[0].split("[")[0] for line in prompt.splitlines() if line.startswith("- ")}
-    assert {"args", "arg", "deps", "dep"} <= listed and not {"ask", "returns", "status", "timeline"} & listed
+    listed = {
+        line[2:].split("(")[0].split("[")[0]
+        for line in prompt.splitlines()
+        if line.startswith("- ")
+    }
+    assert {"args", "arg", "deps", "dep"} <= listed and not {
+        "ask",
+        "returns",
+        "status",
+        "timeline",
+    } & listed
     functions = default_view().functions
-    assert effect_signature(functions["assign.start"]) in prompt and effect_signature(functions["task.cancel"]) not in prompt
+    assert (
+        effect_signature(functions["assign.start"]) in prompt
+        and effect_signature(functions["task.cancel"]) not in prompt
+    )
 
 
 def test_an_effect_on_the_task_is_listed_only_where_the_blok_reads_one() -> None:

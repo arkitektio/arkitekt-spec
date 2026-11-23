@@ -33,8 +33,12 @@ def derive_implementation_details(
     Explicit ``config.locks`` win; otherwise locks are inferred from the required
     state/context locks. Manipulates are the written state variables.
     """
-    state_variables, state_returns = prepare_state_variables(function, structure_registry)
-    context_variables, context_returns = prepare_context_variables(function, structure_registry)
+    state_variables, state_returns = prepare_state_variables(
+        function, structure_registry
+    )
+    context_variables, context_returns = prepare_context_variables(
+        function, structure_registry
+    )
     dependency_variables = prepare_dependency_variables(function, structure_registry)
     interaction_variables = prepare_interaction_variables(function, structure_registry)
     injected_variables = prepare_injected_variables(function, structure_registry)

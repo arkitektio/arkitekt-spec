@@ -111,7 +111,9 @@ def check_blok(blok: BlokImplementationInput) -> BlokImplementationInput:
 
     scope = BlokScope(
         # An agent declares its own bloks, and an action's logo (kind action, in LOGO only).
-        kinds=("agent", "action") if ComponentContext(blok.context) == ComponentContext.LOGO else ("agent",),
+        kinds=("agent", "action")
+        if ComponentContext(blok.context) == ComponentContext.LOGO
+        else ("agent",),
         mount=f"the agent's blok {blok.key!r}",
         dependencies=tuple(blok.dependencies or ()),
         args=tuple(port.key for port in blok.args or ()),
@@ -120,7 +122,9 @@ def check_blok(blok: BlokImplementationInput) -> BlokImplementationInput:
     for component in blok.components or ():
         validate_blok(component, scope)
         if blok_header(component).context != ComponentContext(blok.context).value:
-            raise ValueError(f"blok {blok.key!r} is sent as {ComponentContext(blok.context).value}, but its <Blok> says {blok_header(component).context}")
+            raise ValueError(
+                f"blok {blok.key!r} is sent as {ComponentContext(blok.context).value}, but its <Blok> says {blok_header(component).context}"
+            )
     return blok
 
 
@@ -129,10 +133,18 @@ def is_action_logo(blok: BlokImplementationInput) -> bool:
     from arkitekt_spec.blok.bsx import parse_bsx
     from arkitekt_spec.blok.declared import blok_header, header_problem
 
-    if blok.context != ComponentContext.LOGO and ComponentContext(blok.context) != ComponentContext.LOGO:
+    if (
+        blok.context != ComponentContext.LOGO
+        and ComponentContext(blok.context) != ComponentContext.LOGO
+    ):
         return False
-    trees = blok.components or ((parse_bsx(blok.source),) if blok.source is not None else ())
-    return any(header_problem(tree) is None and blok_header(tree).kind == "action" for tree in trees)
+    trees = blok.components or (
+        (parse_bsx(blok.source),) if blok.source is not None else ()
+    )
+    return any(
+        header_problem(tree) is None and blok_header(tree).kind == "action"
+        for tree in trees
+    )
 
 
 def check_agent_input(agent: ImplementAgentInput) -> ImplementAgentInput:
@@ -145,7 +157,7 @@ def check_agent_input(agent: ImplementAgentInput) -> ImplementAgentInput:
             name = implementation.interface or implementation.definition.name
             raise ValueError(
                 f"implementation '{name}' is drawn by the logo {implementation.logo!r}, "
-                f"which is not an action logo blok this app declares (app.blok(name, '<Blok kind=\"action\" context=\"logo\">...</Blok>'))"
+                f'which is not an action logo blok this app declares (app.blok(name, \'<Blok kind="action" context="logo">...</Blok>\'))'
             )
     for blok in agent.bloks or ():
         check_blok(blok)

@@ -240,7 +240,8 @@ def prepare_injected_variables(
         service_client_variables={
             key: unwrap_injectable(annotation)
             for key, annotation in annotations.items()
-            if structure_registry is not None and structure_registry.is_client(annotation)
+            if structure_registry is not None
+            and structure_registry.is_client(annotation)
         },
         task_variables=[
             key for key, annotation in annotations.items() if is_task(annotation)

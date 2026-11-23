@@ -8,7 +8,9 @@ if TYPE_CHECKING:
     from arkitekt_spec.declare.structures.registry import StructureRegistry
 
 
-def is_local_var(type_: Any, structure_registry: "StructureRegistry | None" = None) -> bool:
+def is_local_var(
+    type_: Any, structure_registry: "StructureRegistry | None" = None
+) -> bool:
     """Check if the type is a local variable (context or state).
 
     Local variables are injected by the agent, so they must not become ports on the
@@ -23,7 +25,11 @@ def is_local_var(type_: Any, structure_registry: "StructureRegistry | None" = No
     """
 
     from arkitekt_spec.declare.agents.context import is_context
-    from arkitekt_spec.declare.state.predicate import is_app_context, is_read_only_state, is_state
+    from arkitekt_spec.declare.state.predicate import (
+        is_app_context,
+        is_read_only_state,
+        is_state,
+    )
     from arkitekt_spec.declare.task import is_task
 
     return (

@@ -31,7 +31,9 @@ VERSION_HEADER = "Arkitekt-Service-Version"
 """Where a released service says its version, on every answer of its health route."""
 
 
-def record_tested(package: str, health_url: str, *, timeout: float = 10.0) -> str | None:
+def record_tested(
+    package: str, health_url: str, *, timeout: float = 10.0
+) -> str | None:
     """Ask the server at ``health_url`` for its version and stamp it into ``package``.
 
     Returns the version; ``None``, with nothing written, when the server names none (a
@@ -71,7 +73,9 @@ def tested_against(package: str) -> str | None:
 def stamped(package: str) -> str | None:
     """The version ``package`` is stamped with, as the server said it."""
     try:
-        return str(json.loads((resources.files(package) / STAMP).read_text())["version"])
+        return str(
+            json.loads((resources.files(package) / STAMP).read_text())["version"]
+        )
     except (OSError, ModuleNotFoundError, KeyError, ValueError):
         return None
 
@@ -87,7 +91,9 @@ def refusal(package: str, service: str | None = None) -> str | None:
         return f"{package} carries no server version it was tested against: its integration tests have to run, against a released server, before it is built."
     if service is not None:
         module, _, attribute = service.partition(":")
-        image = getattr(getattr(importlib.import_module(module), attribute), "image", None)
+        image = getattr(
+            getattr(importlib.import_module(module), attribute), "image", None
+        )
         declared = str(image).rpartition(":")[2] if image else None
         if declared is not None and declared != version.split(".")[0]:
             return f"{package} declares {image}, and was tested against {version}: say the image it is written for."
@@ -98,4 +104,6 @@ if __name__ == "__main__":
     problem = refusal(*sys.argv[1:3])
     if problem:
         sys.exit(problem)
-    print(f"{sys.argv[1]} was tested against {stamped(sys.argv[1])}: it wants {tested_against(sys.argv[1])}")
+    print(
+        f"{sys.argv[1]} was tested against {stamped(sys.argv[1])}: it wants {tested_against(sys.argv[1])}"
+    )

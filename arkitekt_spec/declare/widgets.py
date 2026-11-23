@@ -67,13 +67,16 @@ class ChoiceReturnWidgetWithChoices(ChoiceReturnWidgetInput):
     choices: tuple[ChoiceInput, ...] = Field(default=(), exclude=True)
 
 
-def _to_choices(choices: "list[str] | str | list[ChoiceInput] | tuple[ChoiceInput, ...]") -> tuple[ChoiceInput, ...]:
+def _to_choices(
+    choices: "list[str] | str | list[ChoiceInput] | tuple[ChoiceInput, ...]",
+) -> tuple[ChoiceInput, ...]:
     items = [choices] if isinstance(choices, str) else list(choices)
     return tuple(
-        choice if isinstance(choice, ChoiceInput) else ChoiceInput(value=str(choice), label=str(choice))
+        choice
+        if isinstance(choice, ChoiceInput)
+        else ChoiceInput(value=str(choice), label=str(choice))
         for choice in items
     )
-
 
 
 def SliderWidget(
@@ -228,7 +231,9 @@ def BsxWidget(
     )
 
 
-def PortBlok(source: str, fallback: AssignWidgetInput | None = None) -> AssignWidgetInput:
+def PortBlok(
+    source: str, fallback: AssignWidgetInput | None = None
+) -> AssignWidgetInput:
     """A port's widget written as a blok: BSX the form draws where the port's control would be.
 
     The blok is a field of the action's form. It reads its port as ``port`` (``port.value``,
@@ -262,7 +267,14 @@ def PortBlok(source: str, fallback: AssignWidgetInput | None = None) -> AssignWi
     source = source.strip()
     header = blok_header(parse_bsx(source))
     if header.kind != "port":
-        raise BlokError("kind.placement", n="n" if header.kind[:1] in "aeiou" else "", kind=header.kind, m="", expected="port", where="PortBlok")
+        raise BlokError(
+            "kind.placement",
+            n="n" if header.kind[:1] in "aeiou" else "",
+            kind=header.kind,
+            m="",
+            expected="port",
+            where="PortBlok",
+        )
     return BlokAssignWidgetInput(source=source, fallback=fallback)
 
 

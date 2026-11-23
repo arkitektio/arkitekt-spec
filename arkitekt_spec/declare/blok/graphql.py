@@ -53,7 +53,12 @@ def read_only_problem(document: str, kind: str = "query") -> str | None:
     A query is exactly one ``query`` operation, a subscription exactly one ``subscription``;
     a mutation is refused whatever it would do, because a change goes through a task.
     """
-    from graphql import GraphQLSyntaxError, OperationDefinitionNode, OperationType, parse
+    from graphql import (
+        GraphQLSyntaxError,
+        OperationDefinitionNode,
+        OperationType,
+        parse,
+    )
 
     try:
         definitions = parse(document).definitions
@@ -62,7 +67,9 @@ def read_only_problem(document: str, kind: str = "query") -> str | None:
     operations = [d for d in definitions if isinstance(d, OperationDefinitionNode)]
     if any(operation.operation == OperationType.MUTATION for operation in operations):
         return "a blok never runs a mutation: a change goes through a task (a service's action)"
-    wanted = OperationType.SUBSCRIPTION if kind == "subscription" else OperationType.QUERY
+    wanted = (
+        OperationType.SUBSCRIPTION if kind == "subscription" else OperationType.QUERY
+    )
     if any(operation.operation != wanted for operation in operations):
         return f"a declared {kind} holds a {kind} operation, nothing else"
     if len(operations) != 1:
@@ -102,12 +109,18 @@ def schema_shape(sdl: str) -> dict[str, Any]:
         entry: dict[str, Any] = {"kind": _kind(named)}
         if isinstance(named, (GraphQLObjectType, GraphQLInterfaceType)):
             entry["fields"] = {
-                field_name: {"type": str(f.type), "args": {arg: str(a.type) for arg, a in sorted(f.args.items())}}
+                field_name: {
+                    "type": str(f.type),
+                    "args": {arg: str(a.type) for arg, a in sorted(f.args.items())},
+                }
                 for field_name, f in sorted(named.fields.items())
             }
             entry["interfaces"] = sorted(i.name for i in named.interfaces)
         elif isinstance(named, GraphQLInputObjectType):
-            entry["fields"] = {field_name: str(f.type) for field_name, f in sorted(named.fields.items())}
+            entry["fields"] = {
+                field_name: str(f.type)
+                for field_name, f in sorted(named.fields.items())
+            }
         elif isinstance(named, GraphQLUnionType):
             entry["types"] = sorted(t.name for t in named.types)
         elif isinstance(named, GraphQLEnumType):
@@ -139,7 +152,9 @@ def _kind(named: Any) -> str:
 
 def schema_hash(sdl: str) -> str:
     """``sha256:<hex>`` of :func:`schema_shape` as compact, key-sorted JSON."""
-    canonical = json.dumps(schema_shape(sdl), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    canonical = json.dumps(
+        schema_shape(sdl), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
     return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -160,21 +175,34 @@ def check_query(sdl: str, document: str, kind: str = "query") -> QueryShape:
     schema = _build(sdl)
     try:
         ast = parse(document)
-    except GraphQLSyntaxError as error:  # read_only_problem parsed it already; kept for safety
+    except (
+        GraphQLSyntaxError
+    ) as error:  # read_only_problem parsed it already; kept for safety
         return QueryShape(errors=(f"the query is not valid GraphQL: {error.message}",))
     errors = validate(schema, ast)
     if errors:
         return QueryShape(errors=tuple(error.message for error in errors))
 
-    operation = next(d for d in ast.definitions if isinstance(d, OperationDefinitionNode))
-    fragments = {d.name.value: d for d in ast.definitions if isinstance(d, FragmentDefinitionNode)}
-    query_type = schema.subscription_type if kind == "subscription" else schema.query_type
-    assert query_type is not None  # validate() refuses an operation on a schema without its root
+    operation = next(
+        d for d in ast.definitions if isinstance(d, OperationDefinitionNode)
+    )
+    fragments = {
+        d.name.value: d
+        for d in ast.definitions
+        if isinstance(d, FragmentDefinitionNode)
+    }
+    query_type = (
+        schema.subscription_type if kind == "subscription" else schema.query_type
+    )
+    assert (
+        query_type is not None
+    )  # validate() refuses an operation on a schema without its root
     variables = tuple(
         QueryVariable(
             name=definition.variable.name.value,
             type=print_ast(definition.type),
-            required=definition.type.kind == "non_null_type" and definition.default_value is None,
+            required=definition.type.kind == "non_null_type"
+            and definition.default_value is None,
         )
         for definition in operation.variable_definitions or ()
     )
@@ -182,7 +210,9 @@ def check_query(sdl: str, document: str, kind: str = "query") -> QueryShape:
         key="data",
         kind=PortKind.DICT,
         nullable=True,
-        children=_selection_children(operation.selection_set, query_type, fragments, schema),
+        children=_selection_children(
+            operation.selection_set, query_type, fragments, schema
+        ),
     )
     return QueryShape(data=data, variables=variables)
 
@@ -198,7 +228,9 @@ _SCALAR_KINDS: Mapping[str, PortKind] = {
 }
 
 
-def _selection_children(selection_set: Any, parent: Any, fragments: Mapping[str, Any], schema: Any) -> tuple[PortMatchInput, ...]:
+def _selection_children(
+    selection_set: Any, parent: Any, fragments: Mapping[str, Any], schema: Any
+) -> tuple[PortMatchInput, ...]:
     """The fields a selection set answers with, by response key; fragments merged in."""
     from graphql import FieldNode, FragmentSpreadNode, InlineFragmentNode
 
@@ -208,10 +240,14 @@ def _selection_children(selection_set: Any, parent: Any, fragments: Mapping[str,
             name = selection.name.value
             key = selection.alias.value if selection.alias else name
             if name == "__typename":
-                children[key] = PortMatchInput(key=key, kind=PortKind.STRING, nullable=False)
+                children[key] = PortMatchInput(
+                    key=key, kind=PortKind.STRING, nullable=False
+                )
                 continue
             definition = parent.fields[name]
-            children[key] = _field_match(key, definition.type, selection, fragments, schema)
+            children[key] = _field_match(
+                key, definition.type, selection, fragments, schema
+            )
         else:
             if isinstance(selection, FragmentSpreadNode):
                 fragment = fragments[selection.name.value]
@@ -219,16 +255,28 @@ def _selection_children(selection_set: Any, parent: Any, fragments: Mapping[str,
                 assert isinstance(selection, InlineFragmentNode)
                 fragment = selection
             condition = fragment.type_condition
-            narrowed = schema.get_type(condition.name.value) if condition is not None else parent
-            for child in _selection_children(fragment.selection_set, narrowed, fragments, schema):
+            narrowed = (
+                schema.get_type(condition.name.value)
+                if condition is not None
+                else parent
+            )
+            for child in _selection_children(
+                fragment.selection_set, narrowed, fragments, schema
+            ):
                 # A field only one variant selects may be absent on the others.
                 assert child.key is not None
                 if child.key not in children:
-                    children[child.key] = child if narrowed is parent else child.model_copy(update={"nullable": True})
+                    children[child.key] = (
+                        child
+                        if narrowed is parent
+                        else child.model_copy(update={"nullable": True})
+                    )
     return tuple(children.values())
 
 
-def _field_match(key: str, type_: Any, node: Any, fragments: Mapping[str, Any], schema: Any) -> PortMatchInput:
+def _field_match(
+    key: str, type_: Any, node: Any, fragments: Mapping[str, Any], schema: Any
+) -> PortMatchInput:
     """One field's answer as a match: lists hold their item under ``...``, objects their selection."""
     from graphql import GraphQLEnumType, GraphQLList, GraphQLNonNull, GraphQLScalarType
 
@@ -237,10 +285,14 @@ def _field_match(key: str, type_: Any, node: Any, fragments: Mapping[str, Any], 
         nullable, type_ = False, type_.of_type
     if isinstance(type_, GraphQLList):
         item = _field_match(ITEM, type_.of_type, node, fragments, schema)
-        return PortMatchInput(key=key, kind=PortKind.LIST, nullable=nullable, children=(item,))
+        return PortMatchInput(
+            key=key, kind=PortKind.LIST, nullable=nullable, children=(item,)
+        )
     if isinstance(type_, GraphQLScalarType):
         # A custom scalar (a JSON, a date) can be read, not looked into.
-        return PortMatchInput(key=key, kind=_SCALAR_KINDS.get(type_.name), nullable=nullable)
+        return PortMatchInput(
+            key=key, kind=_SCALAR_KINDS.get(type_.name), nullable=nullable
+        )
     if isinstance(type_, GraphQLEnumType):
         return PortMatchInput(key=key, kind=PortKind.STRING, nullable=nullable)
     return PortMatchInput(

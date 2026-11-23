@@ -47,7 +47,9 @@ class BaseCapability(BaseModel):
         description="If false, the app runs without it and the person installing it may decline it.",
     )
 
-    model_config = ConfigDict(extra="forbid", validate_by_name=True, validate_by_alias=True)
+    model_config = ConfigDict(
+        extra="forbid", validate_by_name=True, validate_by_alias=True
+    )
 
 
 class ContainerEngineCapability(BaseCapability):

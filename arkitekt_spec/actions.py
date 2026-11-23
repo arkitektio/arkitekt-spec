@@ -268,8 +268,12 @@ class CustomAssignWidgetInput(ActionModel):
 
     @model_validator(mode="after")
     def _tree_is_pure(self) -> Self:
-        declared = [prop.declares_value for prop in self.props or () if prop.declares_value]
-        check_widget_tree(self.children, [*self.dependencies, *declared], "CustomAssignWidget")
+        declared = [
+            prop.declares_value for prop in self.props or () if prop.declares_value
+        ]
+        check_widget_tree(
+            self.children, [*self.dependencies, *declared], "CustomAssignWidget"
+        )
         return self
 
     model_config = ConfigDict(
@@ -289,9 +293,12 @@ class BlokAssignWidgetInput(ActionModel):
     )
     source: str = Field(
         min_length=1,
-        description="The port blok as v2 BSX: one `<Blok kind=\"port\" context=\"panel\">`. It reads the port as `port`, the form's other arguments as `args` and the agents a run would get as `self` and `deps`; it writes `port.value` and calls no agent.",
+        description='The port blok as v2 BSX: one `<Blok kind="port" context="panel">`. It reads the port as `port`, the form\'s other arguments as `args` and the agents a run would get as `self` and `deps`; it writes `port.value` and calls no agent.',
     )
-    vocab: Literal[2] = Field(default=2, description="The blok language version the source speaks; 2 is the only one.")
+    vocab: Literal[2] = Field(
+        default=2,
+        description="The blok language version the source speaks; 2 is the only one.",
+    )
     fallback: "AssignWidgetInput | None" = Field(
         default=None,
         description="Widget to render where the UI draws no port bloks; the port's own kind's widget when left out.",
@@ -406,7 +413,8 @@ class SliderAssignWidgetInput(SliderRules, ActionModel):
     min: float | None = Field(default=None, description="The minimum value.")
     max: float | None = Field(default=None, description="The maximum value.")
     step: float | None = Field(
-        default=None, description="The step between selectable values; must be positive."
+        default=None,
+        description="The step between selectable values; must be positive.",
     )
 
     def model_post_init(self, context: Any, /) -> None:  # noqa: ANN401, D102
@@ -551,8 +559,12 @@ class ActionDemandInput(ActionModel):
         default=None,
         description="The identifier of the app providing the action, e.g. 'imagej'. Omit (or drop when loosening) to allow equivalent actions from any app.",
     )
-    version: str | None = Field(default=None, description="The exact version of the action.")
-    name: str | None = Field(default=None, description="The display name of the action to match.")
+    version: str | None = Field(
+        default=None, description="The exact version of the action."
+    )
+    name: str | None = Field(
+        default=None, description="The display name of the action to match."
+    )
     arg_matches: tuple["PortMatchInput", ...] | None = Field(
         validation_alias=AliasChoices("arg_matches", "argMatches"),
         serialization_alias="argMatches",
@@ -566,7 +578,8 @@ class ActionDemandInput(ActionModel):
         description="The matches the action's return ports must satisfy.",
     )
     protocols: tuple[str, ...] | None = Field(
-        default=None, description="Protocols (by name) the action must implement, e.g. 'predicate'."
+        default=None,
+        description="Protocols (by name) the action must implement, e.g. 'predicate'.",
     )
     force_arg_length: int | None = Field(
         validation_alias=AliasChoices("force_arg_length", "forceArgLength"),
@@ -581,7 +594,8 @@ class ActionDemandInput(ActionModel):
         description="Require that the action has exactly this number of root returns.",
     )
     pure: bool | None = Field(
-        default=None, description="Require the action to be (or not be) pure. Omit to match either."
+        default=None,
+        description="Require the action to be (or not be) pure. Omit to match either.",
     )
     idempotent: bool | None = Field(
         default=None,
@@ -640,7 +654,8 @@ class AgentDependencyInput(ActionModel):
         description="Which app this dependency corresponds to (i.e. do you want to use a stardist agent for that or imagej agents needs to be a world unique classsifier (reverse domain notation) that identifies the type of agent you want to use, and then we can have multiple agents of the same type running in the system, e.g. startdist could be the app for all agents that correpsond to a startdist instance)",
     )
     version: str | None = Field(
-        default=None, description="The version of the app this dependency corresponds to."
+        default=None,
+        description="The version of the app this dependency corresponds to.",
     )
     name: str | None = Field(
         default=None,
@@ -675,7 +690,9 @@ class AgentDependencyInput(ActionModel):
     )
     "Whether this dependency is auto resolvable or not. If so we will try to automatically resolve it based on the demands specified in the dependency and the capabilities of the available agents in the system. This is used to identify the demand in the system. Attention if any of the dependencies of this agent dependency is not auto resolvable, this dependency will also not be auto resolvable\nDefault: False"
     mutually_exclusive_keys: tuple[str, ...] | None = Field(
-        validation_alias=AliasChoices("mutually_exclusive_keys", "mutuallyExclusiveKeys"),
+        validation_alias=AliasChoices(
+            "mutually_exclusive_keys", "mutuallyExclusiveKeys"
+        ),
         serialization_alias="mutuallyExclusiveKeys",
         default=None,
         description="A list of keys of other agent dependencies that are mutually exclusive with this one. This means two agent dependencies with mutually exclusive keys cannot be assigned to the same implementing agent. This is used to identify the demand in the system.",
@@ -713,7 +730,8 @@ class AgentProbeInput(ActionModel):
         description="The target function name registered on that specific agent's worker thread loop."
     )
     arguments: tuple[ActionArgumentInput, ...] | None = Field(
-        default=None, description="Key-value arguments map compiled for the target agent call."
+        default=None,
+        description="Key-value arguments map compiled for the target agent call.",
     )
     given: str | None = Field(
         default=None,
@@ -775,16 +793,19 @@ class ArgPortFields(PortRules, ActionModel):
         description='For QUANTITY ports: the pint dimensionality string, e.g. "[mass] * [length] ** 2 / [time] ** 3 / [current]". This is the wiring-compatibility key between quantity ports.',
     )
     children: tuple["ArgPortInput", ...] | None = Field(
-        default=None, description="The child ports (used for list, dict, union and model ports)."
+        default=None,
+        description="The child ports (used for list, dict, union and model ports).",
     )
     validators: tuple["ValidatorInput", ...] | None = Field(
         default=None, description="The validators for the port"
     )
     default: Any | None = Field(
-        default=None, description="The default value for the port; must fit the port's kind."
+        default=None,
+        description="The default value for the port; must fit the port's kind.",
     )
     widget: "AssignWidgetInput | None" = Field(
-        default=None, description="The assign widget to use for this port, discriminated by `kind`."
+        default=None,
+        description="The assign widget to use for this port, discriminated by `kind`.",
     )
     requires: tuple["RequiresInput", ...] | None = Field(
         default=None,
@@ -847,19 +868,34 @@ class BlokLocalInput(ArgPortFields):
         default=LOCAL_ANY,
         description="The port kind of the local, or ANY (an untyped value). Left out, it is inferred from the tree and ANY when nothing tells.",
     )
-    persist: bool = Field(default=False, description="Remember the last input on this device (never on a server).")
+    persist: bool = Field(
+        default=False,
+        description="Remember the last input on this device (never on a server).",
+    )
 
 
 class BlokQueryInput(ActionModel):
     """A declared read: a GraphQL query on a service, re-run when its variables change."""
 
-    key: str = Field(min_length=1, description="Its name: the blok reads it as `queries.<key>` (status, value, error, refetching, fetching_more).")
-    service: str = Field(min_length=1, description="The service it runs on, by its key ('mikro').")
-    document: str = Field(min_length=1, description="One GraphQL `query` operation; never a mutation.")
-    variables: tuple[ActionArgumentInput, ...] = Field(
-        default=(), description="Its variables, each an expression over args, locals and dependencies (as a call argument is stored)."
+    key: str = Field(
+        min_length=1,
+        description="Its name: the blok reads it as `queries.<key>` (status, value, error, refetching, fetching_more).",
     )
-    poll: float | None = Field(default=None, gt=0, description="Re-run every this many seconds, besides when its variables change.")
+    service: str = Field(
+        min_length=1, description="The service it runs on, by its key ('mikro')."
+    )
+    document: str = Field(
+        min_length=1, description="One GraphQL `query` operation; never a mutation."
+    )
+    variables: tuple[ActionArgumentInput, ...] = Field(
+        default=(),
+        description="Its variables, each an expression over args, locals and dependencies (as a call argument is stored).",
+    )
+    poll: float | None = Field(
+        default=None,
+        gt=0,
+        description="Re-run every this many seconds, besides when its variables change.",
+    )
     more: str | None = Field(
         default=None,
         description="The list field of its result that `queries.<key>.fetch_more(...)` appends new pages to, as a dotted path into the data (`positions`, `images.items`). A query without it cannot fetch more.",
@@ -870,13 +906,27 @@ class BlokQueryInput(ActionModel):
 class BlokSubscriptionInput(ActionModel):
     """A declared stream: a GraphQL subscription on a service, re-subscribed when its variables change."""
 
-    key: str = Field(min_length=1, description="Its name: the blok reads it as `subscriptions.<key>` (status, value, error).")
-    service: str = Field(min_length=1, description="The service it runs on, by its key.")
-    document: str = Field(min_length=1, description="One GraphQL `subscription` operation.")
-    variables: tuple[ActionArgumentInput, ...] = Field(default=(), description="Its variables, as a query's.")
-    keep: int | None = Field(default=None, ge=1, description="Keep the last this many payloads as a list; the latest only when absent.")
+    key: str = Field(
+        min_length=1,
+        description="Its name: the blok reads it as `subscriptions.<key>` (status, value, error).",
+    )
+    service: str = Field(
+        min_length=1, description="The service it runs on, by its key."
+    )
+    document: str = Field(
+        min_length=1, description="One GraphQL `subscription` operation."
+    )
+    variables: tuple[ActionArgumentInput, ...] = Field(
+        default=(), description="Its variables, as a query's."
+    )
+    keep: int | None = Field(
+        default=None,
+        ge=1,
+        description="Keep the last this many payloads as a list; the latest only when absent.",
+    )
     history: str | None = Field(
-        default=None, description="A declared query to replay from while travelling; without it the value at travel start shows, stale."
+        default=None,
+        description="A declared query to replay from while travelling; without it the value at travel start shows, stale.",
     )
     model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
 
@@ -884,11 +934,23 @@ class BlokSubscriptionInput(ActionModel):
 class BlokDemoInput(ActionModel):
     """What a preview renders the blok with, mirroring the roots it reads. Never what it shows live."""
 
-    deps: JSONSerializable | None = Field(default=None, description="Per dependency key (`self` included), its states and tasks: `{self: {arm: {joints: [...]}}}`.")
-    args: JSONSerializable | None = Field(default=None, description="What it is opened on.")
-    task: JSONSerializable | None = Field(default=None, description="The task record it is about (task and action bloks, action logos).")
-    queries: JSONSerializable | None = Field(default=None, description="Per declared query, the value it answers.")
-    subscriptions: JSONSerializable | None = Field(default=None, description="Per declared subscription, its value.")
+    deps: JSONSerializable | None = Field(
+        default=None,
+        description="Per dependency key (`self` included), its states and tasks: `{self: {arm: {joints: [...]}}}`.",
+    )
+    args: JSONSerializable | None = Field(
+        default=None, description="What it is opened on."
+    )
+    task: JSONSerializable | None = Field(
+        default=None,
+        description="The task record it is about (task and action bloks, action logos).",
+    )
+    queries: JSONSerializable | None = Field(
+        default=None, description="Per declared query, the value it answers."
+    )
+    subscriptions: JSONSerializable | None = Field(
+        default=None, description="Per declared subscription, its value."
+    )
     model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True)
 
 
@@ -896,8 +958,8 @@ class BlokImplementationInput(BlokRules, ActionModel):
     """Which locks does the agent provide in general"""
 
     key: str = Field(description="The key of this Blok implementation.")
-    dependencies: Annotated[tuple[AgentDependencyInput, ...], GraphQLDefault("[]")] = Field(
-        default=(), description="The dependencies required by this Blok."
+    dependencies: Annotated[tuple[AgentDependencyInput, ...], GraphQLDefault("[]")] = (
+        Field(default=(), description="The dependencies required by this Blok.")
     )
     "The dependencies required by this Blok.\nDefault: []"
     components: tuple["ComponentNodeInput", ...] | None = Field(
@@ -940,7 +1002,9 @@ class BlokImplementationInput(BlokRules, ActionModel):
         default=None,
         description="The items this Blok is opened for, declared like an action's args and read under `args.<key>`. A UI offers the Blok on any item its args accept. PANEL bloks only.",
     )
-    vocab: Literal[2] = Field(description="The blok language version the blok speaks; v2 is the only one.")
+    vocab: Literal[2] = Field(
+        description="The blok language version the blok speaks; v2 is the only one."
+    )
     catalog_minor: int | None = Field(
         validation_alias=AliasChoices("catalog_minor", "catalogMinor"),
         serialization_alias="catalogMinor",
@@ -948,7 +1012,9 @@ class BlokImplementationInput(BlokRules, ActionModel):
         ge=0,
         description="The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
     )
-    demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
+    demo: BlokDemoInput | None = Field(
+        default=None, description="What a preview renders it with."
+    )
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )
@@ -1009,7 +1075,9 @@ class ComponentNodeInput(ActionModel):
 class ComponentPropInput(ActionModel):
     """A single key-value prop configuration for a component layout node."""
 
-    key: str = Field(description="The prop key name matching the target UI catalog constraint.")
+    key: str = Field(
+        description="The prop key name matching the target UI catalog constraint."
+    )
     static_value: JSONSerializable | None = Field(
         validation_alias=AliasChoices("static_value", "staticValue"),
         serialization_alias="staticValue",
@@ -1046,7 +1114,9 @@ class ComponentPropInput(ActionModel):
 
 
 #: The contexts an action has a blok for, one each.
-ACTION_BLOK_CONTEXTS = frozenset({ComponentContext.PANEL.value, ComponentContext.SCENE.value})
+ACTION_BLOK_CONTEXTS = frozenset(
+    {ComponentContext.PANEL.value, ComponentContext.SCENE.value}
+)
 
 
 class ActionBlokInput(ActionBlokRules, ActionModel):
@@ -1076,8 +1146,12 @@ class ActionBlokInput(ActionBlokRules, ActionModel):
         default=None,
         description="The catalog the blok is written for: the address it is published at (`https://arkitekt.live/catalogs/orkestrator/v1`), or the name of one registered in the organization. The base catalog, which every renderer draws, when absent.",
     )
-    description: str | None = Field(default=None, description="What the blok shows of a run.")
-    vocab: Literal[2] = Field(description="The blok language version the blok speaks; v2 is the only one.")
+    description: str | None = Field(
+        default=None, description="What the blok shows of a run."
+    )
+    vocab: Literal[2] = Field(
+        description="The blok language version the blok speaks; v2 is the only one."
+    )
     catalog_minor: int | None = Field(
         validation_alias=AliasChoices("catalog_minor", "catalogMinor"),
         serialization_alias="catalogMinor",
@@ -1085,7 +1159,9 @@ class ActionBlokInput(ActionBlokRules, ActionModel):
         ge=0,
         description="The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
     )
-    demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
+    demo: BlokDemoInput | None = Field(
+        default=None, description="What a preview renders it with."
+    )
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )
@@ -1098,8 +1174,13 @@ class AskBlokInput(AskBlokRules, ActionModel):
     what it is opened on as ``args.<key>`` and the agent as ``self``, and answers with
     ``task.answer(values: {...})``, keyed by its ``returns``."""
 
-    key: str = Field(description="What a task names it by: `<parameter>.<method>` of the action's interactions protocol.")
-    description: str | None = Field(default=None, description="What it asks, in a sentence: the hold's message wherever the ask is listed.")
+    key: str = Field(
+        description="What a task names it by: `<parameter>.<method>` of the action's interactions protocol."
+    )
+    description: str | None = Field(
+        default=None,
+        description="What it asks, in a sentence: the hold's message wherever the ask is listed.",
+    )
     components: tuple["ComponentNodeInput", ...] | None = Field(
         default=None,
         description="The UI component tree, unless the blok is sent as its `source`.",
@@ -1112,13 +1193,20 @@ class AskBlokInput(AskBlokRules, ActionModel):
         default=None,
         description="The catalog the blok is written for: the address it is published at (`https://arkitekt.live/catalogs/orkestrator/v1`), or the name of one registered in the organization. The base catalog, which every renderer draws, when absent.",
     )
-    args: tuple["ArgPortInput", ...] = Field(default=(), description="What it is opened on, read under `args.<key>`: the method's parameters.")
-    returns: tuple["ReturnPortInput", ...] = Field(default=(), description="What an answer holds: the method's return.")
+    args: tuple["ArgPortInput", ...] = Field(
+        default=(),
+        description="What it is opened on, read under `args.<key>`: the method's parameters.",
+    )
+    returns: tuple["ReturnPortInput", ...] = Field(
+        default=(), description="What an answer holds: the method's return."
+    )
     dependencies: tuple[AgentDependencyInput, ...] = Field(
         default=(),
         description="The agents it reads or calls besides `self`, as `deps.<key>`: bound when it is shown, to the task's own when they satisfy it.",
     )
-    vocab: Literal[2] = Field(description="The blok language version the blok speaks; v2 is the only one.")
+    vocab: Literal[2] = Field(
+        description="The blok language version the blok speaks; v2 is the only one."
+    )
     catalog_minor: int | None = Field(
         validation_alias=AliasChoices("catalog_minor", "catalogMinor"),
         serialization_alias="catalogMinor",
@@ -1126,7 +1214,9 @@ class AskBlokInput(AskBlokRules, ActionModel):
         ge=0,
         description="The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
     )
-    demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
+    demo: BlokDemoInput | None = Field(
+        default=None, description="What a preview renders it with."
+    )
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )
@@ -1139,8 +1229,13 @@ class InformBlokInput(InformBlokRules, ActionModel):
     run as ``task``, what it is opened on as ``args.<key>`` and the agent as ``self``; nothing
     waits on it, so it answers nothing."""
 
-    key: str = Field(description="What a task names it by: `<parameter>.<method>` of the action's interactions protocol.")
-    description: str | None = Field(default=None, description="What it shows, in a sentence: the inform's message wherever it is listed.")
+    key: str = Field(
+        description="What a task names it by: `<parameter>.<method>` of the action's interactions protocol."
+    )
+    description: str | None = Field(
+        default=None,
+        description="What it shows, in a sentence: the inform's message wherever it is listed.",
+    )
     components: tuple["ComponentNodeInput", ...] | None = Field(
         default=None,
         description="The UI component tree, unless the blok is sent as its `source`.",
@@ -1153,12 +1248,17 @@ class InformBlokInput(InformBlokRules, ActionModel):
         default=None,
         description="The catalog the blok is written for: the address it is published at (`https://arkitekt.live/catalogs/orkestrator/v1`), or the name of one registered in the organization. The base catalog, which every renderer draws, when absent.",
     )
-    args: tuple["ArgPortInput", ...] = Field(default=(), description="What it is opened on, read under `args.<key>`: the method's parameters.")
+    args: tuple["ArgPortInput", ...] = Field(
+        default=(),
+        description="What it is opened on, read under `args.<key>`: the method's parameters.",
+    )
     dependencies: tuple[AgentDependencyInput, ...] = Field(
         default=(),
         description="The agents it reads or calls besides `self`, as `deps.<key>`: bound when it is shown, to the task's own when they satisfy it.",
     )
-    vocab: Literal[2] = Field(description="The blok language version the blok speaks; v2 is the only one.")
+    vocab: Literal[2] = Field(
+        description="The blok language version the blok speaks; v2 is the only one."
+    )
     catalog_minor: int | None = Field(
         validation_alias=AliasChoices("catalog_minor", "catalogMinor"),
         serialization_alias="catalogMinor",
@@ -1166,7 +1266,9 @@ class InformBlokInput(InformBlokRules, ActionModel):
         ge=0,
         description="The minor of its catalog the blok needs: the newest `since` among the components and props it uses. Absent when the first one does.",
     )
-    demo: BlokDemoInput | None = Field(default=None, description="What a preview renders it with.")
+    demo: BlokDemoInput | None = Field(
+        default=None, description="What a preview renders it with."
+    )
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )
@@ -1252,12 +1354,17 @@ class DefinitionInput(DefinitionRules, ActionModel):
     @model_validator(mode="after")
     def _one_blok_per_context(self) -> Self:
         """An action has one blok per context and phase: the one a client picks for where it shows the run, or its start."""
-        slots = [(blok.phase, ComponentContext(blok.context).value) for blok in self.bloks]
+        slots = [
+            (blok.phase, ComponentContext(blok.context).value) for blok in self.bloks
+        ]
         twice = next((slot for slot in slots if slots.count(slot) > 1), None)
         if twice is not None:
             phase = "assign " if twice[0] == "ASSIGN" else ""
-            raise ValueError(f"Definition {self.key}: the {phase}{twice[1].lower()} blok is given twice; an action has one {phase}blok per context")
+            raise ValueError(
+                f"Definition {self.key}: the {phase}{twice[1].lower()} blok is given twice; an action has one {phase}blok per context"
+            )
         return self
+
     port_groups: Annotated[tuple["PortGroupInput", ...], GraphQLDefault("[]")] = Field(
         validation_alias=AliasChoices("port_groups", "portGroups"),
         serialization_alias="portGroups",
@@ -1471,12 +1578,16 @@ class EstimatedRuntimeInput(ActionModel):
     call: "UtilCallInput" = Field(
         description="The pure blok UtilCall giving seconds, which the server compiles and the frontend evaluates: arithmetic over args/<port>/<descriptor key> of one structure argument and agent/<hardware>."
     )
-    source: str | None = Field(default=None, description="The formula as its author wrote it.")
+    source: str | None = Field(
+        default=None, description="The formula as its author wrote it."
+    )
     ui_call: "UtilCallInput | None" = Field(
         default=None,
         description="A richer formula for the form, which only the frontend evaluates: any pure function, over args/<port>, args/<port>/<descriptor key> and agent/<hardware>.",
     )
-    ui_source: str | None = Field(default=None, description="That formula as its author wrote it.")
+    ui_source: str | None = Field(
+        default=None, description="That formula as its author wrote it."
+    )
 
 
 class FitsInput(FitsRules, ActionModel):
@@ -1486,7 +1597,9 @@ class FitsInput(FitsRules, ActionModel):
     call: "UtilCallInput" = Field(
         description="The pure blok UtilCall: a comparison of numbers, or several joined by logic.all/any. Its value_paths read value/<descriptor key> and agent/<hardware>."
     )
-    source: str | None = Field(default=None, description="The formula as its author wrote it.")
+    source: str | None = Field(
+        default=None, description="The formula as its author wrote it."
+    )
 
 
 class ImplementationInput(ImplementationRules, ActionModel):
@@ -1495,8 +1608,11 @@ class ImplementationInput(ImplementationRules, ActionModel):
     definition: DefinitionInput = Field(
         description="The definition of the implementation. This is used to uniquely identify the implementation"
     )
-    dependencies: Annotated[tuple[AgentDependencyInput, ...], GraphQLDefault("[]")] = Field(
-        default=(), description="The agent dependencies required by this implementation."
+    dependencies: Annotated[tuple[AgentDependencyInput, ...], GraphQLDefault("[]")] = (
+        Field(
+            default=(),
+            description="The agent dependencies required by this implementation.",
+        )
     )
     "The agent dependencies required by this implementation.\nDefault: []"
     interface: str = Field(
@@ -1555,7 +1671,7 @@ class ImplementationInput(ImplementationRules, ActionModel):
     )
     logo: str | None = Field(
         default=None,
-        description="The key of the agent's action logo blok (`<Blok kind=\"action\" context=\"logo\">`) that draws this action.",
+        description='The key of the agent\'s action logo blok (`<Blok kind="action" context="logo">`) that draws this action.',
     )
     asks: tuple[AskBlokInput, ...] | None = Field(
         default=None,
@@ -1602,7 +1718,9 @@ class ImplementationInput(ImplementationRules, ActionModel):
 class LockDefinitionInput(ActionModel):
     """Which locks does the agent provide in general"""
 
-    key: str = Field(description="The key of the lock. This is used to uniquely identify the lock")
+    key: str = Field(
+        description="The key of the lock. This is used to uniquely identify the lock"
+    )
     description: str | None = Field(default=None, description="Describe the lock a bit")
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
@@ -1624,7 +1742,9 @@ class LockImplementationInput(ActionModel):
 class OptimisticInput(ActionModel):
     """An optimistic is used to optimistically set state values when the action is assigned. This is used to provide a better user experience by optimistically setting state values when the action is assigned, instead of waiting for the action to be executed and the state to be updated. This will only ever happen on the frontend."""
 
-    state: str = Field(description="The state to optimistically set when the action is assigned")
+    state: str = Field(
+        description="The state to optimistically set when the action is assigned"
+    )
     path: str | None = Field(
         default=None,
         description="Static JSON pointer into the state value to set. Mutually exclusive with `path_call`.",
@@ -1654,7 +1774,8 @@ class PortGroupInput(ActionModel):
         default=None, description="The title of the port group, displayed in the UI"
     )
     description: str | None = Field(
-        default=None, description="The description of the port group, displayed in the UI"
+        default=None,
+        description="The description of the port group, displayed in the UI",
     )
     effects: Annotated[tuple[EffectInput, ...], GraphQLDefault("[]")] = Field(
         default=(), description="The effects applied to the port group as a whole"
@@ -1678,9 +1799,15 @@ class PortMatchInput(ActionModel):
 
     at: int | None = Field(default=None, description="The index of the port to match.")
     key: str | None = Field(default=None, description="The key of the port to match.")
-    kind: PortKind | None = Field(default=None, description="The kind of the port to match.")
-    identifier: str | None = Field(default=None, description="The identifier of the port to match.")
-    nullable: bool | None = Field(default=None, description="Whether the port is nullable.")
+    kind: PortKind | None = Field(
+        default=None, description="The kind of the port to match."
+    )
+    identifier: str | None = Field(
+        default=None, description="The identifier of the port to match."
+    )
+    nullable: bool | None = Field(
+        default=None, description="Whether the port is nullable."
+    )
     dimension: str | None = Field(
         default=None,
         description="The canonical pint dimensionality the port must have (QUANTITY wiring-compatibility key).",
@@ -1785,10 +1912,12 @@ class ReturnPortInput(PortRules, ActionModel):
         description='For QUANTITY ports: the pint dimensionality string, e.g. "[mass] * [length] ** 2 / [time] ** 3 / [current]". This is the wiring-compatibility key between quantity ports.',
     )
     children: tuple["ReturnPortInput", ...] | None = Field(
-        default=None, description="The child ports (used for list, dict, union and model ports)."
+        default=None,
+        description="The child ports (used for list, dict, union and model ports).",
     )
     widget: "ReturnWidgetInput | None" = Field(
-        default=None, description="The return widget to use for this port, discriminated by `kind`."
+        default=None,
+        description="The return widget to use for this port, discriminated by `kind`.",
     )
     provides: tuple[ProvidesInput, ...] | None = Field(
         default=None,
@@ -1856,7 +1985,8 @@ class StateDemandInput(ActionModel):
         default=None, description="The identifier of the app providing the state."
     )
     matches: tuple[PortMatchInput, ...] | None = Field(
-        default=None, description="The matches the state definition's ports must satisfy."
+        default=None,
+        description="The matches the state definition's ports must satisfy.",
     )
     protocols: tuple[str, ...] | None = Field(
         default=None, description="Protocols (by name) the state must implement."
@@ -1923,7 +2053,9 @@ class StateImplementationInput(ActionModel):
 class TestTargetInput(ActionModel):
     """A test target: the action a test action tests, identified by exact hash or by an (app, key, version) coordinate. app defaults to the registering agent's app; omitting version matches every version."""
 
-    hash: str | None = Field(default=None, description="The exact hash of the target action.")
+    hash: str | None = Field(
+        default=None, description="The exact hash of the target action."
+    )
     app: str | None = Field(
         default=None,
         description="The app identifier owning the target action. Defaults to the registering agent's app.",
@@ -1945,7 +2077,8 @@ class UtilCallInput(ActionModel):
 
     operation: str = Field(description="The utility function name to invoke.")
     arguments: tuple[ActionArgumentInput, ...] | None = Field(
-        default=None, description="Key-value arguments map compiled for the target utility call."
+        default=None,
+        description="Key-value arguments map compiled for the target utility call.",
     )
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
@@ -2039,6 +2172,8 @@ def definition_hash(definition: DefinitionInput) -> str:
     producer and consumer computes it here rather than re-implementing it.
     """
     identity = {
-        key: value for key, value in definition.model_dump().items() if key in DEFINITION_HASH_KEYS
+        key: value
+        for key, value in definition.model_dump().items()
+        if key in DEFINITION_HASH_KEYS
     }
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()

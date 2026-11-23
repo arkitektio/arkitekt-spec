@@ -4,7 +4,12 @@ import datetime
 from collections.abc import Mapping
 from typing import Any
 
-from pydantic import Field, SerializerFunctionWrapHandler, field_validator, model_serializer
+from pydantic import (
+    Field,
+    SerializerFunctionWrapHandler,
+    field_validator,
+    model_serializer,
+)
 
 from arkitekt_spec.base import WireModel, current_spec_version
 from arkitekt_spec.capabilities import Capability, unique_names
@@ -19,7 +24,9 @@ DEPLOYMENTS_PATH = ".arkitekt/deployments.yaml"
 class DockerImage(WireModel):
     """Where a built image was pushed, and when it was built."""
 
-    image_string: str = Field(alias="imageString", description="The pullable image reference.")
+    image_string: str = Field(
+        alias="imageString", description="The pullable image reference."
+    )
     build_at: datetime.datetime | None = Field(
         default=None, alias="buildAt", description="When the image was built."
     )
@@ -28,9 +35,13 @@ class DockerImage(WireModel):
 class AppImage(WireModel):
     """One published image of one flavour of one release."""
 
-    app_image_id: str = Field(alias="appImageId", description="A unique id for this image.")
+    app_image_id: str = Field(
+        alias="appImageId", description="A unique id for this image."
+    )
     flavour_name: str | None = Field(
-        default=None, alias="flavourName", description="The flavour the image was built from."
+        default=None,
+        alias="flavourName",
+        description="The flavour the image was built from.",
     )
     manifest: AppManifest
     selectors: list[Selector] = Field(
@@ -50,7 +61,9 @@ class AppImage(WireModel):
         return value
 
     @model_serializer(mode="wrap")
-    def _without_no_capabilities(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+    def _without_no_capabilities(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, Any]:
         # Left out when there are none: the bytes of everything written before flavours
         # had capabilities stay what they were, and a descriptor's digest is its identity.
         data: dict[str, Any] = handler(self)

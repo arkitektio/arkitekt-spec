@@ -9,7 +9,12 @@ import pytest
 
 from arkitekt_spec.actions import ComponentNodeInput
 from arkitekt_spec.declare.app import AppRegistry
-from arkitekt_spec.declare.blok import SvgConversionError, SvgConversionWarning, bsx, from_svg
+from arkitekt_spec.declare.blok import (
+    SvgConversionError,
+    SvgConversionWarning,
+    bsx,
+    from_svg,
+)
 from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
 
 LUCIDE = """<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
@@ -96,7 +101,10 @@ def test_an_icon_set_svg_keeps_its_root_paint_on_a_group() -> None:
     source, lost = convert(LUCIDE)
     assert lost == []
     blok = bsx(source)
-    assert (blok.component, props(blok)) == ("Blok", {"kind": "agent", "context": "logo"})
+    assert (blok.component, props(blok)) == (
+        "Blok",
+        {"kind": "agent", "context": "logo"},
+    )
     root = logo(source)
     assert props(root) == {"viewBox": "0 0 24 24"}
     (group,) = root.children or ()
@@ -134,7 +142,10 @@ def test_an_inkscape_file_is_flattened_through_its_cascade() -> None:
     ]
 
     # The layer group had no props: it gave its child to the root, which inks what nothing paints.
-    assert drawing.component == "G" and props(drawing) == {"clipPath": "url(#tile)", "fill": "ink"}
+    assert drawing.component == "G" and props(drawing) == {
+        "clipPath": "url(#tile)",
+        "fill": "ink",
+    }
     (ground, cell, frame) = drawing.children or ()
     assert props(ground)["fill"] == "url(#ground)"
     assert props(cell) == {
@@ -161,10 +172,14 @@ def test_a_file_and_its_text_convert_alike(tmp_path) -> None:
 
 def test_hex_colours_become_the_nearest_pen_and_no_ids_are_printed() -> None:
     source, _ = convert(
-        svg('<rect id="r" width="4" height="4" fill="#fff" /><circle r="2" fill="#abcdef" />')
+        svg(
+            '<rect id="r" width="4" height="4" fill="#fff" /><circle r="2" fill="#abcdef" />'
+        )
     )
     assert "id=" not in source
-    assert [shape["fill"] for shape in drawn(source, "Rect") + drawn(source, "Circle")] == [
+    assert [
+        shape["fill"] for shape in drawn(source, "Rect") + drawn(source, "Circle")
+    ] == [
         "surface",
         "brand-soft",
     ]
@@ -200,9 +215,9 @@ def test_use_and_symbol_are_expanded_and_a_shared_gradient_is_defined_once() -> 
         )
     )
     assert lost == []
-    assert [node.id for node in nodes(bsx(source)) if node.component == "RadialGradient"] == [
-        "glow"
-    ]
+    assert [
+        node.id for node in nodes(bsx(source)) if node.component == "RadialGradient"
+    ] == ["glow"]
     assert drawn(source, "Circle") == [
         {
             "cx": "5",
@@ -229,7 +244,9 @@ def test_a_gradient_inherits_through_its_href_chain() -> None:
             '<circle r="9" fill="url(#b) red" />'
         )
     )
-    (gradient,) = [node for node in nodes(bsx(source)) if node.component == "RadialGradient"]
+    (gradient,) = [
+        node for node in nodes(bsx(source)) if node.component == "RadialGradient"
+    ]
     assert props(gradient) == {"r": "9", "gradientUnits": "userSpaceOnUse"}
     assert [props(stop) for stop in gradient.children or ()] == [
         {"offset": "0", "stopColor": "ink"}
@@ -277,7 +294,9 @@ def test_what_a_logo_cannot_draw_is_dropped_with_a_warning() -> None:
 
 def test_text_that_would_read_as_an_expression_is_dropped() -> None:
     source, lost = convert(
-        svg('<title>@home</title><text x="1" y="2">$5 <tspan>off</tspan></text><text>ok</text>')
+        svg(
+            '<title>@home</title><text x="1" y="2">$5 <tspan>off</tspan></text><text>ok</text>'
+        )
     )
     assert "title" not in props(logo(source))
     assert drawn(source, "SvgText") == [{"text": "ok", "fill": "ink"}]
@@ -325,7 +344,9 @@ def test_an_action_logo_paints_with_tokens_only() -> None:
     tree = bsx(source)
     assert props(tree) == {"kind": "action", "context": "logo"}
     assert check_blok_tree(tree, BlokScope(kinds=("action",), dependencies=())) == []
-    assert [(rect.get("fill"), rect.get("stroke")) for rect in drawn(source, "Rect")] == [
+    assert [
+        (rect.get("fill"), rect.get("stroke")) for rect in drawn(source, "Rect")
+    ] == [
         ("ink", "muted"),
         ("surface", "brand-strong"),
         ("brand", "brand-soft"),
@@ -361,7 +382,9 @@ def test_an_action_logo_registers_inline_on_an_action() -> None:
     ("kind", "expected"),
     [("agent", ["brand", "brand", "ink"]), ("action", ["brand", "brand", "ink"])],
 )
-def test_current_colour_paints_the_colour_set_around_it(kind: Literal["agent", "action"], expected: list[str]) -> None:
+def test_current_colour_paints_the_colour_set_around_it(
+    kind: Literal["agent", "action"], expected: list[str]
+) -> None:
     source, lost = convert(
         svg(
             '<path d="M0 0" fill="currentColor" />'
@@ -385,7 +408,8 @@ def test_current_colour_paints_the_colour_set_around_it(kind: Literal["agent", "
 
 def test_a_palette_maps_colours_of_a_logo_too() -> None:
     source, _ = convert(
-        LUCIDE.replace('stroke="currentColor"', 'stroke="black"'), palette={"#000": "ink"}
+        LUCIDE.replace('stroke="currentColor"', 'stroke="black"'),
+        palette={"#000": "ink"},
     )
     assert drawn(source, "G")[0]["stroke"] == "ink"
     with pytest.raises(ValueError, match="not one of"):
@@ -402,16 +426,24 @@ def test_groups_collapse_to_keep_a_deep_file_within_the_depth_limit() -> None:
         + "</g>" * 10
     )
     source, _ = convert(deep)
-    assert drawn(source, "Path") == [{"d": "M0 0", "opacity": ".5", "transform": "translate(1 1)", "fill": "ink"}]
+    assert drawn(source, "Path") == [
+        {"d": "M0 0", "opacity": ".5", "transform": "translate(1 1)", "fill": "ink"}
+    ]
     register(source)
 
 
 def test_precision_rounds_path_data_into_the_budget() -> None:
-    d = "M" + " ".join(f"{i}.123456789 {i}.987654321" for i in range(800)) + "a1 1 0 011.5 1z"
+    d = (
+        "M"
+        + " ".join(f"{i}.123456789 {i}.987654321" for i in range(800))
+        + "a1 1 0 011.5 1z"
+    )
     with pytest.raises(SvgConversionError, match=re.escape("pass precision=2")):
         from_svg(svg(f'<path d="{d}" />'))
 
-    source = from_svg(svg(f'<path d="{d}" transform="rotate(12.3456 1 1)" />'), precision=1)
+    source = from_svg(
+        svg(f'<path d="{d}" transform="rotate(12.3456 1 1)" />'), precision=1
+    )
     (path,) = drawn(source, "Path")
     assert str(path["d"]).startswith("M.1 1 1.1 2 2.1 3")
     assert str(path["d"]).endswith("a1 1 0 0 1 1.5 1z")

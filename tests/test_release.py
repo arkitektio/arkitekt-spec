@@ -33,7 +33,9 @@ PINNED = "ghcr.io/org/starmist@sha256:" + "a" * 64
 
 
 def flavour(name: str = "vanilla", image: str = PINNED) -> ReleaseFlavour:
-    return ReleaseFlavour(name=name, image=image, inspection=Inspection(spec_version="8.0.0"))
+    return ReleaseFlavour(
+        name=name, image=image, inspection=Inspection(spec_version="8.0.0")
+    )
 
 
 def descriptor(**changes: object) -> ReleaseDescriptor:
@@ -64,11 +66,17 @@ def test_golden_descriptor_reads_every_field():
 
 
 def test_a_release_names_the_spec_that_wrote_it_and_its_inspections():
-    declaration = AppDeclaration(manifest=AppManifest(identifier="starmist", version="0.1.0"))
-    inspected = ReleaseFlavour(name="vanilla", image=PINNED, inspection=declaration.to_inspection())
+    declaration = AppDeclaration(
+        manifest=AppManifest(identifier="starmist", version="0.1.0")
+    )
+    inspected = ReleaseFlavour(
+        name="vanilla", image=PINNED, inspection=declaration.to_inspection()
+    )
 
     data = json.loads(
-        dump_descriptor(descriptor(spec_version=current_spec_version(), flavours=[inspected]))
+        dump_descriptor(
+            descriptor(spec_version=current_spec_version(), flavours=[inspected])
+        )
     )
 
     assert data["spec_version"] == current_spec_version()
@@ -127,7 +135,12 @@ def test_a_release_manifest_is_recognised_by_its_config():
     [
         None,
         {"manifests": []},
-        {"config": {"mediaType": "application/vnd.oci.image.config.v1+json", "digest": "x"}},
+        {
+            "config": {
+                "mediaType": "application/vnd.oci.image.config.v1+json",
+                "digest": "x",
+            }
+        },
     ],
 )
 def test_an_image_is_not_taken_for_a_release(manifest: object):
@@ -138,18 +151,24 @@ def test_an_image_is_not_taken_for_a_release(manifest: object):
     ("reference", "expected"),
     [
         ("ghcr.io/org/app", ("ghcr.io", "org/app")),
-        ("oci://registry.gitlab.com/group/sub/app", ("registry.gitlab.com", "group/sub/app")),
+        (
+            "oci://registry.gitlab.com/group/sub/app",
+            ("registry.gitlab.com", "group/sub/app"),
+        ),
         ("localhost:5000/app", ("localhost:5000", "app")),
         ("jhnnsrs/starmist", ("docker.io", "jhnnsrs/starmist")),
         ("starmist", ("docker.io", "library/starmist")),
     ],
 )
-def test_a_repository_reference_splits_like_docker_does(reference: str, expected: tuple[str, str]):
+def test_a_repository_reference_splits_like_docker_does(
+    reference: str, expected: tuple[str, str]
+):
     assert parse_repository(reference) == expected
 
 
 @pytest.mark.parametrize(
-    "reference", ["ghcr.io/org/app:1.0.0", "ghcr.io/org/app@sha256:abc", "ghcr.io/Org/App", ""]
+    "reference",
+    ["ghcr.io/org/app:1.0.0", "ghcr.io/org/app@sha256:abc", "ghcr.io/Org/App", ""],
 )
 def test_a_repository_reference_refuses_anything_but_a_repository(reference: str):
     with pytest.raises(ValueError):

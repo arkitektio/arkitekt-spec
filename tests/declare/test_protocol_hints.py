@@ -34,11 +34,15 @@ def test_hints_reach_the_definition_in_order() -> None:
 def test_register_forwards_them_too() -> None:
     registry = AppRegistry()
     registry.register(protocols=["on_scene_init"])(segment)
-    assert registry.implementations["segment"].definition.protocols == ("on_scene_init",)
+    assert registry.implementations["segment"].definition.protocols == (
+        "on_scene_init",
+    )
 
 
 def test_a_hint_is_not_identity() -> None:
-    assert definition_hash(definition(protocols=["on_scene_annotation"])) == definition_hash(definition())
+    assert definition_hash(
+        definition(protocols=["on_scene_annotation"])
+    ) == definition_hash(definition())
 
 
 def test_without_hints_nothing_new_goes_on_the_wire() -> None:
@@ -49,7 +53,9 @@ def test_without_hints_nothing_new_goes_on_the_wire() -> None:
     assert "protocols" not in plain.model_dump(mode="json", by_alias=True)
     assert "protocols" not in definition(protocols=[]).model_dump()
     hinted = definition(protocols=["on_scene_annotation"])
-    assert hinted.model_dump(exclude_unset=True)["protocols"] == ("on_scene_annotation",)
+    assert hinted.model_dump(exclude_unset=True)["protocols"] == (
+        "on_scene_annotation",
+    )
 
 
 @pytest.mark.parametrize("bad", ["", "on scene", "on_scene\t"])

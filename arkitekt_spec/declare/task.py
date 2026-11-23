@@ -77,7 +77,9 @@ class HookInput(BaseModel):
 
     kind: HookKind = Field(description="When the hook runs.")
     hash: ActionHash = Field(description="The hash of the action that is the hook.")
-    model_config = ConfigDict(frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True)
+    model_config = ConfigDict(
+        frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
+    )
 
 
 class AssignPrompt(BaseModel):
@@ -107,12 +109,16 @@ class StateRequirement(BaseModel):
     ``EXISTS`` with ``value=False``, which asks for absence.
     """
 
-    state: str = Field(description="The state's interface on the agent (`@app.state(name=...)`).")
+    state: str = Field(
+        description="The state's interface on the agent (`@app.state(name=...)`)."
+    )
     path: str = Field(
         pattern=r"^/",
         description="An RFC 6901 pointer into the state's value, e.g. '/busy' or '/stage/position/0'.",
     )
-    operator: DescriptorOperator = Field(description="How the value at `path` is compared with `value`.")
+    operator: DescriptorOperator = Field(
+        description="How the value at `path` is compared with `value`."
+    )
     value: Any | None = Field(
         default=None,
         description="What the value is compared with: IN/NOT_IN take a list, LTE/GTE a number, EXISTS true or false.",
@@ -155,29 +161,54 @@ class TaskBlok(BaseModel):
         default=None,
         description="One of the asks or informs the running action declared (`<parameter>.<method>`).",
     )
-    id: str | None = Field(default=None, description="Any blok of the organization, by its id.")
-    source: str | None = Field(default=None, description="The blok as v2 BSX, made for this task alone.")
-    name: str | None = Field(default=None, description="A title for whoever sees it; the blok's own name when left out.")
-    args: dict[str, JsonValue] | None = Field(default=None, description="What it is opened on, read under `args.<key>`.")
+    id: str | None = Field(
+        default=None, description="Any blok of the organization, by its id."
+    )
+    source: str | None = Field(
+        default=None, description="The blok as v2 BSX, made for this task alone."
+    )
+    name: str | None = Field(
+        default=None,
+        description="A title for whoever sees it; the blok's own name when left out.",
+    )
+    args: dict[str, JsonValue] | None = Field(
+        default=None, description="What it is opened on, read under `args.<key>`."
+    )
     returns: list[ReturnPortInput] | None = Field(
         default=None,
         description="What an answer holds, as return ports (`{key, kind, identifier?, nullable?, children?}`). A `source` blok declares them here; a named one has its own.",
     )
-    dependencies: list[AgentDependencyInput] | None = Field(default=None, description="A `source` blok's agent dependencies besides `self`.")
+    dependencies: list[AgentDependencyInput] | None = Field(
+        default=None, description="A `source` blok's agent dependencies besides `self`."
+    )
     agent_mappings: dict[str, str] | None = Field(
         default=None,
         description="Dependency key to agent id. A dependency left out that the sending agent satisfies is bound to it.",
     )
-    vocab: Literal[2] | None = Field(default=None, description="The blok language version a `source` blok is written in; 2, the only one, when left out.")
-    catalog: str | None = Field(default=None, description="The catalog a `source` blok is written for (its address, or the name of one registered in the organization); the base catalog when left out.")
-    demo: BlokDemoInput | None = Field(default=None, description="What a preview renders a `source` blok with.")
+    vocab: Literal[2] | None = Field(
+        default=None,
+        description="The blok language version a `source` blok is written in; 2, the only one, when left out.",
+    )
+    catalog: str | None = Field(
+        default=None,
+        description="The catalog a `source` blok is written for (its address, or the name of one registered in the organization); the base catalog when left out.",
+    )
+    demo: BlokDemoInput | None = Field(
+        default=None, description="What a preview renders a `source` blok with."
+    )
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     @model_validator(mode="after")
     def _named_once(self) -> "TaskBlok":
-        named = [field for field in ("key", "id", "source") if getattr(self, field) is not None]
+        named = [
+            field
+            for field in ("key", "id", "source")
+            if getattr(self, field) is not None
+        ]
         if len(named) != 1:
-            raise ValueError(f"A task's blok is named by exactly one of key, id or source, not {named or 'none'}")
+            raise ValueError(
+                f"A task's blok is named by exactly one of key, id or source, not {named or 'none'}"
+            )
         return self
 
 
@@ -192,7 +223,11 @@ def as_task_blok(
     ``name`` fill what it leaves out."""
     if isinstance(blok, str):
         return TaskBlok(source=blok, args=args, returns=returns, name=name)
-    extra = {k: v for k, v in {"args": args, "returns": returns, "name": name}.items() if v is not None}
+    extra = {
+        k: v
+        for k, v in {"args": args, "returns": returns, "name": name}.items()
+        if v is not None
+    }
     return blok.model_copy(update=extra) if extra else blok
 
 
@@ -322,7 +357,14 @@ class Task(Protocol):
 
     # -- deciding about a lost step ---------------------------------------- #
 
-    def retry(self, call: Callable[..., Any], *args: Any, attempts: int = 3, if_started: bool = False, **kwargs: Any) -> Any:
+    def retry(
+        self,
+        call: Callable[..., Any],
+        *args: Any,
+        attempts: int = 3,
+        if_started: bool = False,
+        **kwargs: Any,
+    ) -> Any:
         """Call ``call(*args, **kwargs)``, again when its agent is lost (``AgentLost``).
 
         Only when that is safe: when the lost step never started, or when you say so with
@@ -330,11 +372,20 @@ class Task(Protocol):
         """
         ...
 
-    async def aretry(self, call: Callable[..., Any], *args: Any, attempts: int = 3, if_started: bool = False, **kwargs: Any) -> Any:
+    async def aretry(
+        self,
+        call: Callable[..., Any],
+        *args: Any,
+        attempts: int = 3,
+        if_started: bool = False,
+        **kwargs: Any,
+    ) -> Any:
         """:meth:`retry`, awaiting ``call``."""
         ...
 
-    def guard(self, state: object, *paths: str) -> "contextlib.AbstractContextManager[None]":
+    def guard(
+        self, state: object, *paths: str
+    ) -> "contextlib.AbstractContextManager[None]":
         """Watch a dependency's state (the ``paths`` of it, or all of it) across a resume.
 
         ``state`` is the state attribute of a dependency (``handler.plate``): the protocol
@@ -346,7 +397,9 @@ class Task(Protocol):
         """
         ...
 
-    def aguard(self, state: object, *paths: str) -> "contextlib.AbstractAsyncContextManager[None]":
+    def aguard(
+        self, state: object, *paths: str
+    ) -> "contextlib.AbstractAsyncContextManager[None]":
         """:meth:`guard`, entered with ``async with``."""
         ...
 
@@ -382,7 +435,13 @@ class Task(Protocol):
         """
         ...
 
-    def hold(self, message: str, *, prompt: AssignPrompt | None = None, lost: AgentLost | None = None) -> Decision:
+    def hold(
+        self,
+        message: str,
+        *,
+        prompt: AssignPrompt | None = None,
+        lost: AgentLost | None = None,
+    ) -> Decision:
         """Wait for a person to decide: the task is HELD with ``message`` (and ``prompt``)
         until someone approves or denies it, and returns their :class:`Decision`.
 
@@ -394,7 +453,13 @@ class Task(Protocol):
         """
         ...
 
-    async def ahold(self, message: str, *, prompt: AssignPrompt | None = None, lost: AgentLost | None = None) -> Decision:
+    async def ahold(
+        self,
+        message: str,
+        *,
+        prompt: AssignPrompt | None = None,
+        lost: AgentLost | None = None,
+    ) -> Decision:
         """:meth:`hold`, awaited."""
         ...
 
@@ -429,7 +494,9 @@ class Task(Protocol):
         """:meth:`dynamic_ask`, awaited."""
         ...
 
-    def dynamic_inform(self, blok: "TaskBlok | str", *, args: dict[str, JsonValue] | None = None) -> None:
+    def dynamic_inform(
+        self, blok: "TaskBlok | str", *, args: dict[str, JsonValue] | None = None
+    ) -> None:
         """Show a person a blok made now (a :class:`TaskBlok`, or BSX source) while the task
         goes on: a chart of its progress, a result. Nothing waits.
 
@@ -439,7 +506,9 @@ class Task(Protocol):
         make is logged by the agent, never raised here."""
         ...
 
-    async def adynamic_inform(self, blok: "TaskBlok | str", *, args: dict[str, JsonValue] | None = None) -> None:
+    async def adynamic_inform(
+        self, blok: "TaskBlok | str", *, args: dict[str, JsonValue] | None = None
+    ) -> None:
         """:meth:`dynamic_inform`, awaited."""
         ...
 
@@ -570,7 +639,9 @@ class Task(Protocol):
         ...
 
     @classmethod
-    def local(cls, id: str = "local", user: str = "local", org: str = "local") -> "Task":
+    def local(
+        cls, id: str = "local", user: str = "local", org: str = "local"
+    ) -> "Task":
         """A task for calling an action directly, with no runtime behind it.
 
         ``segment(image, task=Task.local(), mikro=mikro)``: logs and progress go to the
@@ -596,7 +667,13 @@ class LocalTask:
 
     token: str | None = None
 
-    def __init__(self, id: str = "local", user: str = "local", org: str = "local", assigner: str | None = None) -> None:
+    def __init__(
+        self,
+        id: str = "local",
+        user: str = "local",
+        org: str = "local",
+        assigner: str | None = None,
+    ) -> None:
         """Make a local task, tagged ``id`` in its logs; ``assigner`` is ``user`` unless given."""
         self.id = id
         self.user = user
@@ -605,7 +682,9 @@ class LocalTask:
         self.hooks: list[AssignmentHook] = []
 
     @classmethod
-    def local(cls, id: str = "local", user: str = "local", org: str = "local") -> "LocalTask":
+    def local(
+        cls, id: str = "local", user: str = "local", org: str = "local"
+    ) -> "LocalTask":
         """Another local task (every task type answers ``local()``)."""
         return cls(id=id, user=user, org=org)
 
@@ -674,13 +753,29 @@ class LocalTask:
         value = fn()
         return await value if inspect.isawaitable(value) else value
 
-    def retry(self, call: Callable[..., Any], *args: Any, attempts: int = 3, if_started: bool = False, **kwargs: Any) -> Any:
+    def retry(
+        self,
+        call: Callable[..., Any],
+        *args: Any,
+        attempts: int = 3,
+        if_started: bool = False,
+        **kwargs: Any,
+    ) -> Any:
         """Call it, again when its agent is lost and that is safe (see :meth:`Task.retry`)."""
         return retry(call, *args, attempts=attempts, if_started=if_started, **kwargs)
 
-    async def aretry(self, call: Callable[..., Any], *args: Any, attempts: int = 3, if_started: bool = False, **kwargs: Any) -> Any:
+    async def aretry(
+        self,
+        call: Callable[..., Any],
+        *args: Any,
+        attempts: int = 3,
+        if_started: bool = False,
+        **kwargs: Any,
+    ) -> Any:
         """Await it, again when its agent is lost and that is safe (see :meth:`Task.retry`)."""
-        return await aretry(call, *args, attempts=attempts, if_started=if_started, **kwargs)
+        return await aretry(
+            call, *args, attempts=attempts, if_started=if_started, **kwargs
+        )
 
     @contextlib.contextmanager
     def guard(self, state: object, *paths: str) -> Generator[None, None, None]:
@@ -702,12 +797,26 @@ class LocalTask:
         """A local task's changes go to no agent: there is no update to make of them."""
         yield
 
-    def hold(self, message: str, *, prompt: AssignPrompt | None = None, lost: AgentLost | None = None) -> Decision:
+    def hold(
+        self,
+        message: str,
+        *,
+        prompt: AssignPrompt | None = None,
+        lost: AgentLost | None = None,
+    ) -> Decision:
         """Nobody decides for a local task: it logs ``message`` and carries on, approved."""
-        logger.log(logging.WARNING, "hold (a local task carries on, approved): %s", message)
+        logger.log(
+            logging.WARNING, "hold (a local task carries on, approved): %s", message
+        )
         return Decision(approved=True, auto=True)
 
-    async def ahold(self, message: str, *, prompt: AssignPrompt | None = None, lost: AgentLost | None = None) -> Decision:
+    async def ahold(
+        self,
+        message: str,
+        *,
+        prompt: AssignPrompt | None = None,
+        lost: AgentLost | None = None,
+    ) -> Decision:
         """Nobody decides for a local task: it logs ``message`` and carries on, approved."""
         return self.hold(message, prompt=prompt, lost=lost)
 
@@ -721,7 +830,11 @@ class LocalTask:
         """Nobody answers a local task: it logs the ask and raises
         :class:`~arkitekt_spec.declare.errors.DismissedError` (an ask has no answer to make up)."""
         task_blok = as_task_blok(blok, args=args, returns=returns)
-        logger.log(logging.WARNING, "ask (nobody answers a local task): %s", task_blok.name or "a blok")
+        logger.log(
+            logging.WARNING,
+            "ask (nobody answers a local task): %s",
+            task_blok.name or "a blok",
+        )
         raise DismissedError("nobody answers a local task")
 
     async def adynamic_ask(
@@ -734,12 +847,20 @@ class LocalTask:
         """Nobody answers a local task (see :meth:`dynamic_ask`)."""
         return self.dynamic_ask(blok, args=args, returns=returns)
 
-    def dynamic_inform(self, blok: "TaskBlok | str", *, args: dict[str, JsonValue] | None = None) -> None:
+    def dynamic_inform(
+        self, blok: "TaskBlok | str", *, args: dict[str, JsonValue] | None = None
+    ) -> None:
         """Nobody sees a local task's blok: it logs its name."""
         task_blok = as_task_blok(blok, args=args)
-        logger.log(logging.INFO, "inform (nobody sees a local task's blok): %s", task_blok.name or "a blok")
+        logger.log(
+            logging.INFO,
+            "inform (nobody sees a local task's blok): %s",
+            task_blok.name or "a blok",
+        )
 
-    async def adynamic_inform(self, blok: "TaskBlok | str", *, args: dict[str, JsonValue] | None = None) -> None:
+    async def adynamic_inform(
+        self, blok: "TaskBlok | str", *, args: dict[str, JsonValue] | None = None
+    ) -> None:
         """Nobody sees a local task's blok (see :meth:`dynamic_inform`)."""
         self.dynamic_inform(blok, args=args)
 
@@ -854,11 +975,19 @@ class LocalTask:
         yield  # an async generator, like every task's aiterate_raw
 
 
-def _should_retry(lost: "AgentLost", attempt: int, attempts: int, if_started: bool) -> bool:
+def _should_retry(
+    lost: "AgentLost", attempt: int, attempts: int, if_started: bool
+) -> bool:
     return attempt < attempts and (not lost.started or if_started)
 
 
-def retry(call: Callable[..., Any], *args: Any, attempts: int = 3, if_started: bool = False, **kwargs: Any) -> Any:
+def retry(
+    call: Callable[..., Any],
+    *args: Any,
+    attempts: int = 3,
+    if_started: bool = False,
+    **kwargs: Any,
+) -> Any:
     """Call ``call(*args, **kwargs)``, again when its agent is lost and that is safe.
 
     Safe means the lost step never started, or ``if_started=True``: you know running it
@@ -874,7 +1003,13 @@ def retry(call: Callable[..., Any], *args: Any, attempts: int = 3, if_started: b
     raise AssertionError("unreachable: the last attempt returns or raises")
 
 
-async def aretry(call: Callable[..., Any], *args: Any, attempts: int = 3, if_started: bool = False, **kwargs: Any) -> Any:
+async def aretry(
+    call: Callable[..., Any],
+    *args: Any,
+    attempts: int = 3,
+    if_started: bool = False,
+    **kwargs: Any,
+) -> Any:
     """:func:`retry`, awaiting ``call``."""
     for attempt in range(1, attempts + 1):
         try:

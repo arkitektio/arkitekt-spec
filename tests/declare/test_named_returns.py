@@ -80,21 +80,32 @@ def test_key_names_the_return() -> None:
 
 
 def test_key_names_an_optional_return_beside_other_markers() -> None:
-    definition = prepare_definition(maybe_counted, structure_registry=StructureRegistry())
+    definition = prepare_definition(
+        maybe_counted, structure_registry=StructureRegistry()
+    )
     (port,) = definition.returns
     assert (port.key, port.nullable, port.description) == ("count", True, "How many")
 
 
 def test_key_names_one_element_of_a_tuple() -> None:
-    assert returns_of(pair) == [("count", None, PortKind.INT), ("return1", None, PortKind.STRING)]
+    assert returns_of(pair) == [
+        ("count", None, PortKind.INT),
+        ("return1", None, PortKind.STRING),
+    ]
 
 
 def test_a_named_tuple_is_one_return_per_field() -> None:
-    assert returns_of(measured) == [("count", None, PortKind.INT), ("mean", None, PortKind.FLOAT)]
+    assert returns_of(measured) == [
+        ("count", None, PortKind.INT),
+        ("mean", None, PortKind.FLOAT),
+    ]
 
 
 def test_a_generator_of_named_tuples_yields_one_return_per_field() -> None:
-    assert returns_of(streamed) == [("count", None, PortKind.INT), ("mean", None, PortKind.FLOAT)]
+    assert returns_of(streamed) == [
+        ("count", None, PortKind.INT),
+        ("mean", None, PortKind.FLOAT),
+    ]
 
 
 def test_a_numpy_return_name_is_only_a_label() -> None:
@@ -102,7 +113,10 @@ def test_a_numpy_return_name_is_only_a_label() -> None:
 
 
 def test_numpy_names_label_a_named_tuple_in_order() -> None:
-    assert returns_of(numpy_named_pair) == [("count", "n", PortKind.INT), ("mean", "m", PortKind.FLOAT)]
+    assert returns_of(numpy_named_pair) == [
+        ("count", "n", PortKind.INT),
+        ("mean", "m", PortKind.FLOAT),
+    ]
 
 
 def test_an_unnamed_return_is_the_port_it_was() -> None:
@@ -115,8 +129,13 @@ def test_an_unnamed_return_is_the_port_it_was() -> None:
         return 1
 
     registry = StructureRegistry()
-    assert prepare_definition(plain, structure_registry=registry).returns == prepare_definition(named, structure_registry=registry).returns
-    assert prepare_definition(plain, structure_registry=registry).returns == (ReturnPortInput(key="return0", kind=PortKind.INT, nullable=False, effects=()),)
+    assert (
+        prepare_definition(plain, structure_registry=registry).returns
+        == prepare_definition(named, structure_registry=registry).returns
+    )
+    assert prepare_definition(plain, structure_registry=registry).returns == (
+        ReturnPortInput(key="return0", kind=PortKind.INT, nullable=False, effects=()),
+    )
 
 
 def test_two_returns_of_one_key_are_refused() -> None:

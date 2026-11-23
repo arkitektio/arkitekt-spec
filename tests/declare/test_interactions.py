@@ -34,12 +34,16 @@ class Asks(Protocol):
         """Pick one."""
         ...
 
-    @ask('<Blok kind="task" context="panel"><Button label="Ok" onClick={task.answer(values: {choice: "keep"})} /></Blok>')
+    @ask(
+        '<Blok kind="task" context="panel"><Button label="Ok" onClick={task.answer(values: {choice: "keep"})} /></Blok>'
+    )
     def choose(self) -> Annotated[Literal["keep", "drop"], Key("choice")]:
         """Keep it?"""
         ...
 
-    @inform('<Blok kind="task" context="panel"><Card><CardTitle text={args.step} /></Card></Blok>')
+    @inform(
+        '<Blok kind="task" context="panel"><Card><CardTitle text={args.step} /></Card></Blok>'
+    )
     def progress(self, step: int, total: int) -> None:
         """How far it got."""
         ...
@@ -64,9 +68,17 @@ def test_an_action_registers_the_asks_it_is_handed() -> None:
     assert set(asks) == {"asks.pick", "asks.choose"}
     pick = asks["asks.pick"]
     assert pick.description == "Pick one."
-    assert [(port.key, port.nullable) for port in pick.args] == [("question", False), ("error", True)]
-    assert [(port.key, port.kind) for port in pick.returns] == [("name", "STRING"), ("count", "INT")]
-    assert [(port.key, port.kind) for port in asks["asks.choose"].returns] == [("choice", "ENUM")]
+    assert [(port.key, port.nullable) for port in pick.args] == [
+        ("question", False),
+        ("error", True),
+    ]
+    assert [(port.key, port.kind) for port in pick.returns] == [
+        ("name", "STRING"),
+        ("count", "INT"),
+    ]
+    assert [(port.key, port.kind) for port in asks["asks.choose"].returns] == [
+        ("choice", "ENUM")
+    ]
     informs = {inform.key: inform for inform in implementation.informs or ()}
     assert set(informs) == {"asks.progress"}
     assert informs["asks.progress"].description == "How far it got."
@@ -81,8 +93,13 @@ def test_an_action_without_asks_or_flags_keeps_its_wire_bytes() -> None:
         return x
 
     registry.register_action(plain)
-    dumped = registry.implementations["plain"].model_dump(exclude_none=True, by_alias=True)
-    assert not {"asks", "informs", "dynamicAsks", "dynamicCalls", "dynamicInforms"} & dumped.keys()
+    dumped = registry.implementations["plain"].model_dump(
+        exclude_none=True, by_alias=True
+    )
+    assert (
+        not {"asks", "informs", "dynamicAsks", "dynamicCalls", "dynamicInforms"}
+        & dumped.keys()
+    )
     assert registry.get_scopes() == []
 
 
@@ -90,7 +107,9 @@ def test_an_answer_keyed_by_no_return_is_refused() -> None:
     registry = AppRegistry()
 
     class Bad(Protocol):
-        @ask('<Blok kind="task" context="panel"><Button onClick={task.answer(values: {nope: 1})} /></Blok>')
+        @ask(
+            '<Blok kind="task" context="panel"><Button onClick={task.answer(values: {nope: 1})} /></Blok>'
+        )
         def pick(self) -> Picked: ...
 
     with pytest.raises(DefinitionError, match="'nope'"):
@@ -101,7 +120,9 @@ def test_an_answer_leaving_out_a_required_return_is_refused() -> None:
     registry = AppRegistry()
 
     class Short(Protocol):
-        @ask('<Blok kind="task" context="panel"><Button onClick={task.answer(values: {name: "x"})} /></Blok>')
+        @ask(
+            '<Blok kind="task" context="panel"><Button onClick={task.answer(values: {name: "x"})} /></Blok>'
+        )
         def pick(self) -> Picked: ...
 
     with pytest.raises(DefinitionError, match="'count'"):
@@ -150,10 +171,18 @@ def test_the_dynamic_flags_ask_for_their_scopes() -> None:
         """Flow."""
         return x
 
-    registry.register_workflow(flow, dynamic_asks=True, dynamic_calls=True, dynamic_informs=True)
+    registry.register_workflow(
+        flow, dynamic_asks=True, dynamic_calls=True, dynamic_informs=True
+    )
     implementation = registry.implementations["flow"]
-    assert (implementation.dynamic_asks, implementation.dynamic_calls, implementation.dynamic_informs) == (True, True, True)
-    assert registry.get_scopes() == sorted([DYNAMIC_ASK_SCOPE, DYNAMIC_CALL_SCOPE, DYNAMIC_INFORM_SCOPE])
+    assert (
+        implementation.dynamic_asks,
+        implementation.dynamic_calls,
+        implementation.dynamic_informs,
+    ) == (True, True, True)
+    assert registry.get_scopes() == sorted(
+        [DYNAMIC_ASK_SCOPE, DYNAMIC_CALL_SCOPE, DYNAMIC_INFORM_SCOPE]
+    )
 
 
 def test_an_inform_with_a_return_is_refused() -> None:
@@ -171,7 +200,9 @@ def test_an_inform_answering_is_refused() -> None:
     registry = AppRegistry()
 
     class Answers(Protocol):
-        @inform('<Blok kind="task" context="panel"><Button onClick={task.answer(values: {x: 1})} /></Blok>')
+        @inform(
+            '<Blok kind="task" context="panel"><Button onClick={task.answer(values: {x: 1})} /></Blok>'
+        )
         def progress(self) -> None: ...
 
     with pytest.raises(DefinitionError, match="make it an @ask"):

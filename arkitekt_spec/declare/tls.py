@@ -71,7 +71,9 @@ def bundle_file(certificates: list[str]) -> str:
         for pem in certificates:
             _native.setdefault(pem.strip(), None)
         base = (
-            Path(_base_bundle).read_text() if _base_bundle and Path(_base_bundle).is_file() else ""
+            Path(_base_bundle).read_text()
+            if _base_bundle and Path(_base_bundle).is_file()
+            else ""
         )
         bundle = base.rstrip() + "\n" + "\n".join(_native) + "\n"
         digest = hashlib.sha256(bundle.encode()).hexdigest()[:16]

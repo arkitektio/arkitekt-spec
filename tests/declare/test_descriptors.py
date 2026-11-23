@@ -4,7 +4,12 @@ import pytest
 
 from arkitekt_spec.actions import DescriptorOperator
 from arkitekt_spec.declare.annotations import Provides, Requires
-from arkitekt_spec.declare.descriptors import holds, resolve_pointer, unfulfilled, unmet_state
+from arkitekt_spec.declare.descriptors import (
+    holds,
+    resolve_pointer,
+    unfulfilled,
+    unmet_state,
+)
 from arkitekt_spec.declare.structures.registry import StructureRegistry
 from arkitekt_spec.declare.task import StateRequirement
 
@@ -36,7 +41,9 @@ def requires(key: str, operator: str, value: object = None) -> Requires:
         ("MATCHES", "abc", "a.c", False),
     ],
 )
-def test_an_operator_holds_as_on_the_server(operator: str, actual: object, expected: object, result: bool) -> None:
+def test_an_operator_holds_as_on_the_server(
+    operator: str, actual: object, expected: object, result: bool
+) -> None:
     assert holds(operator, actual, expected) is result
     assert holds(DescriptorOperator(operator), actual, expected) is result
 
@@ -62,7 +69,10 @@ def test_failures_name_the_constraint_and_the_actual_value() -> None:
 
 
 def test_a_key_the_object_does_not_carry_is_not_tested() -> None:
-    constraints = [requires("@t/kind", "EQUALS", "categorical"), requires("@t/space", "EQUALS", 2)]
+    constraints = [
+        requires("@t/kind", "EQUALS", "categorical"),
+        requires("@t/space", "EQUALS", 2),
+    ]
     assert unfulfilled(constraints, {"@t/space": 2}) == ()
     assert unfulfilled(constraints, {"@t/space": 2, "@t/kind": "continuous"}) == (
         "@t/kind EQUALS 'categorical' (actual 'continuous')",
@@ -106,8 +116,12 @@ def test_a_structure_without_a_describer_has_none() -> None:
     assert registry.get_fullfilled_structure("@t/thing").describe is None
 
 
-def state(path: str, operator: str, value: object = None, name: str = "stage") -> StateRequirement:
-    return StateRequirement(state=name, path=path, operator=DescriptorOperator(operator), value=value)
+def state(
+    path: str, operator: str, value: object = None, name: str = "stage"
+) -> StateRequirement:
+    return StateRequirement(
+        state=name, path=path, operator=DescriptorOperator(operator), value=value
+    )
 
 
 STAGE = {"busy": False, "position": [1.5, 2.0], "mode": "idle", "a/b": {"~x": 1}}
@@ -146,7 +160,9 @@ def test_a_path_the_state_does_not_hold_fails(path: str) -> None:
 
 
 def test_a_state_the_agent_does_not_have_fails() -> None:
-    (failure,) = unmet_state([state("/busy", "EQUALS", False, name="laser")], {"stage": STAGE})
+    (failure,) = unmet_state(
+        [state("/busy", "EQUALS", False, name="laser")], {"stage": STAGE}
+    )
     assert "no state 'laser'" in failure
 
 
@@ -161,7 +177,11 @@ def test_a_comparison_that_cannot_be_made_fails_rather_than_raises() -> None:
 
 def test_every_failing_requirement_is_reported() -> None:
     failures = unmet_state(
-        [state("/busy", "EQUALS", True), state("/mode", "EQUALS", "idle"), state("/gone", "EXISTS")],
+        [
+            state("/busy", "EQUALS", True),
+            state("/mode", "EQUALS", "idle"),
+            state("/gone", "EXISTS"),
+        ],
         {"stage": STAGE},
     )
     assert len(failures) == 2

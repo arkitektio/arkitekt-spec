@@ -27,7 +27,9 @@ def test_is_mesh(kind: str | None, host: str, expected: bool) -> None:
 
 
 def test_proxy_is_never_serialized() -> None:
-    alias = Alias(id="a", host="100.64.0.9", kind="mesh", proxy="http://127.0.0.1:41234")
+    alias = Alias(
+        id="a", host="100.64.0.9", kind="mesh", proxy="http://127.0.0.1:41234"
+    )
 
     dumped = alias.model_dump()
     assert "proxy" not in dumped
@@ -64,7 +66,9 @@ class FakeNode:
         return "127.0.0.1:5555"
 
     async def turn(self) -> TurnInfo:
-        return TurnInfo(urls=["turn:127.0.0.1:3478?transport=udp"], username="u", credential="c")
+        return TurnInfo(
+            urls=["turn:127.0.0.1:3478?transport=udp"], username="u", credential="c"
+        )
 
 
 @pytest.mark.asyncio
@@ -84,7 +88,9 @@ async def test_an_alias_reached_through_a_node_forwards_and_relays() -> None:
 
 def test_the_node_is_never_serialized_and_copies_share_it() -> None:
     node = FakeNode()
-    alias = Alias(id="a", host="db", kind="mesh").through_mesh("http://127.0.0.1:1", node)
+    alias = Alias(id="a", host="db", kind="mesh").through_mesh(
+        "http://127.0.0.1:1", node
+    )
 
     assert alias.model_dump() == Alias(id="a", host="db", kind="mesh").model_dump()
     assert alias.model_copy()._mesh is node
@@ -118,4 +124,6 @@ def test_reach_says_where_an_alias_works_and_kind_still_counts() -> None:
     assert Alias(id="r", host="box", reach="loopback").is_loopback()
     assert not Alias(id="n", host="lab.local", reach="lan").is_loopback()
     # Routing stays on kind: a literal tailnet host is reach mesh but not routed by the node.
-    assert not Alias(id="m", host="hub.tail.ts.net", reach="mesh", kind="absolute").is_mesh()
+    assert not Alias(
+        id="m", host="hub.tail.ts.net", reach="mesh", kind="absolute"
+    ).is_mesh()

@@ -46,7 +46,13 @@ from typing import (
     get_type_hints,
 )
 
-from arkitekt_spec.declare.wiring import Alias, Own, Require, TokenLoader, is_fakts_client
+from arkitekt_spec.declare.wiring import (
+    Alias,
+    Own,
+    Require,
+    TokenLoader,
+    is_fakts_client,
+)
 from arkitekt_spec.manifest import AppManifest, Requirement
 
 if TYPE_CHECKING:
@@ -238,11 +244,13 @@ def _read_injections(
             )
         injections.append(
             _injection_for(
-                function_name, parameter.name, hints[parameter.name], clients_of=clients_of
+                function_name,
+                parameter.name,
+                hints[parameter.name],
+                clients_of=clients_of,
             )
         )
     return returns, injections
-
 
 
 class Service(Generic[C]):
@@ -322,8 +330,12 @@ class Service(Generic[C]):
         # An attribute a client class may or may not carry: a protocol of one class variable
         # cannot be checked with issubclass.
         scopes = getattr(self.returns, "__scopes__", ())
-        if not isinstance(scopes, (tuple, list, frozenset)) or not all(isinstance(scope, str) for scope in scopes):
-            raise ServiceDefinitionError(f"{self.name}: {self.returns.__name__}.__scopes__ is not a collection of scope names")
+        if not isinstance(scopes, (tuple, list, frozenset)) or not all(
+            isinstance(scope, str) for scope in scopes
+        ):
+            raise ServiceDefinitionError(
+                f"{self.name}: {self.returns.__name__}.__scopes__ is not a collection of scope names"
+            )
         return sorted(scopes)
 
     @property
@@ -349,7 +361,11 @@ class Service(Generic[C]):
         Returns:
             The turms project configuration, or ``None``.
         """
-        return json.loads(Path(self._turms).read_text(encoding="utf-8")) if self._turms else None
+        return (
+            json.loads(Path(self._turms).read_text(encoding="utf-8"))
+            if self._turms
+            else None
+        )
 
     # ------------------------------------------------------------------ #
     # Building                                                           #

@@ -79,7 +79,13 @@ class PortCallParser:
         except tokenize.TokenError as e:
             raise ValueError(f"Failed to parse port call '{source}': {e}") from e
 
-        skipped = {tokenize.NL, tokenize.NEWLINE, tokenize.COMMENT, tokenize.INDENT, tokenize.DEDENT}
+        skipped = {
+            tokenize.NL,
+            tokenize.NEWLINE,
+            tokenize.COMMENT,
+            tokenize.INDENT,
+            tokenize.DEDENT,
+        }
         significant = [tok for tok in tokens if tok.type not in skipped]
         renamed: list[tuple[int, str]] = []
         for index, tok in enumerate(significant):
@@ -87,8 +93,12 @@ class PortCallParser:
             if tok.type == tokenize.NAME and keyword.iskeyword(string):
                 nxt = significant[index + 1] if index + 1 < len(significant) else None
                 prev = significant[index - 1] if index > 0 else None
-                follows_dot = prev is not None and prev.type == tokenize.OP and prev.string == "."
-                precedes_call = nxt is not None and nxt.type == tokenize.OP and nxt.string == "("
+                follows_dot = (
+                    prev is not None and prev.type == tokenize.OP and prev.string == "."
+                )
+                precedes_call = (
+                    nxt is not None and nxt.type == tokenize.OP and nxt.string == "("
+                )
                 # Only a keyword in *callee* position is an operation name (``if(`` at the start,
                 # after ``(``, ``,``, ``=``, ...). ``x and (y)`` or ``not (x)`` are operators and
                 # must reach Python's grammar, where the desugarer maps them onto the same names.
@@ -104,8 +114,7 @@ class PortCallParser:
     def _unescape_name(cls, path: str, separator: str) -> str:
         prefix = cls.KEYWORD_PREFIX
         return separator.join(
-            part.removeprefix(prefix)
-            for part in path.split(separator)
+            part.removeprefix(prefix) for part in path.split(separator)
         )
 
     @classmethod
@@ -127,9 +136,9 @@ class PortCallParser:
 
     @classmethod
     def _is_call_like(cls, node: ast.AST) -> bool:
-        return isinstance(node, (ast.Call, ast.Compare, ast.BoolOp, ast.IfExp, ast.BinOp)) or (
-            isinstance(node, ast.UnaryOp) and not cls._is_signed_constant(node)
-        )
+        return isinstance(
+            node, (ast.Call, ast.Compare, ast.BoolOp, ast.IfExp, ast.BinOp)
+        ) or (isinstance(node, ast.UnaryOp) and not cls._is_signed_constant(node))
 
     @staticmethod
     def _is_signed_constant(node: ast.UnaryOp) -> bool:
@@ -153,7 +162,9 @@ class PortCallParser:
                 cls._desugar_comparison(op, left, right)
                 for op, left, right in zip(node.ops, operands, operands[1:])
             ]
-            return functools.reduce(lambda acc, part: cls._base_call("and", a=acc, b=part), parts)
+            return functools.reduce(
+                lambda acc, part: cls._base_call("and", a=acc, b=part), parts
+            )
 
         if isinstance(node, ast.BoolOp):
             name = "and" if isinstance(node.op, ast.And) else "or"
@@ -169,11 +180,15 @@ class PortCallParser:
             if isinstance(node.op, ast.UAdd):
                 if cls._is_call_like(node.operand):
                     return cls._desugar(node.operand)
-                raise ValueError("Unary plus on a value is not an expression; write the value itself")
+                raise ValueError(
+                    "Unary plus on a value is not an expression; write the value itself"
+                )
             raise ValueError("Bitwise operators are not supported in port calls")
 
         if isinstance(node, ast.IfExp):
-            return cls._base_call("if", condition=node.test, then=node.body, otherwise=node.orelse)
+            return cls._base_call(
+                "if", condition=node.test, then=node.body, otherwise=node.orelse
+            )
 
         if isinstance(node, ast.BinOp):
             name = cls._ARITHMETIC.get(type(node.op))
@@ -186,22 +201,32 @@ class PortCallParser:
         raise ValueError(f"Unsupported expression in port call: {type(node).__name__}")
 
     @classmethod
-    def _desugar_comparison(cls, op: ast.cmpop, left: ast.AST, right: ast.AST) -> UtilCallInput:
+    def _desugar_comparison(
+        cls, op: ast.cmpop, left: ast.AST, right: ast.AST
+    ) -> UtilCallInput:
         if isinstance(op, ast.In):
             return cls._base_call("in", value=left, options=right)
         if isinstance(op, ast.NotIn):
-            return cls._base_call("not", a=cls._base_call("in", value=left, options=right))
+            return cls._base_call(
+                "not", a=cls._base_call("in", value=left, options=right)
+            )
         if isinstance(op, (ast.Is, ast.IsNot)):
             if not (isinstance(right, ast.Constant) and right.value is None):
                 raise ValueError("'is' is only supported as 'is None' / 'is not None'")
-            return cls._base_call("is_null" if isinstance(op, ast.Is) else "is_set", a=left)
+            return cls._base_call(
+                "is_null" if isinstance(op, ast.Is) else "is_set", a=left
+            )
         name = cls._COMPARISONS.get(type(op))
         if name is None:
-            raise ValueError(f"Unsupported comparison in port call: {type(op).__name__}")
+            raise ValueError(
+                f"Unsupported comparison in port call: {type(op).__name__}"
+            )
         return cls._base_call(name, a=left, b=right)
 
     @classmethod
-    def _base_call(cls, operation: str, **operands: "ast.AST | UtilCallInput") -> UtilCallInput:
+    def _base_call(
+        cls, operation: str, **operands: "ast.AST | UtilCallInput"
+    ) -> UtilCallInput:
         """A base-catalog call with named arguments, from AST nodes or already-built calls."""
         arguments = [
             ActionArgumentInput(key=key, util_call=operand)
@@ -216,7 +241,11 @@ class PortCallParser:
     def _parse_ast_argument_value(  # type: ignore[override]
         cls, node: ast.AST, key: str | None = None
     ) -> ActionArgumentInput:
-        if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.UAdd) and not cls._is_signed_constant(node):
+        if (
+            isinstance(node, ast.UnaryOp)
+            and isinstance(node.op, ast.UAdd)
+            and not cls._is_signed_constant(node)
+        ):
             return cls._parse_ast_argument_value(node.operand, key)  # ``+x`` is ``x``
         if cls._is_call_like(node) and not isinstance(node, ast.Call):
             return ActionArgumentInput(key=key, util_call=cls._desugar(node))
@@ -230,11 +259,17 @@ class PortCallParser:
         segments: list[str] = []
         while isinstance(node, (ast.Subscript, ast.Attribute)):
             if isinstance(node, ast.Attribute):
-                segments.insert(0, cls._pointer_segment(cls._unescape_name(node.attr, ".")))
+                segments.insert(
+                    0, cls._pointer_segment(cls._unescape_name(node.attr, "."))
+                )
                 node = node.value
                 continue
             index = node.slice
-            if isinstance(index, ast.Constant) and isinstance(index.value, str) and index.value:
+            if (
+                isinstance(index, ast.Constant)
+                and isinstance(index.value, str)
+                and index.value
+            ):
                 segments.insert(0, cls._pointer_segment(index.value))
             elif (
                 isinstance(index, ast.Constant)
@@ -361,7 +396,9 @@ class PortCallParser:
                     or not isinstance(k_node.value, str)
                     or not k_node.value
                 ):
-                    raise ValueError("Dictionary keys must be non-empty literal strings.")
+                    raise ValueError(
+                        "Dictionary keys must be non-empty literal strings."
+                    )
                 parsed_dict_list.append(
                     cls._parse_ast_argument_value(v_node, key=k_node.value)
                 )
@@ -429,10 +466,18 @@ _VOCABULARY_NAMES = {
 }
 """What the parser's sugar is called in the blok vocabulary, the only functions the renderer has."""
 
-_VOCABULARY_KEYS = {("if", "condition"): "cond", ("is_null", "a"): "value", ("is_set", "a"): "value"}
+_VOCABULARY_KEYS = {
+    ("if", "condition"): "cond",
+    ("is_null", "a"): "value",
+    ("is_set", "a"): "value",
+}
 """The arguments the vocabulary names differently from the base catalog."""
 
-_VOCABULARY_FOLDS = {"and": "logic.all", "or": "logic.any", "coalesce": "logic.coalesce"}
+_VOCABULARY_FOLDS = {
+    "and": "logic.all",
+    "or": "logic.any",
+    "coalesce": "logic.coalesce",
+}
 """What the base catalog takes as two arguments and the vocabulary as one list."""
 
 
@@ -440,7 +485,8 @@ def _in_vocabulary(call: UtilCallInput, owner: str) -> UtilCallInput:
     """``call``, its operations and argument keys renamed to the blok vocabulary's."""
     if call.operation in _VOCABULARY_FOLDS:
         operands = tuple(
-            argument.model_copy(update={"key": None}) for argument in _vocabulary_arguments(call, owner)
+            argument.model_copy(update={"key": None})
+            for argument in _vocabulary_arguments(call, owner)
         )
         return UtilCallInput(
             operation=_VOCABULARY_FOLDS[call.operation],
@@ -450,7 +496,9 @@ def _in_vocabulary(call: UtilCallInput, owner: str) -> UtilCallInput:
     operation = _VOCABULARY_NAMES.get(call.operation, call.operation)
     function = load_vocabulary().function(operation)
     if function is None or function.effect:
-        raise ValueError(f"{owner}: {operation} is not a pure function of the blok language")
+        raise ValueError(
+            f"{owner}: {operation} is not a pure function of the blok language"
+        )
 
     arguments = []
     for index, argument in enumerate(_vocabulary_arguments(call, owner)):
@@ -458,10 +506,14 @@ def _in_vocabulary(call: UtilCallInput, owner: str) -> UtilCallInput:
         key = _VOCABULARY_KEYS.get((call.operation, key), key)
         if key.isdigit():
             if int(key) >= len(function.keys):
-                raise ValueError(f"{owner}: {operation} takes {', '.join(function.keys)}")
+                raise ValueError(
+                    f"{owner}: {operation} takes {', '.join(function.keys)}"
+                )
             key = function.keys[int(key)]
         if key not in function.keys:
-            raise ValueError(f"{owner}: {operation} has no argument {key} ({', '.join(function.keys)})")
+            raise ValueError(
+                f"{owner}: {operation} has no argument {key} ({', '.join(function.keys)})"
+            )
         arguments.append(argument.model_copy(update={"key": key}))
 
     missing = set(function.required_keys) - {argument.key for argument in arguments}
@@ -502,7 +554,10 @@ def parse_estimated_runtime(expression: str) -> UtilCallInput:
     Raises:
         ValueError: If the formula does not parse, or calls anything but a pure function.
     """
-    return _in_vocabulary(EstimatedRuntimeParser.parse_expression(expression), f"Estimated runtime '{expression}'")
+    return _in_vocabulary(
+        EstimatedRuntimeParser.parse_expression(expression),
+        f"Estimated runtime '{expression}'",
+    )
 
 
 def parse_fits(expression: str) -> UtilCallInput:
@@ -531,7 +586,6 @@ def coerce_util_call(call: "str | UtilCallInput") -> UtilCallInput:
     if isinstance(call, UtilCallInput):
         return call
     return parse_util_call(call)
-
 
 
 def bsx(source: str) -> ComponentNodeInput:

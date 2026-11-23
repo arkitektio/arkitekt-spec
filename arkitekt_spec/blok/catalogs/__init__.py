@@ -33,7 +33,11 @@ from dataclasses import dataclass, field
 from importlib import resources
 
 from arkitekt_spec.blok.vocabulary import JSON, Function, Param, load_vocabulary
-from arkitekt_spec.declare.catalogs import Catalog, ComponentSpec, parse_catalog_components
+from arkitekt_spec.declare.catalogs import (
+    Catalog,
+    ComponentSpec,
+    parse_catalog_components,
+)
 
 BASE_NAME = "base"
 LANGUAGE_GROUP = "language"
@@ -49,15 +53,23 @@ _registered: dict[str, Catalog] = {}
 
 def _text(file: str) -> str:
     """A file under ``arkitekt_spec/blok``: ``catalogs/base@4.json``."""
-    return resources.files("arkitekt_spec.blok").joinpath(file).read_text(encoding="utf-8")
+    return (
+        resources.files("arkitekt_spec.blok").joinpath(file).read_text(encoding="utf-8")
+    )
 
 
 def label_of(catalog: Catalog) -> str:
     """A catalog as a message names it: ``base@4``, or its bare name when it has no version."""
-    return f"{catalog.name}@{catalog.version}" if catalog.version is not None else catalog.name
+    return (
+        f"{catalog.name}@{catalog.version}"
+        if catalog.version is not None
+        else catalog.name
+    )
 
 
-def parse_catalog(raw: "str | Mapping[str, JSON]", where: str = "the catalog") -> Catalog:
+def parse_catalog(
+    raw: "str | Mapping[str, JSON]", where: str = "the catalog"
+) -> Catalog:
     """A catalog file (``{id, name, version, minor, extends, components}``) as a :class:`Catalog`.
 
     Only data is read: nothing of the payload is ever executed, and every field is checked.
@@ -79,11 +91,17 @@ def parse_catalog(raw: "str | Mapping[str, JSON]", where: str = "the catalog") -
     if not isinstance(name, str) or not vocabulary.catalog_name.fullmatch(name):
         raise ValueError(f"{where} has no name")
     for what, number in (("version", version), ("minor", minor)):
-        if number is not None and (not isinstance(number, int) or isinstance(number, bool) or number < 0):
+        if number is not None and (
+            not isinstance(number, int) or isinstance(number, bool) or number < 0
+        ):
             raise ValueError(f"{where} has a {what} that is not an integer")
     for what, address in (("id", identifier), ("extends", extends)):
-        if address is not None and (not isinstance(address, str) or not vocabulary.catalog_id.fullmatch(address)):
-            raise ValueError(f"{where} has an {what} that is not the address of a catalog")
+        if address is not None and (
+            not isinstance(address, str) or not vocabulary.catalog_id.fullmatch(address)
+        ):
+            raise ValueError(
+                f"{where} has an {what} that is not the address of a catalog"
+            )
     return Catalog(
         name=name,
         version=version if isinstance(version, int) else None,
@@ -160,7 +178,13 @@ def known_catalog(identifier: str) -> Catalog | None:
 
 def known_catalogs() -> tuple[Catalog, ...]:
     """Every catalog known here: those that ship (the base first), then those registered."""
-    return (*(bundled_catalog(identifier) for identifier in load_vocabulary().bundled_catalogs), *_registered.values())
+    return (
+        *(
+            bundled_catalog(identifier)
+            for identifier in load_vocabulary().bundled_catalogs
+        ),
+        *_registered.values(),
+    )
 
 
 def catalog_chain(target: "str | Catalog | None" = None) -> tuple[Catalog, ...]:
@@ -196,7 +220,9 @@ def catalog_chain(target: "str | Catalog | None" = None) -> tuple[Catalog, ...]:
             break
         parent = known_catalog(current.extends)
         if parent is None:
-            raise ValueError(f"the catalog {label_of(current)} extends {current.extends!r}, which is not known here")
+            raise ValueError(
+                f"the catalog {label_of(current)} extends {current.extends!r}, which is not known here"
+            )
         current = parent
     ordered = (base, *reversed(chain))
     owner: dict[str, tuple[ComponentSpec, str]] = {}
@@ -204,7 +230,9 @@ def catalog_chain(target: "str | Catalog | None" = None) -> tuple[Catalog, ...]:
         for component in catalog.components:
             previous = owner.get(component.name)
             if previous is not None and previous[0] != component:
-                raise ValueError(f"the catalog {label_of(catalog)} redefines <{component.name}> of {previous[1]}: a catalog only adds")
+                raise ValueError(
+                    f"the catalog {label_of(catalog)} redefines <{component.name}> of {previous[1]}: a catalog only adds"
+                )
             owner.setdefault(component.name, (component, label_of(catalog)))
     return ordered
 
@@ -231,18 +259,25 @@ class BlokView:
 
 
 def _operation_function(name: str, catalog: Catalog) -> Function | None:
-    operation = next((operation for operation in catalog.operations if operation.name == name), None)
+    operation = next(
+        (operation for operation in catalog.operations if operation.name == name), None
+    )
     if operation is None:
         return None
     return Function(
         name=name,
-        params=tuple(Param(key=argument.key, kind=argument.kind, required=argument.required) for argument in operation.arguments),
+        params=tuple(
+            Param(key=argument.key, kind=argument.kind, required=argument.required)
+            for argument in operation.arguments
+        ),
         returns=operation.returns,
         description=operation.description or "",
     )
 
 
-def blok_view(target: "str | Catalog | None" = None, *, complete: bool = True) -> BlokView:
+def blok_view(
+    target: "str | Catalog | None" = None, *, complete: bool = True
+) -> BlokView:
     """The view of a blok written for ``target`` (see :func:`catalog_chain`); the base's when None.
 
     A catalog's operations join the vocabulary's functions only under a function namespace
@@ -261,7 +296,10 @@ def blok_view(target: "str | Catalog | None" = None, *, complete: bool = True) -
     for catalog in chain[1:]:
         for operation in catalog.operations:
             namespace = operation.name.split(".", 1)[0]
-            if operation.name in functions or namespace not in vocabulary.function_namespaces:
+            if (
+                operation.name in functions
+                or namespace not in vocabulary.function_namespaces
+            ):
                 continue
             function = _operation_function(operation.name, catalog)
             if function is not None:
@@ -305,7 +343,10 @@ def is_catalog_target(target: str) -> bool:
     """Whether ``target`` can name a catalog at all: a published one's address, or the name of
     one registered in an organization."""
     vocabulary = load_vocabulary()
-    return vocabulary.catalog_id.fullmatch(target) is not None or vocabulary.catalog_name.fullmatch(target) is not None
+    return (
+        vocabulary.catalog_id.fullmatch(target) is not None
+        or vocabulary.catalog_name.fullmatch(target) is not None
+    )
 
 
 def catalog_text(file: str) -> str:
@@ -320,7 +361,9 @@ def catalog_files() -> tuple[str, ...]:
 
 # --------------------------------------------------------------------------- who checks a catalog
 
-_checking: contextvars.ContextVar[bool] = contextvars.ContextVar("arkitekt_spec_checking_catalogs", default=False)
+_checking: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "arkitekt_spec_checking_catalogs", default=False
+)
 
 
 def catalogs_checked() -> bool:

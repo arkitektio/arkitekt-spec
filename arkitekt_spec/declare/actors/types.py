@@ -21,7 +21,10 @@ from arkitekt_spec.actions import (
     ValidatorInput,
 )
 from arkitekt_spec.declare.actors.policy import KEEP, DisconnectPolicy
-from arkitekt_spec.declare.agents.context import PreparedContextReturns, PreparedContextVariables
+from arkitekt_spec.declare.agents.context import (
+    PreparedContextReturns,
+    PreparedContextVariables,
+)
 from arkitekt_spec.declare.blok.action import ActionBloks
 from arkitekt_spec.declare.coercible_types import OptimisticCoercible
 from arkitekt_spec.declare.definition.define import (
@@ -132,7 +135,9 @@ class ImplementationDetails:
     injected_variables: PreparedInjectedVariables = field(
         default_factory=PreparedInjectedVariables
     )
-    interaction_variables: PreparedInteractionVariables = field(default_factory=PreparedInteractionVariables)
+    interaction_variables: PreparedInteractionVariables = field(
+        default_factory=PreparedInteractionVariables
+    )
 
     def actor_kwargs(self) -> dict[str, Any]:
         """Everything derived from the function that its actor is built with.
@@ -240,7 +245,6 @@ class Actifier(Protocol):
     ) -> tuple[DefinitionInput, ImplementationDetails, Any]:
         """Inspect the function; return its definition, details and actor builder."""
         ...
-
 
 
 @dataclass

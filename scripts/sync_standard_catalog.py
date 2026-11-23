@@ -58,7 +58,9 @@ def sync_orkestrator_catalog(checkout: Path) -> Path:
     text = (checkout / ORKESTRATOR_EXPORT).read_text(encoding="utf-8")
     catalog = parse_catalog(text, str(ORKESTRATOR_EXPORT))
     if catalog.id != ORKESTRATOR_CATALOG_ID:
-        raise ValueError(f"{ORKESTRATOR_EXPORT} is the catalog {catalog.id!r}, not {ORKESTRATOR_CATALOG_ID!r}")
+        raise ValueError(
+            f"{ORKESTRATOR_EXPORT} is the catalog {catalog.id!r}, not {ORKESTRATOR_CATALOG_ID!r}"
+        )
     catalog_chain(catalog)
     target = BLOK / load_vocabulary().bundled_catalogs[ORKESTRATOR_CATALOG_ID]
     target.write_text(text, encoding="utf-8")
@@ -67,10 +69,27 @@ def sync_orkestrator_catalog(checkout: Path) -> Path:
 
 def main() -> None:
     """Sync into a bsx checkout, or copy the Orkestrator's catalog in."""
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("checkout", nargs="?", type=Path, help="a checkout of @arkitektio/bsx (typescript/libraries/bsx): the language and the catalogs are written out into it")
-    parser.add_argument("--into", type=Path, default=DEFAULT_INTO, help=f"where in the checkout (default {DEFAULT_INTO})")
-    parser.add_argument("--orkestrator", type=Path, metavar="CHECKOUT", help=f"copy the Orkestrator's catalog in from this Orkestrator checkout's {ORKESTRATOR_EXPORT}")
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "checkout",
+        nargs="?",
+        type=Path,
+        help="a checkout of @arkitektio/bsx (typescript/libraries/bsx): the language and the catalogs are written out into it",
+    )
+    parser.add_argument(
+        "--into",
+        type=Path,
+        default=DEFAULT_INTO,
+        help=f"where in the checkout (default {DEFAULT_INTO})",
+    )
+    parser.add_argument(
+        "--orkestrator",
+        type=Path,
+        metavar="CHECKOUT",
+        help=f"copy the Orkestrator's catalog in from this Orkestrator checkout's {ORKESTRATOR_EXPORT}",
+    )
     args = parser.parse_args()
     if args.orkestrator is not None:
         print(sync_orkestrator_catalog(args.orkestrator))

@@ -163,14 +163,19 @@ def test_a_public_annotated_attribute_is_a_state_demand_named_after_its_class() 
 
     registry = AppRegistry()
     registry.declare(app="lab")(Camera)
-    dependency = registry.structure_registry.protocol_for(Camera).to_dependency_input("camera")
+    dependency = registry.structure_registry.protocol_for(Camera).to_dependency_input(
+        "camera"
+    )
 
     by_key = {d.key: d for d in dependency.state_dependencies or ()}
     assert set(by_key) == {"state", "redirected"}
     assert by_key["state"].demand is not None
     assert by_key["state"].demand.key == "state"
     assert by_key["redirected"].demand is not None
-    assert (by_key["redirected"].demand.app, by_key["redirected"].demand.key) == ("imagej", "cam")
+    assert (by_key["redirected"].demand.app, by_key["redirected"].demand.key) == (
+        "imagej",
+        "cam",
+    )
     assert [a.key for a in dependency.action_dependencies or ()] == ["snap"]
     assert not any(name.startswith("__rekuest") for name in vars(CameraState))
 

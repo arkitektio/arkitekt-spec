@@ -19,23 +19,23 @@ import pytest
 from arkitekt_spec.declare.structures.convert import AppNamespace, source_root
 from arkitekt_spec.declare.structures.registry import StructureRegistry
 
-APP_SOURCE = '''
+APP_SOURCE = """
 from enum import Enum
 
 
 class ThresholdMethod(Enum):
     OTSU = "otsu"
     LI = "li"
-'''
+"""
 
-LIBRARY_SOURCE = '''
+LIBRARY_SOURCE = """
 from enum import Enum
 
 
 class ProjectionMode(Enum):
     MAX = "max"
     MEAN = "mean"
-'''
+"""
 
 
 def write(path: Path, source: str) -> Path:
@@ -54,10 +54,14 @@ def isolated_modules() -> Iterator[None]:
         del sys.modules[name]
 
 
-def registry_for(identifier: str, constructed_in: Path, module: str) -> StructureRegistry:
+def registry_for(
+    identifier: str, constructed_in: Path, module: str
+) -> StructureRegistry:
     """The registry of an app named ``identifier`` that ``module`` (in ``constructed_in``) constructs."""
     return StructureRegistry(
-        namespace=AppNamespace(identifier=identifier, root=source_root(constructed_in), module=module)
+        namespace=AppNamespace(
+            identifier=identifier, root=source_root(constructed_in), module=module
+        )
     )
 
 
@@ -71,15 +75,27 @@ def enum_in(namespace: dict[str, object], name: str) -> type[Enum]:
 def test_an_app_local_enum_is_the_same_run_or_imported(tmp_path: Path) -> None:
     script = write(tmp_path / "apps" / "cluster_segment_path_app.py", APP_SOURCE)
 
-    as_main = enum_in(runpy.run_path(str(script), run_name="__main__"), "ThresholdMethod")
+    as_main = enum_in(
+        runpy.run_path(str(script), run_name="__main__"), "ThresholdMethod"
+    )
     sys.path.insert(0, str(script.parent))
-    as_import = enum_in(vars(importlib.import_module("cluster_segment_path_app")), "ThresholdMethod")
-    assert (as_main.__module__, as_import.__module__) == ("__main__", "cluster_segment_path_app")
+    as_import = enum_in(
+        vars(importlib.import_module("cluster_segment_path_app")), "ThresholdMethod"
+    )
+    assert (as_main.__module__, as_import.__module__) == (
+        "__main__",
+        "cluster_segment_path_app",
+    )
 
     run = registry_for("cluster-segment-path", script, "__main__")
     imported = registry_for("cluster-segment-path", script, "cluster_segment_path_app")
-    assert run.derive_enum(as_main).identifier == "@cluster-segment-path/thresholdmethod"
-    assert imported.derive_enum(as_import).identifier == "@cluster-segment-path/thresholdmethod"
+    assert (
+        run.derive_enum(as_main).identifier == "@cluster-segment-path/thresholdmethod"
+    )
+    assert (
+        imported.derive_enum(as_import).identifier
+        == "@cluster-segment-path/thresholdmethod"
+    )
 
 
 @pytest.mark.usefixtures("isolated_modules")
@@ -91,12 +107,19 @@ def test_a_module_beside_the_app_or_in_its_package_is_the_apps(tmp_path: Path) -
     sys.path.insert(0, str(tmp_path))
 
     assert source_root(app) == (tmp_path / "myapp").resolve()
-    methods = enum_in(vars(importlib.import_module("myapp.kinds.methods")), "ThresholdMethod")
-    assert registry_for("myapp", app, "myapp.app").derive_enum(methods).identifier == "@myapp/thresholdmethod"
+    methods = enum_in(
+        vars(importlib.import_module("myapp.kinds.methods")), "ThresholdMethod"
+    )
+    assert (
+        registry_for("myapp", app, "myapp.app").derive_enum(methods).identifier
+        == "@myapp/thresholdmethod"
+    )
 
 
 @pytest.mark.usefixtures("isolated_modules")
-def test_a_library_enum_keeps_its_module_identifier_in_every_app(tmp_path: Path) -> None:
+def test_a_library_enum_keeps_its_module_identifier_in_every_app(
+    tmp_path: Path,
+) -> None:
     write(tmp_path / "lib" / "sharedlib" / "__init__.py", "")
     write(tmp_path / "lib" / "sharedlib" / "schema.py", LIBRARY_SOURCE)
     first = write(tmp_path / "apps" / "first_app.py", "")
@@ -135,12 +158,17 @@ def test_an_installed_app_is_still_its_own(tmp_path: Path) -> None:
     sys.path.insert(0, str(installed))
     methods = enum_in(vars(importlib.import_module("myapp.kinds")), "ThresholdMethod")
 
-    assert registry_for("myapp", app, "myapp.app").derive_enum(methods).identifier == "@myapp/thresholdmethod"
+    assert (
+        registry_for("myapp", app, "myapp.app").derive_enum(methods).identifier
+        == "@myapp/thresholdmethod"
+    )
 
 
 def test_a_console_app_owns_only_main() -> None:
     """Code typed into a console has no file, so only ``__main__`` is the app's."""
-    namespace = AppNamespace(identifier="console", root=source_root(Path("<stdin>")), module="__main__")
+    namespace = AppNamespace(
+        identifier="console", root=source_root(Path("<stdin>")), module="__main__"
+    )
     assert namespace.root is None
     as_main = Enum("Method", {"OTSU": "otsu"}, module="__main__")
     assert namespace.of(as_main) == "console"
@@ -159,5 +187,8 @@ def test_a_model_and_a_memory_structure_follow_the_same_rule(tmp_path: Path) -> 
     # A library class: pathlib is not under the app's directory.
     assert registry.register_as_memory_structure(Path).identifier == "@pathlib/path"
     # And any other library keeps the identifier, and with it the hash, its module has always given it.
-    assert registry.register_as_memory_structure(Future).identifier == "@concurrent.futures._base/future"
+    assert (
+        registry.register_as_memory_structure(Future).identifier
+        == "@concurrent.futures._base/future"
+    )
     assert registry.copy_maps().namespace == registry.namespace

@@ -52,13 +52,18 @@ def test_parse_non_base_positional_arguments_stay_indexed() -> None:
     keys = [argument.key for argument in _args(parse_util_call("f(value, 1, b=2)"))]
     assert keys == ["0", "1", "b"]
 
-    keys = [argument.key for argument in _args(parse_util_call("math.multiply(value, 2)"))]
+    keys = [
+        argument.key for argument in _args(parse_util_call("math.multiply(value, 2)"))
+    ]
     assert keys == ["0", "1"]
 
 
 def test_parse_mixed_positional_and_keyword_arguments() -> None:
     """Positionals and keywords of a base operation combine, in manifest order."""
-    keys = [argument.key for argument in _args(parse_util_call("between(value, max=10, min=0)"))]
+    keys = [
+        argument.key
+        for argument in _args(parse_util_call("between(value, max=10, min=0)"))
+    ]
 
     assert keys == ["value", "min", "max"]
 
@@ -170,14 +175,24 @@ def test_coerce_passes_through_util_call_input() -> None:
 
 @pytest.mark.parametrize(
     "expression, operation",
-    [("value > 3", "gt"), ("value >= 3", "gte"), ("value < 3", "lt"), ("value <= 3", "lte"), ("value == 3", "eq"), ("value != 3", "ne")],
+    [
+        ("value > 3", "gt"),
+        ("value >= 3", "gte"),
+        ("value < 3", "lt"),
+        ("value <= 3", "lte"),
+        ("value == 3", "eq"),
+        ("value != 3", "ne"),
+    ],
 )
 def test_parse_comparison_sugar(expression: str, operation: str) -> None:
     """Comparison operators desugar onto the base comparisons with named parameters."""
     call = parse_util_call(expression)
 
     assert call.operation == operation
-    assert [(a.key, a.value_path, a.value_literal) for a in _args(call)] == [("a", "value", None), ("b", None, 3)]
+    assert [(a.key, a.value_path, a.value_literal) for a in _args(call)] == [
+        ("a", "value", None),
+        ("b", None, 3),
+    ]
 
 
 def test_parse_chained_comparison_folds_into_and() -> None:
@@ -188,7 +203,9 @@ def test_parse_chained_comparison_folds_into_and() -> None:
     left, right = _args(call)
     assert left.util_call is not None and left.util_call.operation == "lt"
     assert [a.value_literal for a in _args(left.util_call)] == [0, None]
-    assert right.util_call is not None and [a.value_literal for a in _args(right.util_call)] == [None, 10]
+    assert right.util_call is not None and [
+        a.value_literal for a in _args(right.util_call)
+    ] == [None, 10]
 
 
 def test_parse_bool_ops_fold_left() -> None:
@@ -196,17 +213,25 @@ def test_parse_bool_ops_fold_left() -> None:
     call = parse_util_call("a and b and c")
     inner, last = _args(call)
     assert call.operation == "and" and inner.util_call is not None
-    assert [a.value_path for a in _args(inner.util_call)] == ["a", "b"] and last.value_path == "c"
+    assert [a.value_path for a in _args(inner.util_call)] == [
+        "a",
+        "b",
+    ] and last.value_path == "c"
 
     call = parse_util_call("a or (b and c)")
     assert call.operation == "or"
-    assert _args(call)[1].util_call is not None and _args(call)[1].util_call.operation == "and"
+    assert (
+        _args(call)[1].util_call is not None
+        and _args(call)[1].util_call.operation == "and"
+    )
 
 
 def test_parse_not_sugar_and_not_call_converge() -> None:
     """``not value > 3`` and ``not(gt(value, 3))`` produce the same tree."""
     assert parse_util_call("not value > 3") == parse_util_call("not(gt(value, 3))")
-    assert parse_util_call("value > 3 and not other") == parse_util_call("and(gt(value, 3), not(other))")
+    assert parse_util_call("value > 3 and not other") == parse_util_call(
+        "and(gt(value, 3), not(other))"
+    )
 
 
 def test_parse_in_and_not_in() -> None:
@@ -215,11 +240,16 @@ def test_parse_in_and_not_in() -> None:
     assert call.operation == "in"
     value, options = _args(call)
     assert value.key == "value" and options.key == "options"
-    assert options.value_list is not None and [e.value_literal for e in options.value_list] == [1, 2]
+    assert options.value_list is not None and [
+        e.value_literal for e in options.value_list
+    ] == [1, 2]
 
     call = parse_util_call("value not in opts")
     assert call.operation == "not"
-    assert _args(call)[0].util_call is not None and _args(call)[0].util_call.operation == "in"
+    assert (
+        _args(call)[0].util_call is not None
+        and _args(call)[0].util_call.operation == "in"
+    )
 
 
 def test_parse_is_none_and_is_not_none() -> None:
@@ -235,7 +265,10 @@ def test_parse_ternary() -> None:
 
     assert call.operation == "if"
     assert [a.key for a in _args(call)] == ["condition", "then", "otherwise"]
-    assert _args(call)[0].util_call is not None and _args(call)[0].util_call.operation == "gt"
+    assert (
+        _args(call)[0].util_call is not None
+        and _args(call)[0].util_call.operation == "gt"
+    )
 
 
 def test_parse_len_sugar() -> None:
@@ -250,7 +283,10 @@ def test_parse_len_sugar() -> None:
 
 def test_parse_subscripts_are_json_pointer_segments() -> None:
     """Subscripts become pointer segments, RFC 6901 escaped; integers index lists."""
-    paths = [a.value_path for a in _args(parse_util_call('eq(other["k/x"], other.list[1].x)'))]
+    paths = [
+        a.value_path
+        for a in _args(parse_util_call('eq(other["k/x"], other.list[1].x)'))
+    ]
     assert paths == ["other/k~1x", "other/list/1/x"]
 
     assert _args(parse_util_call("eq(items[0], 1)"))[0].value_path == "items/0"
@@ -261,23 +297,37 @@ def test_parse_keyword_operator_before_parenthesis() -> None:
     """A keyword followed by ``(`` is only an operation when it is in callee position."""
     call = parse_util_call("gt(value, 1) and (other or value)")
     assert call.operation == "and"
-    assert _args(call)[1].util_call is not None and _args(call)[1].util_call.operation == "or"
+    assert (
+        _args(call)[1].util_call is not None
+        and _args(call)[1].util_call.operation == "or"
+    )
 
     assert parse_util_call("not (value)").operation == "not"
     assert parse_util_call("value in (1, 2)").operation == "in"
-    assert parse_util_call("[if(value, 1, 2)][0] == 1") if False else True  # subscript on a list literal is out of scope
+    assert (
+        parse_util_call("[if(value, 1, 2)][0] == 1") if False else True
+    )  # subscript on a list literal is out of scope
 
 
 @pytest.mark.parametrize(
     "expression, operation",
-    [("value + 3", "add"), ("value - 3", "sub"), ("value * 3", "mul"), ("value / 3", "div"), ("value % 3", "mod")],
+    [
+        ("value + 3", "add"),
+        ("value - 3", "sub"),
+        ("value * 3", "mul"),
+        ("value / 3", "div"),
+        ("value % 3", "mod"),
+    ],
 )
 def test_parse_arithmetic_sugar(expression: str, operation: str) -> None:
     """Arithmetic operators desugar onto the base arithmetic with named parameters."""
     call = parse_util_call(expression)
 
     assert call.operation == operation
-    assert [(a.key, a.value_path, a.value_literal) for a in _args(call)] == [("a", "value", None), ("b", None, 3)]
+    assert [(a.key, a.value_path, a.value_literal) for a in _args(call)] == [
+        ("a", "value", None),
+        ("b", None, 3),
+    ]
 
 
 def test_parse_arithmetic_precedence_and_associativity() -> None:
@@ -287,11 +337,16 @@ def test_parse_arithmetic_precedence_and_associativity() -> None:
     left, right = _args(call)
     assert left.value_path == "x"
     assert right.util_call is not None and right.util_call.operation == "add"
-    assert [(a.value_path, a.value_literal) for a in _args(right.util_call)] == [("value", None), (None, 3)]
+    assert [(a.value_path, a.value_literal) for a in _args(right.util_call)] == [
+        ("value", None),
+        (None, 3),
+    ]
 
     call = parse_util_call("a - b - c")
     assert call.operation == "sub" and _args(call)[0].util_call is not None
-    assert _args(call)[0].util_call.operation == "sub" and _args(call)[1].value_path == "c"
+    assert (
+        _args(call)[0].util_call.operation == "sub" and _args(call)[1].value_path == "c"
+    )
 
     call = parse_util_call("a + b * c")
     assert call.operation == "add" and _args(call)[1].util_call is not None
@@ -319,9 +374,18 @@ def test_parse_unary_minus_on_paths() -> None:
 
 def test_parse_optional_base_argument_may_be_omitted() -> None:
     """A trailing optional parameter (``len_between.max``) may be left out."""
-    assert [a.key for a in _args(parse_util_call("len_between(value, 3)"))] == ["value", "min"]
-    assert [a.key for a in _args(parse_util_call("len_between(value, 3, 5)"))] == ["value", "min", "max"]
-    assert [a.key for a in _args(parse_util_call("len_between(value, max=5, min=3)"))] == ["value", "min", "max"]
+    assert [a.key for a in _args(parse_util_call("len_between(value, 3)"))] == [
+        "value",
+        "min",
+    ]
+    assert [a.key for a in _args(parse_util_call("len_between(value, 3, 5)"))] == [
+        "value",
+        "min",
+        "max",
+    ]
+    assert [
+        a.key for a in _args(parse_util_call("len_between(value, max=5, min=3)"))
+    ] == ["value", "min", "max"]
 
 
 def test_sugar_calls_satisfy_the_shape_and_purity_rules() -> None:
@@ -417,7 +481,9 @@ def test_input_models_reject_impure_calls(
                 arguments=(
                     ActionArgumentInput(
                         key="a",
-                        agent_call=AgentProbeInput(dependency="stage", operation="move"),
+                        agent_call=AgentProbeInput(
+                            dependency="stage", operation="move"
+                        ),
                     ),
                 ),
             ),
@@ -444,7 +510,12 @@ def _unchecked(operation: str = "gt", **binding: object) -> UtilCallInput:
         (_unchecked(key="a"), "exactly one of"),
         (_unchecked(key="a", value_literal=1, value_path="value"), "exactly one of"),
         (
-            _unchecked(key="a", value_dict=(ActionArgumentInput.model_construct(key=None, value_literal=1),)),
+            _unchecked(
+                key="a",
+                value_dict=(
+                    ActionArgumentInput.model_construct(key=None, value_literal=1),
+                ),
+            ),
             "every entry must carry a key",
         ),
         (
@@ -458,10 +529,18 @@ def _unchecked(operation: str = "gt", **binding: object) -> UtilCallInput:
             "duplicate key 'x'",
         ),
         (
-            _unchecked(key="a", value_list=(ActionArgumentInput.model_construct(key="x", value_literal=1),)),
+            _unchecked(
+                key="a",
+                value_list=(
+                    ActionArgumentInput.model_construct(key="x", value_literal=1),
+                ),
+            ),
             "must not carry a key",
         ),
-        (_unchecked(operation="   ", key="a", value_literal=1), "must name an operation"),
+        (
+            _unchecked(operation="   ", key="a", value_literal=1),
+            "must name an operation",
+        ),
         (
             _unchecked(key="a", util_call=_unchecked(key=None, value_literal=1)),
             "every entry must carry a key",
@@ -552,7 +631,9 @@ def test_definition_round_trip(simple_registry: StructureRegistry) -> None:
     """Validators and effects referencing sibling ports survive ``prepare_definition``."""
 
     def func(
-        a: Annotated[int, withValidator("gt(value, b)", error_message="a must exceed b")],
+        a: Annotated[
+            int, withValidator("gt(value, b)", error_message="a must exceed b")
+        ],
         b: Annotated[int, withEffect(EffectKind.HIDE, "gt(a, 10)")],
     ) -> int:
         return a + b
@@ -570,8 +651,11 @@ def test_definition_round_trip(simple_registry: StructureRegistry) -> None:
 
 
 @pytest.mark.define
-def test_definition_resolves_nested_dependency_paths(simple_registry: StructureRegistry) -> None:
+def test_definition_resolves_nested_dependency_paths(
+    simple_registry: StructureRegistry,
+) -> None:
     """A dependency ``cfg..limit`` names the child ``limit`` of the model port ``cfg``."""
+
     @simple_registry.model
     class Config:
         limit: int
@@ -585,7 +669,9 @@ def test_definition_resolves_nested_dependency_paths(simple_registry: StructureR
         ),
     )
 
-    def good(cfg: Config, n: Annotated[int, withValidator(call, error_message="too big")]) -> int:
+    def good(
+        cfg: Config, n: Annotated[int, withValidator(call, error_message="too big")]
+    ) -> int:
         return n
 
     definition = prepare_definition(good, structure_registry=simple_registry)
@@ -623,13 +709,17 @@ def test_definition_checks_return_ports_children_and_port_groups(
     def nested(a: Inner) -> int:
         return 1
 
-    with pytest.raises(ValueError, match="in port a..n has invalid dependency: missing"):
+    with pytest.raises(
+        ValueError, match="in port a..n has invalid dependency: missing"
+    ):
         prepare_definition(nested, structure_registry=simple_registry)
 
     def grouped(a: int) -> int:
         return a
 
-    with pytest.raises(ValueError, match="port group grp has invalid dependency: missing"):
+    with pytest.raises(
+        ValueError, match="port group grp has invalid dependency: missing"
+    ):
         prepare_definition(
             grouped,
             structure_registry=simple_registry,
@@ -689,13 +779,17 @@ def test_definition_carries_catalogs(simple_registry: StructureRegistry) -> None
     def func(a: int) -> int:
         return a
 
-    definition = prepare_definition(func, structure_registry=simple_registry, catalogs=["ui", "base@1"])
+    definition = prepare_definition(
+        func, structure_registry=simple_registry, catalogs=["ui", "base@1"]
+    )
     assert definition.catalogs == ("ui", "base@1")
     assert prepare_definition(func, structure_registry=simple_registry).catalogs == ()
 
 
 @pytest.mark.define
-def test_definition_rejects_unknown_dependency(simple_registry: StructureRegistry) -> None:
+def test_definition_rejects_unknown_dependency(
+    simple_registry: StructureRegistry,
+) -> None:
     """An effect referencing a port that does not exist is rejected."""
 
     def func(a: Annotated[int, withEffect(EffectKind.HIDE, "gt(missing, 10)")]) -> int:
@@ -737,7 +831,10 @@ def test_annotated_types_len_bounds(simple_registry: StructureRegistry) -> None:
     validators = definition.args[1].children[0].validators
     assert validators is not None
     assert validators[0].call.operation == "len_between"
-    assert [(a.key, a.value_literal) for a in _args(validators[0].call)] == [("value", None), ("min", 3)]
+    assert [(a.key, a.value_literal) for a in _args(validators[0].call)] == [
+        ("value", None),
+        ("min", 3),
+    ]
     assert validators[0].source == "len_between(value, 3)"
 
     def func(name: Annotated[str, Len(3, 5)]) -> str:
@@ -746,7 +843,11 @@ def test_annotated_types_len_bounds(simple_registry: StructureRegistry) -> None:
     definition = prepare_definition(func, structure_registry=simple_registry)
     validators = definition.args[0].validators
     assert validators is not None
-    assert [(a.key, a.value_literal) for a in _args(validators[0].call)] == [("value", None), ("min", 3), ("max", 5)]
+    assert [(a.key, a.value_literal) for a in _args(validators[0].call)] == [
+        ("value", None),
+        ("min", 3),
+        ("max", 5),
+    ]
 
 
 @pytest.mark.define

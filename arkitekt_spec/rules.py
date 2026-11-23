@@ -27,7 +27,18 @@ ESTIMATE_AGENT_ROOT = "agent"
 AGENT_HARDWARE = ("cpu_count", "memory_mib", "gpu_count", "gpu_memory_mib")
 
 #: What a ``Fits`` may be made of: what compiles to a ``jsonpath`` and evaluates alike everywhere.
-FITS_ARITHMETIC = frozenset({"math.add", "math.sub", "math.mul", "math.div", "math.neg", "math.abs", "math.floor", "math.ceil"})
+FITS_ARITHMETIC = frozenset(
+    {
+        "math.add",
+        "math.sub",
+        "math.mul",
+        "math.div",
+        "math.neg",
+        "math.abs",
+        "math.floor",
+        "math.ceil",
+    }
+)
 FITS_COMPARISONS = frozenset({"cmp.gt", "cmp.gte", "cmp.lt", "cmp.lte"})
 FITS_COMBINATIONS = frozenset({"logic.all", "logic.any"})
 
@@ -93,7 +104,9 @@ def iter_call_arguments(call: _Call) -> Iterator[_Argument]:
     yield from walk(call.arguments)
 
 
-def infer_dependencies(call: _Call, explicit: Iterable[str] | None = None) -> tuple[str, ...]:
+def infer_dependencies(
+    call: _Call, explicit: Iterable[str] | None = None
+) -> tuple[str, ...]:
     """The ports a call subscribes to: every ``value_path`` root except :data:`OWN_VALUE`.
 
     First-seen order without duplicates; ``explicit`` entries not already present
@@ -133,13 +146,17 @@ def check_call_shape(call: _Call, owner: str) -> None:
     _check_keyed(call.arguments, f"{owner}: arguments of {call.operation}")
 
     for argument in call.arguments or ():
-        bound = [name for name in ARGUMENT_BINDINGS if getattr(argument, name) is not None]
+        bound = [
+            name for name in ARGUMENT_BINDINGS if getattr(argument, name) is not None
+        ]
         if len(bound) != 1:
             raise ValueError(
                 f"{owner}: argument {argument.key!r} must set exactly one of "
                 f"{', '.join(ARGUMENT_BINDINGS)} (got {bound or 'none'})"
             )
-        _check_keyed(argument.value_dict, f"{owner}: value_dict of argument {argument.key!r}")
+        _check_keyed(
+            argument.value_dict, f"{owner}: value_dict of argument {argument.key!r}"
+        )
         for entry in argument.value_list or ():
             if entry.key is not None:
                 raise ValueError(
@@ -152,7 +169,9 @@ def check_call_shape(call: _Call, owner: str) -> None:
                 check_call_shape(nested.util_call, owner)
 
 
-def check_pure_call(call: _Call, dependencies: Iterable[str] | None, owner: str) -> None:
+def check_pure_call(
+    call: _Call, dependencies: Iterable[str] | None, owner: str
+) -> None:
     """Raise unless ``call`` is pure and only references ``dependencies``.
 
     A valid shape, no agent call anywhere in the argument tree, and every
@@ -162,7 +181,9 @@ def check_pure_call(call: _Call, dependencies: Iterable[str] | None, owner: str)
     allowed = set(dependencies or ()) | {OWN_VALUE}
     for argument in iter_call_arguments(call):
         if argument.agent_call is not None:
-            raise ValueError(f"{owner} must be pure: nested agent calls are not allowed")
+            raise ValueError(
+                f"{owner} must be pure: nested agent calls are not allowed"
+            )
         if argument.value_path is not None:
             root = value_path_root(argument.value_path)
             if root not in allowed:
@@ -188,7 +209,9 @@ def check_estimated_runtime(call: _Call, ports: Iterable[Any], owner: str) -> No
     hint = "; a formula using more goes in estimated_runtime_ui"
     check_call_shape(call, owner)
     if call.operation not in FITS_ARITHMETIC:
-        raise ValueError(f"{owner}: {call.operation} cannot be computed when matching actions, which only has {', '.join(sorted(FITS_ARITHMETIC))}{hint}")
+        raise ValueError(
+            f"{owner}: {call.operation} cannot be computed when matching actions, which only has {', '.join(sorted(FITS_ARITHMETIC))}{hint}"
+        )
     by_key = {port.key: port for port in ports}
     read: set[str] = set()
 
@@ -196,13 +219,28 @@ def check_estimated_runtime(call: _Call, ports: Iterable[Any], owner: str) -> No
         segments = path.split("/")
         if segments[0] == ESTIMATE_ARGS_ROOT:
             port = by_key.get(segments[1]) if len(segments) > 1 else None
-            if len(segments) != 3 or not segments[2].startswith("@") or port is None or not port.identifier:
-                raise ValueError(f"{owner} reads '{path}': it can read the descriptors of a structure argument, args.<port>[\"@pkg/key\"]{hint}")
+            if (
+                len(segments) != 3
+                or not segments[2].startswith("@")
+                or port is None
+                or not port.identifier
+            ):
+                raise ValueError(
+                    f"{owner} reads '{path}': it can read the descriptors of a structure argument, args.<port>[\"@pkg/key\"]{hint}"
+                )
             read.add(segments[1])
             if len(read) > 1:
-                raise ValueError(f"{owner} reads {' and '.join(sorted(read))}: the action query has one object, so it reads one argument{hint}")
-        elif segments[0] != ESTIMATE_AGENT_ROOT or len(segments) != 2 or segments[1] not in AGENT_HARDWARE:
-            raise ValueError(f"{owner} reads '{path}': it can read a structure argument's descriptors and agent.{{{', '.join(AGENT_HARDWARE)}}}{hint}")
+                raise ValueError(
+                    f"{owner} reads {' and '.join(sorted(read))}: the action query has one object, so it reads one argument{hint}"
+                )
+        elif (
+            segments[0] != ESTIMATE_AGENT_ROOT
+            or len(segments) != 2
+            or segments[1] not in AGENT_HARDWARE
+        ):
+            raise ValueError(
+                f"{owner} reads '{path}': it can read a structure argument's descriptors and agent.{{{', '.join(AGENT_HARDWARE)}}}{hint}"
+            )
 
     try:
         for argument in call.arguments or ():
@@ -222,50 +260,82 @@ def check_estimated_runtime_ui(call: _Call, ports: Iterable[Any], owner: str) ->
     by_key = {port.key: port for port in ports}
     for argument in iter_call_arguments(call):
         if argument.agent_call is not None:
-            raise ValueError(f"{owner} must be pure: nested agent calls are not allowed")
+            raise ValueError(
+                f"{owner} must be pure: nested agent calls are not allowed"
+            )
         if argument.value_path is None:
             continue
         root, *rest = argument.value_path.split("/")
         if root == ESTIMATE_ARGS_ROOT and rest:
             port = by_key.get(rest[0])
             if port is None:
-                raise ValueError(f"{owner} reads args.{rest[0]}, but the action has no such argument")
-            descriptors = [_pointer_segment(segment) for segment in rest[1:] if segment.startswith("@")]
+                raise ValueError(
+                    f"{owner} reads args.{rest[0]}, but the action has no such argument"
+                )
+            descriptors = [
+                _pointer_segment(segment)
+                for segment in rest[1:]
+                if segment.startswith("@")
+            ]
             if descriptors and (len(rest) != 2 or not port.identifier):
-                raise ValueError(f"{owner} reads the descriptor {descriptors[0]} of args.{rest[0]}, which only a structure argument has")
+                raise ValueError(
+                    f"{owner} reads the descriptor {descriptors[0]} of args.{rest[0]}, which only a structure argument has"
+                )
         elif root == ESTIMATE_AGENT_ROOT and rest:
             if len(rest) != 1 or rest[0] not in AGENT_HARDWARE:
-                raise ValueError(f"{owner} reads agent.{'.'.join(rest)}; an agent has {', '.join(AGENT_HARDWARE)}")
+                raise ValueError(
+                    f"{owner} reads agent.{'.'.join(rest)}; an agent has {', '.join(AGENT_HARDWARE)}"
+                )
         else:
-            raise ValueError(f"{owner} reads '{argument.value_path}': a path starts with args.<port> or agent.")
+            raise ValueError(
+                f"{owner} reads '{argument.value_path}': a path starts with args.<port> or agent."
+            )
 
 
 def _check_fits_read(path: str, owner: str) -> None:
     segments = path.split("/")
     if segments[0] == OWN_VALUE:
         if len(segments) != 2 or not segments[1].startswith("@"):
-            raise ValueError(f"{owner} reads '{path}': name a descriptor of this argument, such as @mikro/size")
-    elif segments[0] != ESTIMATE_AGENT_ROOT or len(segments) != 2 or segments[1] not in AGENT_HARDWARE:
-        raise ValueError(f"{owner} reads '{path}': it can read this argument's descriptors and agent.{{{', '.join(AGENT_HARDWARE)}}}. Agent state and other arguments cannot be tested when matching actions")
+            raise ValueError(
+                f"{owner} reads '{path}': name a descriptor of this argument, such as @mikro/size"
+            )
+    elif (
+        segments[0] != ESTIMATE_AGENT_ROOT
+        or len(segments) != 2
+        or segments[1] not in AGENT_HARDWARE
+    ):
+        raise ValueError(
+            f"{owner} reads '{path}': it can read this argument's descriptors and agent.{{{', '.join(AGENT_HARDWARE)}}}. Agent state and other arguments cannot be tested when matching actions"
+        )
 
 
-def _check_formula_number(argument: _Argument, owner: str, check_read: Callable[[str], None]) -> None:
+def _check_formula_number(
+    argument: _Argument, owner: str, check_read: Callable[[str], None]
+) -> None:
     """Hold one operand to what a database predicate can compute."""
     if argument.util_call is not None:
         if argument.util_call.operation not in FITS_ARITHMETIC:
-            raise ValueError(f"{owner}: {argument.util_call.operation} cannot be computed when matching actions, which only has {', '.join(sorted(FITS_ARITHMETIC))}")
+            raise ValueError(
+                f"{owner}: {argument.util_call.operation} cannot be computed when matching actions, which only has {', '.join(sorted(FITS_ARITHMETIC))}"
+            )
         for nested in argument.util_call.arguments or ():
             _check_formula_number(nested, owner, check_read)
     elif argument.value_path is not None:
         check_read(argument.value_path)
-    elif isinstance(argument.value_literal, bool) or not isinstance(argument.value_literal, (int, float)):
-        raise ValueError(f"{owner} uses {argument.value_literal!r}: it only works on numbers")
+    elif isinstance(argument.value_literal, bool) or not isinstance(
+        argument.value_literal, (int, float)
+    ):
+        raise ValueError(
+            f"{owner} uses {argument.value_literal!r}: it only works on numbers"
+        )
 
 
 def _check_fits_predicate(call: _Call, owner: str) -> None:
     if call.operation in FITS_COMPARISONS:
         for argument in call.arguments or ():
-            _check_formula_number(argument, owner, lambda path: _check_fits_read(path, owner))
+            _check_formula_number(
+                argument, owner, lambda path: _check_fits_read(path, owner)
+            )
     elif call.operation in FITS_COMBINATIONS:
         for argument in call.arguments or ():
             for item in argument.value_list or ():
@@ -273,7 +343,9 @@ def _check_fits_predicate(call: _Call, owner: str) -> None:
                     raise ValueError(f"{owner}: and/or combine comparisons")
                 _check_fits_predicate(item.util_call, owner)
     else:
-        raise ValueError(f"{owner} must be a comparison ({', '.join(sorted(FITS_COMPARISONS))}), or several joined by and/or, not {call.operation}. Exact values belong in Requires")
+        raise ValueError(
+            f"{owner} must be a comparison ({', '.join(sorted(FITS_COMPARISONS))}), or several joined by and/or, not {call.operation}. Exact values belong in Requires"
+        )
 
 
 def check_fits(call: _Call, owner: str) -> None:
@@ -307,7 +379,9 @@ def _ensure_unique(values: Iterable[str], label: str) -> None:
         seen.add(value)
 
 
-def check_widget_tree(nodes: Iterable[Any] | None, dependencies: Iterable[str] | None, owner: str) -> None:
+def check_widget_tree(
+    nodes: Iterable[Any] | None, dependencies: Iterable[str] | None, owner: str
+) -> None:
     """Raise unless a CUSTOM widget's tree is pure and reads only what the widget has in scope.
 
     That is its own value, its ``dependencies`` and what a node above declares (a ``foreach``'s
@@ -315,22 +389,36 @@ def check_widget_tree(nodes: Iterable[Any] | None, dependencies: Iterable[str] |
     """
     for node in nodes or ():
         props = node.props or ()
-        in_scope = {*(dependencies or ()), OWN_VALUE, *(prop.declares_value for prop in props if prop.declares_value)}
+        in_scope = {
+            *(dependencies or ()),
+            OWN_VALUE,
+            *(prop.declares_value for prop in props if prop.declares_value),
+        }
         for prop in props:
             prop_owner = f"{owner} node {node.id!r} prop {prop.key!r}"
             if prop.agent_call is not None:
-                raise ValueError(f"{prop_owner} must be pure: agent calls are not allowed in widgets")
-            reads = [prop.dynamic_value.path] if prop.dynamic_value is not None and prop.dynamic_value.path else []
+                raise ValueError(
+                    f"{prop_owner} must be pure: agent calls are not allowed in widgets"
+                )
+            reads = (
+                [prop.dynamic_value.path]
+                if prop.dynamic_value is not None and prop.dynamic_value.path
+                else []
+            )
             if prop.util_call is not None:
                 for argument in iter_call_arguments(prop.util_call):
                     if argument.agent_call is not None:
-                        raise ValueError(f"{prop_owner} must be pure: nested agent calls are not allowed")
+                        raise ValueError(
+                            f"{prop_owner} must be pure: nested agent calls are not allowed"
+                        )
                     if argument.value_path is not None:
                         reads.append(argument.value_path)
             for path in reads:
                 root = blok_path_root(path)
                 if root not in in_scope:
-                    raise ValueError(f"{prop_owner} references {root!r} but it is not in dependencies")
+                    raise ValueError(
+                        f"{prop_owner} references {root!r} but it is not in dependencies"
+                    )
         check_widget_tree(node.children, in_scope, owner)
 
 
@@ -353,9 +441,13 @@ class PortRules(BaseModel):
         kind = _value(port.kind)
         children = port.children
         if kind == "STRUCTURE" and port.identifier is None:
-            raise ValueError("When specifying a structure you need to provide an identifier")
+            raise ValueError(
+                "When specifying a structure you need to provide an identifier"
+            )
         if kind == "ENUM" and not port.choices:
-            raise ValueError("When specifying an enum you need to provide its 'choices'")
+            raise ValueError(
+                "When specifying an enum you need to provide its 'choices'"
+            )
         if kind == "QUANTITY" and not port.reference_unit:
             raise ValueError(
                 "When specifying a quantity you need to provide a 'reference_unit' "
@@ -364,12 +456,16 @@ class PortRules(BaseModel):
             )
         if kind == "LIST":
             if children is None:
-                raise ValueError("When specifying a list you need to provide a wrapped 'children' port")
+                raise ValueError(
+                    "When specifying a list you need to provide a wrapped 'children' port"
+                )
             if len(children) != 1:
                 raise ValueError("A list has exactly one child (its item type)")
         if kind == "DICT":
             if not children:
-                raise ValueError("When specifying a dict you need to provide 'children' ports")
+                raise ValueError(
+                    "When specifying a dict you need to provide 'children' ports"
+                )
             if len(children) > 1 and any(child.key == ITEM_KEY for child in children):
                 raise ValueError(
                     f"A dict is either homogeneous (one child keyed {ITEM_KEY!r}) "
@@ -385,9 +481,13 @@ class SliderRules(BaseModel):
     def _bounds(self) -> Self:
         widget: Any = self
         if widget.min is None or widget.max is None:
-            raise ValueError("When specifying a Slider you need to provide a 'min' and a 'max'")
+            raise ValueError(
+                "When specifying a Slider you need to provide a 'min' and a 'max'"
+            )
         if widget.min > widget.max:
-            raise ValueError("When specifying a Slider, 'max' must not be less than 'min'")
+            raise ValueError(
+                "When specifying a Slider, 'max' must not be less than 'min'"
+            )
         return self
 
 
@@ -398,7 +498,9 @@ class StateChoiceRules(BaseModel):
     def _one_pointer(self) -> Self:
         widget: Any = self
         if (widget.state_path is None) == (widget.state_call is None):
-            raise ValueError("STATE_CHOICE widget needs exactly one of state_path or state_call")
+            raise ValueError(
+                "STATE_CHOICE widget needs exactly one of state_path or state_call"
+            )
         return self
 
 
@@ -440,9 +542,13 @@ class ImplementationRules(BaseModel):
             if port is None:
                 raise ValueError(f"{owner}: the action has no such argument")
             if _value(port.kind) != "STRUCTURE":
-                raise ValueError(f"{owner}: only a single structure argument can have one")
+                raise ValueError(
+                    f"{owner}: only a single structure argument can have one"
+                )
             if fits.port in seen:
-                raise ValueError(f"{owner}: an argument has one Fits; join conditions with and/or")
+                raise ValueError(
+                    f"{owner}: an argument has one Fits; join conditions with and/or"
+                )
             seen.add(fits.port)
         return self
 
@@ -452,9 +558,17 @@ class ImplementationRules(BaseModel):
         estimate = implementation.estimated_runtime
         if estimate is not None:
             name = implementation.interface or implementation.definition.name
-            check_estimated_runtime(estimate.call, implementation.definition.args, f"The estimated runtime of {name}")
+            check_estimated_runtime(
+                estimate.call,
+                implementation.definition.args,
+                f"The estimated runtime of {name}",
+            )
             if estimate.ui_call is not None:
-                check_estimated_runtime_ui(estimate.ui_call, implementation.definition.args, f"The form's estimated runtime of {name}")
+                check_estimated_runtime_ui(
+                    estimate.ui_call,
+                    implementation.definition.args,
+                    f"The form's estimated runtime of {name}",
+                )
         return self
 
 
@@ -494,7 +608,11 @@ class DefinitionRules(BaseModel):
             for port in ports:
                 path = f"{prefix}{port.key}"
                 widget = getattr(port, "widget", None)
-                if widget is not None and _value(widget.kind) == "SEARCH" and widget.dependencies:
+                if (
+                    widget is not None
+                    and _value(widget.kind) == "SEARCH"
+                    and widget.dependencies
+                ):
                     check(widget.dependencies, f"Search widget in port {path}")
                 for validator in getattr(port, "validators", None) or ():
                     check(
@@ -525,9 +643,15 @@ class DefinitionRules(BaseModel):
         protocols: tuple[str, ...] = tuple(getattr(self, "protocols", None) or ())
         for protocol in protocols:
             # The server stores a hint as a name of at most 1000 characters.
-            if len(protocol) > 1000 or protocol.split() != [protocol]:  # empty, or with whitespace
-                raise ValueError(f"A protocol hint is a name without whitespace, got {protocol!r}")
-        twice = sorted({protocol for protocol in protocols if protocols.count(protocol) > 1})
+            if len(protocol) > 1000 or protocol.split() != [
+                protocol
+            ]:  # empty, or with whitespace
+                raise ValueError(
+                    f"A protocol hint is a name without whitespace, got {protocol!r}"
+                )
+        twice = sorted(
+            {protocol for protocol in protocols if protocols.count(protocol) > 1}
+        )
         if twice:
             raise ValueError(f"The protocol hint {', '.join(twice)} is given twice")
         return self
@@ -615,8 +739,18 @@ def _wrong_context(kind: str, context: object) -> ValueError:
     """``context.kind``: a blok of ``kind`` drawn in a context its kind has no blok for."""
     from arkitekt_spec.blok.vocabulary import BlokError, load_vocabulary
 
-    contexts = ACTION_BLOK_PANEL_SCENE if kind == "action" else load_vocabulary().kind(kind).contexts
-    return BlokError("context.kind", n="n" if kind[:1] in "aeiou" else "", kind=kind, contexts=", ".join(contexts), context=str(context))
+    contexts = (
+        ACTION_BLOK_PANEL_SCENE
+        if kind == "action"
+        else load_vocabulary().kind(kind).contexts
+    )
+    return BlokError(
+        "context.kind",
+        n="n" if kind[:1] in "aeiou" else "",
+        kind=kind,
+        contexts=", ".join(contexts),
+        context=str(context),
+    )
 
 
 class BlokRules(BaseModel):
@@ -679,7 +813,9 @@ def _check_blok_args(rules: BaseModel) -> None:
         return
     context = getattr(blok.context, "value", blok.context)
     if context != "PANEL":
-        raise ValueError(f"Blok manifest: only a panel blok takes args, not a {context} blok")
+        raise ValueError(
+            f"Blok manifest: only a panel blok takes args, not a {context} blok"
+        )
     keys = [port.key for port in blok.args]
     twice = next((key for key in keys if keys.count(key) > 1), None)
     if twice is not None:

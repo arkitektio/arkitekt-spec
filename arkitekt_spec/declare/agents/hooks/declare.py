@@ -10,7 +10,15 @@ rekuest wraps each declaration in a runner when its agent starts.
 import collections.abc
 import inspect
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, TypeVar, get_args, get_origin, get_type_hints, overload
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    TypeVar,
+    get_args,
+    get_origin,
+    get_type_hints,
+    overload,
+)
 
 from arkitekt_spec.declare.agents.hooks.registry import HooksRegistry
 from arkitekt_spec.declare.agents.hooks.variables import WithVariables
@@ -43,7 +51,9 @@ class StartupWithVariables(WithVariables):
     def __init__(
         self, func: AnyFunction, structure_registry: "StructureRegistry | None" = None
     ) -> None:
-        self.previous_state_variables = prepare_previous_state_variables(func, structure_registry)
+        self.previous_state_variables = prepare_previous_state_variables(
+            func, structure_registry
+        )
         super().__init__(func, structure_registry)
 
     def _validate_arguments(self, func: AnyFunction) -> None:
@@ -118,7 +128,9 @@ def _yields_as_returns(func: AnyFunction) -> AnyFunction:
 
     stand_in.__name__ = func.__name__
     stand_in.__signature__ = inspect.signature(func).replace(return_annotation=yields)  # type: ignore[attr-defined]
-    stand_in.__annotations__ = hints if yields is inspect.Signature.empty else {**hints, "return": yields}
+    stand_in.__annotations__ = (
+        hints if yields is inspect.Signature.empty else {**hints, "return": yields}
+    )
     return stand_in
 
 
@@ -170,7 +182,8 @@ class _Declared:
     def threaded(self) -> bool:
         """Whether the hook is synchronous, so a runtime runs it in a worker thread."""
         return not (
-            inspect.iscoroutinefunction(self.func) or inspect.isasyncgenfunction(self.func)
+            inspect.iscoroutinefunction(self.func)
+            or inspect.isasyncgenfunction(self.func)
         )
 
 
@@ -271,7 +284,8 @@ def declare_startup(
     def decorator(function: TStartup) -> TStartup:
         _require_function(function)
         registry.register_startup(
-            name or function.__name__, StartupHookDeclaration(function, structure_registry)
+            name or function.__name__,
+            StartupHookDeclaration(function, structure_registry),
         )
         return function
 
@@ -323,7 +337,8 @@ def declare_lifecycle(
                 "`async def` with one `yield`."
             )
         registry.register_startup(
-            name or function.__name__, LifecycleHookDeclaration(function, structure_registry)
+            name or function.__name__,
+            LifecycleHookDeclaration(function, structure_registry),
         )
         return function
 
@@ -368,7 +383,8 @@ def declare_background(
     def decorator(function: TBackground) -> TBackground:
         _require_function(function)
         registry.register_background(
-            name or function.__name__, BackgroundDeclaration(function, structure_registry)
+            name or function.__name__,
+            BackgroundDeclaration(function, structure_registry),
         )
         return function
 
@@ -413,7 +429,8 @@ def declare_shutdown(
     def decorator(function: TShutdown) -> TShutdown:
         _require_function(function)
         registry.register_shutdown(
-            name or function.__name__, ShutdownHookDeclaration(function, structure_registry)
+            name or function.__name__,
+            ShutdownHookDeclaration(function, structure_registry),
         )
         return function
 

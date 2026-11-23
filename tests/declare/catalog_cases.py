@@ -88,6 +88,20 @@ COMPONENT_CASES = (
     ("children on a container", "Box", (), True, {}, OK),
     ("unknown prop", "Slider", ("min", "nope"), False, {}, ERROR),
     ("missing required prop", "Slider", ("max",), False, {}, ERROR),
-    ("callback prop bound", "Slider", ("min", "onChange"), False, {"onChange": True}, OK),
-    ("callback prop unbound", "Slider", ("min", "onChange"), False, {"onChange": False}, ERROR),
+    (
+        "callback prop bound",
+        "Slider",
+        ("min", "onChange"),
+        False,
+        {"onChange": True},
+        OK,
+    ),
+    (
+        "callback prop unbound",
+        "Slider",
+        ("min", "onChange"),
+        False,
+        {"onChange": False},
+        ERROR,
+    ),
 )

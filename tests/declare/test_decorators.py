@@ -1,4 +1,3 @@
-
 import pytest
 
 from arkitekt_spec.declare.app import AppRegistry

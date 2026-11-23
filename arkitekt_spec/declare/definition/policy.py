@@ -34,7 +34,9 @@ def seconds(duration: float | str) -> float:
         ValueError: If it is negative or not one of those spellings.
     """
     if isinstance(duration, bool):
-        raise ValueError(f"A duration is a number of seconds or a string like '5s', not {duration!r}.")
+        raise ValueError(
+            f"A duration is a number of seconds or a string like '5s', not {duration!r}."
+        )
     if isinstance(duration, (int, float)):
         value = float(duration)
     else:

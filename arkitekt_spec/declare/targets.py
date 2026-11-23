@@ -132,4 +132,9 @@ class ImplementationTarget(Protocol):
         ...
 
 
-__all__ = ["CallTarget", "ImplementationTarget", "SerializableDefinition", "SerializablePort"]
+__all__ = [
+    "CallTarget",
+    "ImplementationTarget",
+    "SerializableDefinition",
+    "SerializablePort",
+]

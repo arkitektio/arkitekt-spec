@@ -42,7 +42,9 @@ class CatalogUnavailable(ValueError):
 class _HttpsOnly(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]  # noqa: ANN001, ANN202
         if not newurl.startswith("https://"):
-            raise urllib.error.HTTPError(newurl, code, "a catalog is only pulled over https", headers, fp)
+            raise urllib.error.HTTPError(
+                newurl, code, "a catalog is only pulled over https", headers, fp
+            )
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
@@ -51,18 +53,26 @@ def cache_directory() -> Path:
     override = os.environ.get("ARKITEKT_CATALOG_CACHE")
     if override:
         return Path(override)
-    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "arkitekt" / "catalogs"
+    return (
+        Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+        / "arkitekt"
+        / "catalogs"
+    )
 
 
 def cache_file(identifier: str, directory: Path | None = None) -> Path:
     """The file a catalog is kept in: named by the hash of its id, so no id can name a path."""
-    return (directory or cache_directory()) / f"{hashlib.sha256(identifier.encode()).hexdigest()}.json"
+    return (
+        directory or cache_directory()
+    ) / f"{hashlib.sha256(identifier.encode()).hexdigest()}.json"
 
 
 def _checked(text: str, identifier: str, where: str) -> Catalog:
     catalog = parse_catalog(text, where)
     if catalog.id != identifier:
-        raise CatalogUnavailable(f"{where} is the catalog {catalog.id!r}, not {identifier!r}")
+        raise CatalogUnavailable(
+            f"{where} is the catalog {catalog.id!r}, not {identifier!r}"
+        )
     return catalog
 
 
@@ -75,7 +85,9 @@ def cached_catalog(identifier: str, directory: Path | None = None) -> Catalog | 
         return None
 
 
-def fetch_catalog(identifier: str, *, timeout: float = TIMEOUT, max_bytes: int = MAX_BYTES) -> tuple[Catalog, str]:
+def fetch_catalog(
+    identifier: str, *, timeout: float = TIMEOUT, max_bytes: int = MAX_BYTES
+) -> tuple[Catalog, str]:
     """Pull the catalog published at ``identifier``: the catalog, and its text as it was served.
 
     Raises:
@@ -84,22 +96,31 @@ def fetch_catalog(identifier: str, *, timeout: float = TIMEOUT, max_bytes: int =
     """
     if not load_vocabulary().catalog_id.fullmatch(identifier):
         raise CatalogUnavailable(f"{identifier!r} is not the address of a catalog")
-    request = urllib.request.Request(identifier, headers={"Accept": "application/json", "User-Agent": "arkitekt-spec"})
+    request = urllib.request.Request(
+        identifier,
+        headers={"Accept": "application/json", "User-Agent": "arkitekt-spec"},
+    )
     opener = urllib.request.build_opener(_HttpsOnly)
     try:
         with opener.open(request, timeout=timeout) as response:
             body = response.read(max_bytes + 1)
     except (OSError, ValueError) as error:
-        raise CatalogUnavailable(f"the catalog {identifier!r} could not be pulled: {error}") from error
+        raise CatalogUnavailable(
+            f"the catalog {identifier!r} could not be pulled: {error}"
+        ) from error
     if len(body) > max_bytes:
-        raise CatalogUnavailable(f"the catalog {identifier!r} is larger than {max_bytes} bytes")
+        raise CatalogUnavailable(
+            f"the catalog {identifier!r} is larger than {max_bytes} bytes"
+        )
     try:
         text = body.decode("utf-8")
         return _checked(text, identifier, f"what {identifier} serves"), text
     except CatalogUnavailable:
         raise
     except ValueError as error:
-        raise CatalogUnavailable(f"what {identifier} serves is no catalog: {error}") from error
+        raise CatalogUnavailable(
+            f"what {identifier} serves is no catalog: {error}"
+        ) from error
 
 
 def resolve_catalog(
@@ -124,7 +145,9 @@ def resolve_catalog(
     if known is not None:
         return known
     if _depth >= MAX_DEPTH:
-        raise CatalogUnavailable(f"the catalog {identifier!r} is more than {MAX_DEPTH} catalogs away from the base")
+        raise CatalogUnavailable(
+            f"the catalog {identifier!r} is more than {MAX_DEPTH} catalogs away from the base"
+        )
     catalog = None if (refresh and fetch) else cached_catalog(identifier, directory)
     if catalog is None and fetch:
         try:
@@ -141,9 +164,18 @@ def resolve_catalog(
             except OSError:
                 pass  # a cache that cannot be written is no reason to fail the check
     if catalog is None:
-        raise CatalogUnavailable(f"the catalog {identifier!r} is not kept here, and was not pulled")
+        raise CatalogUnavailable(
+            f"the catalog {identifier!r} is not kept here, and was not pulled"
+        )
     if catalog.extends is not None:
-        resolve_catalog(catalog.extends, fetch=fetch, refresh=refresh, directory=directory, timeout=timeout, _depth=_depth + 1)
+        resolve_catalog(
+            catalog.extends,
+            fetch=fetch,
+            refresh=refresh,
+            directory=directory,
+            timeout=timeout,
+            _depth=_depth + 1,
+        )
     try:
         register_catalog(catalog)
     except ValueError as error:

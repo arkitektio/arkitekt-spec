@@ -145,7 +145,9 @@ def test_iter_definition_calls_finds_every_call() -> None:
             ),
         ),
         port_groups=(
-            PortGroupInput(key="g", effects=(withEffect(EffectKind.HIDE, "value > 3"),)),
+            PortGroupInput(
+                key="g", effects=(withEffect(EffectKind.HIDE, "value > 3"),)
+            ),
         ),
     )
     owners = [owner for owner, _ in iter_definition_calls(definition)]
@@ -254,7 +256,9 @@ def _app_calling(call: str, **options: object) -> AppRegistry:
     return registry
 
 
-def test_a_snapshot_warns_what_an_action_calls_and_its_catalogs_do_not_provide() -> None:
+def test_a_snapshot_warns_what_an_action_calls_and_its_catalogs_do_not_provide() -> (
+    None
+):
     """Base@1 is all a definition naming no catalog has, as on the server; one it declared is added."""
     with pytest.warns(CatalogWarning, match="nosuchop") as caught:
         _app_calling("nosuchop(value)").snapshot()
@@ -267,7 +271,9 @@ def test_a_snapshot_warns_what_an_action_calls_and_its_catalogs_do_not_provide()
         registry.snapshot()
 
 
-def test_a_snapshot_warns_of_a_misused_operation_where_the_server_would_accept_it() -> None:
+def test_a_snapshot_warns_of_a_misused_operation_where_the_server_would_accept_it() -> (
+    None
+):
     """The server only warns, so this must not refuse what it accepts; a module only it holds stays quiet."""
     registry = _app_calling("clamp(value=value, nope=1)", catalogs=["electron"])
     registry.declared_catalogs["electron"] = ELECTRON

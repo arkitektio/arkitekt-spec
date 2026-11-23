@@ -58,7 +58,9 @@ def coerce_id(value: Any) -> str:  # noqa: ANN401 -- ints and objects with an id
     """An object id as a string: a str, an int, or anything carrying an ``id``."""
     coerced = _coerce_id(value)
     if not isinstance(coerced, str):
-        raise TypeError(f"Cannot use {value!r} as an ID: expected a str, an int, or an object with an id")
+        raise TypeError(
+            f"Cannot use {value!r} as an ID: expected a str, an int, or an object with an id"
+        )
     return coerced
 
 
@@ -78,7 +80,9 @@ def validate_identifier(value: str) -> str:
 # ``requires`` is the port's own constraints: a frontend fills it from the port the
 # widget sits on, so one widget on a structure serves every port typed on it, and
 # the service that answers the query keeps only what the port accepts.
-RESERVED_SEARCH_VARIABLES = frozenset({"search", "values", "limit", "offset", "requires", "fits"})
+RESERVED_SEARCH_VARIABLES = frozenset(
+    {"search", "values", "limit", "offset", "requires", "fits"}
+)
 
 _HEADER_VARIABLE = re.compile(r"\$([_A-Za-z][_0-9A-Za-z]*)\s*:")
 
@@ -140,7 +144,10 @@ def validate_search_query(query: str) -> str:
             "At least two arguments should be provided "
             f"($search: String, $values: [ID]): Was given: {printed}"
         )
-    if variables[0].variable.name.value != "search" or variables[0].type.kind != "named_type":
+    if (
+        variables[0].variable.name.value != "search"
+        or variables[0].type.kind != "named_type"
+    ):
         raise ValueError(
             f"First parameter of a search query should be '$search: String': Was given: {printed}"
         )
@@ -152,9 +159,13 @@ def validate_search_query(query: str) -> str:
     if not isinstance(wrapped, FieldNode):
         raise ValueError(f"Wrapped query should be a field node: Was given: {printed}")  # noqa: TRY004
     if (wrapped.alias.value if wrapped.alias else wrapped.name.value) != "options":
-        raise ValueError(f"First element of query should be 'options': Was given: {printed}")
+        raise ValueError(
+            f"First element of query should be 'options': Was given: {printed}"
+        )
     if not wrapped.selection_set:
-        raise ValueError(f"Wrapped query should contain a selection set: Was given: {printed}")
+        raise ValueError(
+            f"Wrapped query should contain a selection set: Was given: {printed}"
+        )
     aliases = [
         field.alias.value if field.alias else field.name.value
         for field in wrapped.selection_set.selections

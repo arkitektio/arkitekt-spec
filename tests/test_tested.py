@@ -27,12 +27,16 @@ def package(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     sys.modules.pop(NAME, None)
 
 
-def test_a_stamped_package_wants_the_minor_it_was_tested_on_within_its_major(package: Path) -> None:
+def test_a_stamped_package_wants_the_minor_it_was_tested_on_within_its_major(
+    package: Path,
+) -> None:
     (package / STAMP).write_text(json.dumps({"version": "22.7.3"}))
     assert tested.tested_against(NAME) == ">=22.7,<23"
 
 
-def test_a_package_without_a_stamp_or_with_no_release_in_it_wants_nothing(package: Path) -> None:
+def test_a_package_without_a_stamp_or_with_no_release_in_it_wants_nothing(
+    package: Path,
+) -> None:
     assert tested.tested_against(NAME) is None
     (package / STAMP).write_text(json.dumps({"version": "0+local"}))
     assert tested.tested_against(NAME) is None
@@ -67,13 +71,19 @@ def test_the_version_a_server_names_is_stamped_and_none_is_not(package: Path) ->
         server.shutdown()
 
 
-def test_a_release_is_refused_without_a_stamp_or_with_one_of_another_major(package: Path) -> None:
-    (package / "__init__.py").write_text("class service:\n    image = 'jhnnsrs/stamped:22'\n")
+def test_a_release_is_refused_without_a_stamp_or_with_one_of_another_major(
+    package: Path,
+) -> None:
+    (package / "__init__.py").write_text(
+        "class service:\n    image = 'jhnnsrs/stamped:22'\n"
+    )
     assert "no server version" in (tested.refusal(NAME) or "")
 
     (package / STAMP).write_text(json.dumps({"version": "23.0.1"}))
     assert tested.refusal(NAME) is None
-    assert "declares jhnnsrs/stamped:22, and was tested against 23.0.1" in (tested.refusal(NAME, f"{NAME}:service") or "")
+    assert "declares jhnnsrs/stamped:22, and was tested against 23.0.1" in (
+        tested.refusal(NAME, f"{NAME}:service") or ""
+    )
 
     (package / STAMP).write_text(json.dumps({"version": "22.7.0"}))
     assert tested.refusal(NAME, f"{NAME}:service") is None

@@ -12,7 +12,8 @@ from arkitekt_spec.declare.definition.define import prepare_definition
 from arkitekt_spec.declare.structures.registry import StructureRegistry
 
 TiffName = Annotated[
-    str, Requires(key="filename", operator=DescriptorOperator.MATCHES, value=r".*\.tiff?")
+    str,
+    Requires(key="filename", operator=DescriptorOperator.MATCHES, value=r".*\.tiff?"),
 ]
 Wide = Annotated[int, Provides(key="x", operator=DescriptorOperator.GTE, value="1")]
 

@@ -30,7 +30,12 @@ from arkitekt_spec.blok.declared import local_node
 from arkitekt_spec.blok.vocabulary import Finding
 from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
 from arkitekt_spec.declare.blok.walk import iter_nodes
-from arkitekt_spec.declare.catalogs import CatalogView, Diagnostic, check_call, check_component
+from arkitekt_spec.declare.catalogs import (
+    CatalogView,
+    Diagnostic,
+    check_call,
+    check_component,
+)
 from arkitekt_spec.rules import OWN_VALUE, iter_call_arguments
 
 
@@ -49,9 +54,12 @@ def _prop_calls(prop: Any) -> Iterator[UtilCallInput]:
         for argument in agent_call.arguments or ():
             if argument.util_call is not None:
                 yield argument.util_call
-            for nested in iter_call_arguments(argument.util_call) if argument.util_call else ():
+            for nested in (
+                iter_call_arguments(argument.util_call) if argument.util_call else ()
+            ):
                 if nested.util_call is not None:
                     yield nested.util_call
+
 
 Widget = AssignWidgetInput | ReturnWidgetInput
 
@@ -67,7 +75,9 @@ def iter_widget_calls(widget: Widget) -> Iterator[UtilCallInput]:
             yield call
 
 
-def iter_definition_widgets(definition: DefinitionInput) -> Iterator[tuple[str, Widget]]:
+def iter_definition_widgets(
+    definition: DefinitionInput,
+) -> Iterator[tuple[str, Widget]]:
     """Every widget of a definition, with a label naming where it lives.
 
     Walks args and returns, their nested children, each widget's fallback chain, and the
@@ -90,7 +100,9 @@ def iter_definition_widgets(definition: DefinitionInput) -> Iterator[tuple[str, 
 
     def walk(ports: Sequence[Any], prefix: str) -> Iterator[tuple[str, Widget]]:
         for port in ports:
-            yield from widgets_of(getattr(port, "widget", None), f"{prefix} port {port.key}")
+            yield from widgets_of(
+                getattr(port, "widget", None), f"{prefix} port {port.key}"
+            )
             yield from walk(port.children or (), prefix)
 
     yield from walk(definition.args or (), f"Definition {definition.key}")
@@ -125,7 +137,11 @@ def iter_definition_calls(
             yield f"optimistic of {label}", optimistic.path_call
 
 
-def _widget_tree_scope(port: ArgPortInput, widget: CustomAssignWidgetInput, siblings: Sequence[ArgPortInput]) -> BlokScope:
+def _widget_tree_scope(
+    port: ArgPortInput,
+    widget: CustomAssignWidgetInput,
+    siblings: Sequence[ArgPortInput],
+) -> BlokScope:
     """What a port's tree has in scope: its own port as ``value``, and each dependency that is a sibling, as locals.
 
     A local is typed like a port and written through ``bind``, which is what these are to the tree.
@@ -134,21 +150,45 @@ def _widget_tree_scope(port: ArgPortInput, widget: CustomAssignWidgetInput, sibl
     return BlokScope(kinds=("custom",), mount="a port's widget")
 
 
-def _widget_blok(port: ArgPortInput, widget: CustomAssignWidgetInput, siblings: Sequence[ArgPortInput]) -> ComponentNodeInput:
+def _widget_blok(
+    port: ArgPortInput,
+    widget: CustomAssignWidgetInput,
+    siblings: Sequence[ArgPortInput],
+) -> ComponentNodeInput:
     """A port's widget tree as the blok it is checked as: a custom panel whose locals are its own
     port as ``value`` and each dependency that is a sibling, then the tree."""
     named = {sibling.key: sibling for sibling in siblings}
-    scoped = [(OWN_VALUE, port), *((key, named[key]) for key in widget.dependencies if key in named)]
+    scoped = [
+        (OWN_VALUE, port),
+        *((key, named[key]) for key in widget.dependencies if key in named),
+    ]
     locals_ = tuple(
-        local_node(BlokLocalInput.model_validate({**source.model_dump(exclude={"widget"}), "key": key, "default": None}), f"widget-blok/local[{index}]")
+        local_node(
+            BlokLocalInput.model_validate(
+                {**source.model_dump(exclude={"widget"}), "key": key, "default": None}
+            ),
+            f"widget-blok/local[{index}]",
+        )
         for index, (key, source) in enumerate(scoped)
     )
-    tree = ComponentNodeInput(id="widget", component=widget.component, props=widget.props, children=widget.children)
-    header = (ComponentPropInput(key="kind", static_value="custom"), ComponentPropInput(key="context", static_value="panel"))
-    return ComponentNodeInput(id="widget-blok", component="Blok", props=header, children=(*locals_, tree))
+    tree = ComponentNodeInput(
+        id="widget",
+        component=widget.component,
+        props=widget.props,
+        children=widget.children,
+    )
+    header = (
+        ComponentPropInput(key="kind", static_value="custom"),
+        ComponentPropInput(key="context", static_value="panel"),
+    )
+    return ComponentNodeInput(
+        id="widget-blok", component="Blok", props=header, children=(*locals_, tree)
+    )
 
 
-def widget_tree_findings(definition: DefinitionInput, view: BlokView) -> Iterator[tuple[str, Finding]]:
+def widget_tree_findings(
+    definition: DefinitionInput, view: BlokView
+) -> Iterator[tuple[str, Finding]]:
     """What the blok checker says of each CUSTOM widget's tree, with its port's own kind as ``value``'s.
 
     Only a widget with children: one that has none is one component, checked as such above. The
@@ -160,7 +200,9 @@ def widget_tree_findings(definition: DefinitionInput, view: BlokView) -> Iterato
             widget = port.widget
             if isinstance(widget, CustomAssignWidgetInput) and widget.children:
                 tree = _widget_blok(port, widget, ports)
-                for finding in check_blok_tree(tree, _widget_tree_scope(port, widget, ports), view):
+                for finding in check_blok_tree(
+                    tree, _widget_tree_scope(port, widget, ports), view
+                ):
                     yield port.key, finding
             yield from walk(port.children or ())
 
@@ -168,7 +210,10 @@ def widget_tree_findings(definition: DefinitionInput, view: BlokView) -> Iterato
 
 
 def _check_call_tree(
-    call: UtilCallInput, view: CatalogView, owner: str, findings: list[Diagnostic] | None = None
+    call: UtilCallInput,
+    view: CatalogView,
+    owner: str,
+    findings: list[Diagnostic] | None = None,
 ) -> list[Diagnostic]:
     """Check ``call`` and every util call nested in its argument tree."""
     diagnostics: list[Diagnostic] = []
@@ -230,7 +275,9 @@ def validate_definition_against_catalog(
                 id="widget",
                 component=widget.component,
                 props=widget.props,
-                children=widget.children if isinstance(widget, CustomAssignWidgetInput) else None,
+                children=widget.children
+                if isinstance(widget, CustomAssignWidgetInput)
+                else None,
             )
             for node in iter_nodes(root):
                 props = node.props or ()
@@ -250,7 +297,9 @@ def validate_definition_against_catalog(
                 for prop in props:
                     prop_owner = f"prop {prop.key!r} of {widget_owner}"
                     for call in _prop_calls(prop):
-                        diagnostics.extend(_check_call_tree(call, view, prop_owner, recorded))
+                        diagnostics.extend(
+                            _check_call_tree(call, view, prop_owner, recorded)
+                        )
         for call in iter_widget_calls(widget):
             diagnostics.extend(_check_call_tree(call, view, widget_owner, recorded))
 

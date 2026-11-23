@@ -35,7 +35,11 @@ from arkitekt_spec.blok.bsx import (
     TEXT_VALUE,
 )
 from arkitekt_spec.blok.catalogs import BlokView, default_view
-from arkitekt_spec.blok.declared import LOCAL_COMPONENT, NAME_PROP, declared_dependencies
+from arkitekt_spec.blok.declared import (
+    LOCAL_COMPONENT,
+    NAME_PROP,
+    declared_dependencies,
+)
 from arkitekt_spec.blok.expr import AGENTS_ROOT, PICK_VERB, REFERENCE_SEPARATOR
 from arkitekt_spec.blok.vocabulary import JSON, load_vocabulary
 
@@ -46,8 +50,19 @@ _PLACEHOLDER = re.compile(r"\{\{|\}\}|\{([0-9]+)\}|[{}]")
 
 # Precedence: higher binds tighter.
 _TERNARY, _COALESCE, _OR, _AND, _EQUALITY, _RELATION, _NOT, _ATOM = range(1, 9)
-_LOGICAL = {"logic.all": (_AND, " && "), "logic.any": (_OR, " || "), "logic.coalesce": (_COALESCE, " ?? ")}
-_COMPARISONS = {"cmp.eq": "==", "cmp.ne": "!=", "cmp.gt": ">", "cmp.gte": ">=", "cmp.lt": "<", "cmp.lte": "<="}
+_LOGICAL = {
+    "logic.all": (_AND, " && "),
+    "logic.any": (_OR, " || "),
+    "logic.coalesce": (_COALESCE, " ?? "),
+}
+_COMPARISONS = {
+    "cmp.eq": "==",
+    "cmp.ne": "!=",
+    "cmp.gt": ">",
+    "cmp.gte": ">=",
+    "cmp.lt": "<",
+    "cmp.lte": "<=",
+}
 
 
 class _Printer:
@@ -63,12 +78,16 @@ class _Printer:
 
     # -- nodes
 
-    def node(self, node: ComponentNodeInput, derived: str, depth: int, lines: list[str]) -> None:
+    def node(
+        self, node: ComponentNodeInput, derived: str, depth: int, lines: list[str]
+    ) -> None:
         pad = " " * (self.indent * depth)
         attributes: list[str] = []
         if node.id != derived:
             if not self.vocabulary.is_explicit_id(node.id):
-                raise ValueError(f"<{node.component}>: the id {node.id!r} is neither explicit nor the one its place derives ({derived!r})")
+                raise ValueError(
+                    f"<{node.component}>: the id {node.id!r} is neither explicit nor the one its place derives ({derived!r})"
+                )
             attributes.append(f"id={_quoted(node.id)}")
         children = list(node.children or ())
         text_child: str | None = None
@@ -79,7 +98,11 @@ class _Printer:
         head = f"<{node.component}{''.join(' ' + a for a in attributes)}"
         wrapped = len(pad) + len(head) > LINE_WIDTH and len(attributes) > 1
         if wrapped:
-            head = f"<{node.component}\n" + "\n".join(f"{pad}{' ' * self.indent}{a}" for a in attributes) + f"\n{pad}"
+            head = (
+                f"<{node.component}\n"
+                + "\n".join(f"{pad}{' ' * self.indent}{a}" for a in attributes)
+                + f"\n{pad}"
+            )
         if text_child is not None:
             lines.append(f"{pad}{head}>{text_child}</{node.component}>")
             return
@@ -92,9 +115,13 @@ class _Printer:
         for child in children:
             if self.is_implicit(child, node.id):
                 if child.id != f"{node.id}/#{implicit}":
-                    raise ValueError(f"<{node.component}> ({node.id}): the text node {child.id!r} is out of order")
+                    raise ValueError(
+                        f"<{node.component}> ({node.id}): the text node {child.id!r} is out of order"
+                    )
                 implicit += 1
-                lines.append(f"{pad}{' ' * self.indent}{self.text_node(child, inline=False)}")
+                lines.append(
+                    f"{pad}{' ' * self.indent}{self.text_node(child, inline=False)}"
+                )
                 continue
             index = counts.get(child.component, 0)
             counts[child.component] = index + 1
@@ -105,7 +132,11 @@ class _Printer:
     def is_implicit(child: ComponentNodeInput, parent: str) -> bool:
         """Whether ``child`` is a run of text of ``parent``: a text node, or what one was stored as before."""
         match = _IMPLICIT.fullmatch(child.id)
-        return match is not None and match.group("parent") == parent and child.component in (TEXT_NODE, *LEGACY_IMPLICIT_TEXTS)
+        return (
+            match is not None
+            and match.group("parent") == parent
+            and child.component in (TEXT_NODE, *LEGACY_IMPLICIT_TEXTS)
+        )
 
     def text_node(self, child: ComponentNodeInput, *, inline: bool) -> str:
         """A text node as the text it was parsed from.
@@ -115,14 +146,20 @@ class _Printer:
         """
         key = TEXT_VALUE if child.component == TEXT_NODE else "text"
         props = child.props or ()
-        text = self.text_of(props[0], child, inline=inline) if len(props) == 1 and props[0].key == key and not child.children else None
+        text = (
+            self.text_of(props[0], child, inline=inline)
+            if len(props) == 1 and props[0].key == key and not child.children
+            else None
+        )
         if text is None:
             raise ValueError(f"the text node {child.id!r} cannot be spelled as text")
         return text
 
     # -- text
 
-    def text_of(self, prop: ComponentPropInput, node: ComponentNodeInput, *, inline: bool = True) -> str | None:
+    def text_of(
+        self, prop: ComponentPropInput, node: ComponentNodeInput, *, inline: bool = True
+    ) -> str | None:
         """``prop`` as text children, or None when only an attribute spells it.
 
         ``inline``: printed on the line of its tags, where JSX keeps the spaces at its ends;
@@ -133,7 +170,11 @@ class _Printer:
         if isinstance(prop.static_value, str):
             return _text_literal(prop.static_value, edges=not inline)
         if prop.dynamic_value is not None:
-            if prop.dynamic_value.literal is not None or prop.dynamic_value.path is None or prop.static_value is not None:
+            if (
+                prop.dynamic_value.literal is not None
+                or prop.dynamic_value.path is None
+                or prop.static_value is not None
+            ):
                 return None
             return "{" + self.path(prop.dynamic_value.path) + "}"
         call = prop.util_call
@@ -144,11 +185,17 @@ class _Printer:
             out: list[str] = []
             for index, part in enumerate(parts):
                 edge = not inline and index in (0, len(parts) - 1)
-                out.append(_text_literal(part, edges=edge) if isinstance(part, str) else "{" + self.argument(part, 0) + "}")
+                out.append(
+                    _text_literal(part, edges=edge)
+                    if isinstance(part, str)
+                    else "{" + self.argument(part, 0) + "}"
+                )
             return "".join(out)
         if call is not None:
             return "{" + self.expression_of_call(call, 0) + "}"
-        if isinstance(prop.static_value, (int, float)) and not isinstance(prop.static_value, bool):
+        if isinstance(prop.static_value, (int, float)) and not isinstance(
+            prop.static_value, bool
+        ):
             return "{" + _literal(prop.static_value) + "}"
         return None
 
@@ -160,34 +207,63 @@ class _Printer:
             into = f" into {prop.declares_value}" if prop.declares_value else ""
             return f"{key}={{{self.agent_call(prop.agent_call)}{into}}}"
         if prop.declares_value is not None:
-            if node.component == FOREACH and key in ("let", "index") and prop.static_value == prop.declares_value:
+            if (
+                node.component == FOREACH
+                and key in ("let", "index")
+                and prop.static_value == prop.declares_value
+            ):
                 return f"{key}={_quoted(prop.declares_value)}"
-            if node.component == LOCAL_COMPONENT and key == NAME_PROP and prop.static_value == prop.declares_value:
+            if (
+                node.component == LOCAL_COMPONENT
+                and key == NAME_PROP
+                and prop.static_value == prop.declares_value
+            ):
                 return f"{key}={_quoted(prop.declares_value)}"
-            raise ValueError(f"<{node.component}> ({node.id}): {key} declares {prop.declares_value!r}, which BSX cannot spell")
+            raise ValueError(
+                f"<{node.component}> ({node.id}): {key} declares {prop.declares_value!r}, which BSX cannot spell"
+            )
         if prop.util_call is not None:
             call = prop.util_call
             sugar = self.pick_sugar(call) or self.query_sugar(call)
             if sugar is not None:
                 return f"{key}={{{sugar}}}"
-            if key == CLASS_NAME and call.operation == CLASSES_FUNCTION and call.arguments and len(call.arguments) == 1:
+            if (
+                key == CLASS_NAME
+                and call.operation == CLASSES_FUNCTION
+                and call.arguments
+                and len(call.arguments) == 1
+            ):
                 values = call.arguments[0]
-                if values.key == "values" and (values.value_list is not None or values.value_dict is not None):
+                if values.key == "values" and (
+                    values.value_list is not None or values.value_dict is not None
+                ):
                     return f"{key}={{{self.argument(values, 0)}}}"
             return f"{key}={{{self.expression_of_call(call, 0)}}}"
         if prop.dynamic_value is not None:
-            if prop.dynamic_value.literal is not None or prop.dynamic_value.path is None:
-                raise ValueError(f"<{node.component}> ({node.id}): {key} has a fallback literal, which BSX cannot spell")
+            if (
+                prop.dynamic_value.literal is not None
+                or prop.dynamic_value.path is None
+            ):
+                raise ValueError(
+                    f"<{node.component}> ({node.id}): {key} has a fallback literal, which BSX cannot spell"
+                )
             return f"{key}={{{self.path(prop.dynamic_value.path)}}}"
         value = prop.static_value
         if value is True:
             return key
         if isinstance(value, str):
-            if self.custom and key == LIKE and node.component in (LOCAL_COMPONENT, DEPENDENCIES) and value.startswith("deps."):
+            if (
+                self.custom
+                and key == LIKE
+                and node.component in (LOCAL_COMPONENT, DEPENDENCIES)
+                and value.startswith("deps.")
+            ):
                 value = f"{AGENTS_ROOT}.{value.removeprefix('deps.')}"
             return f"{key}={_quoted(value)}"
         if isinstance(value, (list, dict)) and key == CLASS_NAME:
-            raise ValueError(f"<{node.component}> ({node.id}): a static className list reads back as str.classes")
+            raise ValueError(
+                f"<{node.component}> ({node.id}): a static className list reads back as str.classes"
+            )
         return f"{key}={{{_literal(value)}}}"
 
     # -- expressions
@@ -201,12 +277,27 @@ class _Printer:
         if not arguments or arguments[0].key != "query":
             return None
         named = arguments[0]
-        if not isinstance(named.value_literal, str) or not _IDENTIFIER.fullmatch(named.value_literal):
+        if not isinstance(named.value_literal, str) or not _IDENTIFIER.fullmatch(
+            named.value_literal
+        ):
             return None
-        if any(value is not None for value in (named.value_path, named.util_call, named.agent_call, named.value_list, named.value_dict)):
+        if any(
+            value is not None
+            for value in (
+                named.value_path,
+                named.util_call,
+                named.agent_call,
+                named.value_list,
+                named.value_dict,
+            )
+        ):
             return None
         if call.operation == REFETCH_FUNCTION:
-            return f"queries.{named.value_literal}.refetch()" if len(arguments) == 1 else None
+            return (
+                f"queries.{named.value_literal}.refetch()"
+                if len(arguments) == 1
+                else None
+            )
         variables: list[str] = []
         if len(arguments) > 2:
             return None
@@ -238,7 +329,11 @@ class _Printer:
         if call.operation != PICK_FUNCTION:
             return None
         arguments = call.arguments or ()
-        if len(arguments) != 2 or arguments[0].key != "key" or arguments[1].key != "picks":
+        if (
+            len(arguments) != 2
+            or arguments[0].key != "key"
+            or arguments[1].key != "picks"
+        ):
             return None
         key, picks = arguments[0].value_literal, arguments[1].value_dict
         if not isinstance(key, str) or key not in self.references or not picks:
@@ -251,13 +346,21 @@ class _Printer:
         return f"{key}.{PICK_VERB}({', '.join(written)})"
 
     def agent_call(self, call: AgentProbeInput) -> str:
-        callee = f"self.{call.operation}" if call.dependency == "self" else self.path(f"deps.{call.dependency}.{call.operation}")
+        callee = (
+            f"self.{call.operation}"
+            if call.dependency == "self"
+            else self.path(f"deps.{call.dependency}.{call.operation}")
+        )
         arguments: list[str] = []
         for argument in call.arguments or ():
             if argument.key is None or not _IDENTIFIER.fullmatch(argument.key):
-                raise ValueError(f"{callee}: a task call names its arguments, not {argument.key!r}")
+                raise ValueError(
+                    f"{callee}: a task call names its arguments, not {argument.key!r}"
+                )
             arguments.append(f"{argument.key}: {self.argument(argument, 0)}")
-        return f"{callee}({', '.join(arguments)})" + (f" with {call.given}" if call.given else "")
+        return f"{callee}({', '.join(arguments)})" + (
+            f" with {call.given}" if call.given else ""
+        )
 
     def expression_of_call(self, call: UtilCallInput, needed: int) -> str:
         text, precedence = self.call(call)
@@ -269,14 +372,17 @@ class _Printer:
         operation = call.operation
         if operation in _COMPARISONS and keys == ["a", "b"]:
             needed = _RELATION + 1 if operation in ("cmp.eq", "cmp.ne") else _NOT
-            return f"{self.argument(arguments['a'], needed)} {_COMPARISONS[operation]} {self.argument(arguments['b'], needed)}", (
-                _EQUALITY if operation in ("cmp.eq", "cmp.ne") else _RELATION
+            return (
+                f"{self.argument(arguments['a'], needed)} {_COMPARISONS[operation]} {self.argument(arguments['b'], needed)}",
+                (_EQUALITY if operation in ("cmp.eq", "cmp.ne") else _RELATION),
             )
         if operation in _LOGICAL and keys == ["values"]:
             values = arguments["values"].value_list
             if values is not None and len(values) >= 2:
                 own, joiner = _LOGICAL[operation]
-                return joiner.join(self.argument(value, own + 1) for value in values), own
+                return joiner.join(
+                    self.argument(value, own + 1) for value in values
+                ), own
         if operation == "logic.negate" and keys == ["a"]:
             return "!" + self.argument(arguments["a"], _NOT), _NOT
         if operation == "logic.choose" and keys == ["cond", "then", "otherwise"]:
@@ -287,22 +393,44 @@ class _Printer:
         function = self.view.functions.get(operation)
         printed: list[str] = []
         if function is None:
-            positional = sorted((a for a in call.arguments or () if a.key is not None and a.key.isdigit()), key=lambda a: int(a.key or 0))
-            if [a.key for a in positional] != [str(index) for index in range(len(positional))]:
-                raise ValueError(f"{operation}: its positional arguments are not numbered 0, 1, ...")
+            positional = sorted(
+                (
+                    a
+                    for a in call.arguments or ()
+                    if a.key is not None and a.key.isdigit()
+                ),
+                key=lambda a: int(a.key or 0),
+            )
+            if [a.key for a in positional] != [
+                str(index) for index in range(len(positional))
+            ]:
+                raise ValueError(
+                    f"{operation}: its positional arguments are not numbered 0, 1, ..."
+                )
             printed = [self.argument(a, 0) for a in positional]
-            printed += [f"{a.key}: {self.argument(a, 0)}" for a in call.arguments or () if a.key is not None and not a.key.isdigit()]
+            printed += [
+                f"{a.key}: {self.argument(a, 0)}"
+                for a in call.arguments or ()
+                if a.key is not None and not a.key.isdigit()
+            ]
             return f"{operation}({', '.join(printed)})", _ATOM
         params = list(function.keys)
         if params == ["values"] and keys == ["values"]:
             values = arguments["values"]
             if values.value_list is not None and len(values.value_list) >= 2:
-                return f"{operation}({', '.join(self.argument(v, 0) for v in values.value_list)})", _ATOM
+                return (
+                    f"{operation}({', '.join(self.argument(v, 0) for v in values.value_list)})",
+                    _ATOM,
+                )
             return f"{operation}({self.argument(values, 0)})", _ATOM
         if keys == params[: len(keys)]:
             printed = [self.argument(arguments[key], 0) for key in keys]
         else:
-            printed = [f"{key}: {self.argument(arguments[key], 0)}" for key in keys if key is not None]
+            printed = [
+                f"{key}: {self.argument(arguments[key], 0)}"
+                for key in keys
+                if key is not None
+            ]
         return f"{operation}({', '.join(printed)})", _ATOM
 
     def argument(self, argument: ActionArgumentInput, needed: int) -> str:
@@ -313,13 +441,21 @@ class _Printer:
         if argument.util_call is not None:
             return self.expression_of_call(argument.util_call, needed)
         if argument.value_list is not None:
-            return "[" + ", ".join(self.argument(item, 0) for item in argument.value_list) + "]"
+            return (
+                "["
+                + ", ".join(self.argument(item, 0) for item in argument.value_list)
+                + "]"
+            )
         if argument.value_dict is not None:
             entries: list[str] = []
             for entry in argument.value_dict:
                 if not entry.key:
                     raise ValueError("an object's key is a non-empty string")
-                name = entry.key if _IDENTIFIER.fullmatch(entry.key) else json.dumps(entry.key, ensure_ascii=False)
+                name = (
+                    entry.key
+                    if _IDENTIFIER.fullmatch(entry.key)
+                    else json.dumps(entry.key, ensure_ascii=False)
+                )
                 entries.append(f"{name}: {self.argument(entry, 0)}")
             return "{" + ", ".join(entries) + "}"
         return _literal(argument.value_literal)
@@ -330,7 +466,12 @@ def _template_parts(call: UtilCallInput) -> list[str | ActionArgumentInput] | No
     arguments = {argument.key: argument for argument in call.arguments or ()}
     template = arguments.get("template")
     values = arguments.get("values")
-    if template is None or not isinstance(template.value_literal, str) or values is None or values.value_list is None:
+    if (
+        template is None
+        or not isinstance(template.value_literal, str)
+        or values is None
+        or values.value_list is None
+    ):
         return None
     items = list(values.value_list)
     parts: list[str | ActionArgumentInput] = []
@@ -345,7 +486,11 @@ def _template_parts(call: UtilCallInput) -> list[str | ActionArgumentInput] | No
         if token in ("{{", "}}"):
             literal.append(token[0])
             continue
-        if match.group(1) is None or int(match.group(1)) != expected or expected >= len(items):
+        if (
+            match.group(1) is None
+            or int(match.group(1)) != expected
+            or expected >= len(items)
+        ):
             return None
         if "".join(literal):
             parts.append("".join(literal))
@@ -406,7 +551,9 @@ def _literal(value: JSON) -> str:
     return "{" + ", ".join(entries) + "}"
 
 
-def to_bsx(node: ComponentNodeInput, *, view: BlokView | None = None, indent: int = 2) -> str:
+def to_bsx(
+    node: ComponentNodeInput, *, view: BlokView | None = None, indent: int = 2
+) -> str:
     """Print ``node`` as v2 BSX that :func:`parse_bsx` (with the same view) reads back into it.
 
     Raises:
@@ -416,13 +563,20 @@ def to_bsx(node: ComponentNodeInput, *, view: BlokView | None = None, indent: in
     """
     lines: list[str] = []
     printer = _Printer(view or default_view(), indent)
-    printer.references = frozenset(declared.key for declared in declared_dependencies(node))
-    printer.custom = node.component == BLOK and any(prop.key == "kind" and prop.static_value == "custom" for prop in node.props or ())
+    printer.references = frozenset(
+        declared.key for declared in declared_dependencies(node)
+    )
+    printer.custom = node.component == BLOK and any(
+        prop.key == "kind" and prop.static_value == "custom"
+        for prop in node.props or ()
+    )
     printer.node(node, f"{node.component}[0]", 0, lines)
     return "\n".join(lines)
 
 
-def to_bsx_all(nodes: Sequence[ComponentNodeInput], *, view: BlokView | None = None) -> list[str]:
+def to_bsx_all(
+    nodes: Sequence[ComponentNodeInput], *, view: BlokView | None = None
+) -> list[str]:
     """Every root of a blok, printed."""
     return [to_bsx(node, view=view) for node in nodes]
 

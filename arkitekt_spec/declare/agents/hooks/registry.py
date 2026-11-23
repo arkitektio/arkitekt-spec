@@ -123,4 +123,3 @@ class HooksRegistry(BaseModel):
         self.background_worker = {}
         self.startup_hooks = {}
         self.shutdown_hooks = {}
-

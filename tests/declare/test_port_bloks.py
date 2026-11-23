@@ -39,15 +39,24 @@ def acquire(registry: AppRegistry, source: str) -> None:
     """Register an action whose ``exposure`` port is drawn by the port blok ``source``."""
 
     @registry.register
-    def acquire(exposure: Annotated[float, PortBlok(source, fallback=SliderWidget(min=0, max=100))], frames: int = 3) -> int:
+    def acquire(
+        exposure: Annotated[
+            float, PortBlok(source, fallback=SliderWidget(min=0, max=100))
+        ],
+        frames: int = 3,
+    ) -> int:
         """Acquire."""
         return frames
 
 
-def test_a_port_blok_is_sent_as_its_source_on_the_ports_widget(registry: AppRegistry) -> None:
+def test_a_port_blok_is_sent_as_its_source_on_the_ports_widget(
+    registry: AppRegistry,
+) -> None:
     acquire(registry, EXPOSURE)
 
-    (implementation,) = registry.to_registered_agent_input().model_dump(mode="json", by_alias=False, exclude_unset=True)["implementations"]
+    (implementation,) = registry.to_registered_agent_input().model_dump(
+        mode="json", by_alias=False, exclude_unset=True
+    )["implementations"]
     exposure, frames = implementation["definition"]["args"]
     assert exposure["widget"]["kind"] == "BLOK" and exposure["widget"]["vocab"] == 2
     assert exposure["widget"]["source"] == EXPOSURE
@@ -58,7 +67,10 @@ def test_a_port_blok_is_sent_as_its_source_on_the_ports_widget(registry: AppRegi
 @pytest.mark.parametrize(
     ("content", "code"),
     [
-        ("<Button onClick={self.acquire(exposure: 1)}>Go</Button>", "calls.not_in_kind"),
+        (
+            "<Button onClick={self.acquire(exposure: 1)}>Go</Button>",
+            "calls.not_in_kind",
+        ),
         ("<Text>{args.gain}</Text>", "args.unknown"),
         ("<Slider bind={port.error} />", "port.bind"),
         ("<Text>{port.value.x}</Text>", "path.unknown"),
@@ -66,7 +78,9 @@ def test_a_port_blok_is_sent_as_its_source_on_the_ports_widget(registry: AppRegi
         ("<Text>{self.Stage.x}</Text>", "deps.unknown_state"),
     ],
 )
-def test_a_port_blok_is_a_field_of_its_actions_form(registry: AppRegistry, content: str, code: str) -> None:
+def test_a_port_blok_is_a_field_of_its_actions_form(
+    registry: AppRegistry, content: str, code: str
+) -> None:
     """It calls no agent, reads only the arguments the action takes, writes only its port's value,
     which is typed as the port, and reads of the agent only what the app declares."""
     with pytest.raises(BlokError) as refused:
@@ -77,7 +91,9 @@ def test_a_port_blok_is_a_field_of_its_actions_form(registry: AppRegistry, conte
     assert "widget of port 'exposure'" in str(refused.value)
 
 
-def test_a_widget_that_reads_its_agent_makes_the_action_stateful(registry: AppRegistry) -> None:
+def test_a_widget_that_reads_its_agent_makes_the_action_stateful(
+    registry: AppRegistry,
+) -> None:
     """It matters which agent runs it, so a caller names one; a widget of the form alone says nothing of that."""
     acquire(registry, EXPOSURE)
     assert registry.implementations["acquire"].definition.stateful is True
@@ -94,7 +110,9 @@ def test_only_a_port_blok_is_a_ports_widget() -> None:
     assert refused.value.code == "kind.placement"
 
 
-PORT_BLOK_SERVER_HASH = "67e542b9c8430f8210a9d7da0f0db69bba38af6922a0deaaae5dc4822c6da893"
+PORT_BLOK_SERVER_HASH = (
+    "67e542b9c8430f8210a9d7da0f0db69bba38af6922a0deaaae5dc4822c6da893"
+)
 
 
 def test_a_port_blok_hashes_as_the_server_hashes_it() -> None:
@@ -109,7 +127,12 @@ def test_a_port_blok_hashes_as_the_server_hashes_it() -> None:
         version="0.1.0",
         kind="FUNCTION",
         args=(
-            ArgPortInput(key="scale", kind="FLOAT", widget=PortBlok(source, fallback=SliderWidget(min=0, max=1)), label="s"),
+            ArgPortInput(
+                key="scale",
+                kind="FLOAT",
+                widget=PortBlok(source, fallback=SliderWidget(min=0, max=1)),
+                label="s",
+            ),
             ArgPortInput(key="limit", kind="INT", label="l"),
         ),
     )
@@ -129,7 +152,9 @@ def test_a_choice_over_the_agents_own_state_makes_the_action_stateful() -> None:
         trajectories: list[str]
 
     @registry.register
-    def run(trajectory: Annotated[str, withStateChoices("self.Robot.trajectories")]) -> None:
+    def run(
+        trajectory: Annotated[str, withStateChoices("self.Robot.trajectories")],
+    ) -> None:
         """Run."""
 
     assert registry.implementations["run"].definition.stateful is True

@@ -29,7 +29,10 @@ from arkitekt_spec.actions import (
     StateDefinitionInput,
     StateDependencyInput,
 )
-from arkitekt_spec.declare.definition.define import convert_object_to_returnport, prepare_definition
+from arkitekt_spec.declare.definition.define import (
+    convert_object_to_returnport,
+    prepare_definition,
+)
 from arkitekt_spec.declare.definition.demands import (
     ActionDemandOverride,
     StateDemandOverride,

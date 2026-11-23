@@ -12,7 +12,12 @@ from arkitekt_spec.actions import (
 )
 from arkitekt_spec.blok.catalogs import default_view
 from arkitekt_spec.declare.definition.catalogs import widget_tree_findings
-from arkitekt_spec.declare.widgets import BsxWidget, CustomWidget, SearchWidget, SliderWidget
+from arkitekt_spec.declare.widgets import (
+    BsxWidget,
+    CustomWidget,
+    SearchWidget,
+    SliderWidget,
+)
 
 
 def test_search_widget_error_on_wrong_graphql() -> None:
@@ -78,7 +83,11 @@ def test_custom_widgets_render_catalog_components() -> None:
         CustomAssignWidgetInput,
         UtilCallInput,
     )
-    from arkitekt_spec.declare.widgets import CustomReturnWidget, CustomWidget, StringWidget
+    from arkitekt_spec.declare.widgets import (
+        CustomReturnWidget,
+        CustomWidget,
+        StringWidget,
+    )
 
     widget = CustomWidget(
         "Gauge",
@@ -111,13 +120,19 @@ def test_custom_widgets_render_catalog_components() -> None:
 
 def test_choice_widgets_carry_choices_off_the_wire() -> None:
     """Choice widgets keep the choices for the port but never serialise them."""
-    from arkitekt_spec.declare.widgets import ChoiceReturnWidget, ChoiceWidget, withChoices
+    from arkitekt_spec.declare.widgets import (
+        ChoiceReturnWidget,
+        ChoiceWidget,
+        withChoices,
+    )
 
     widget = ChoiceWidget(["a", "b"])
     assert [c.value for c in widget.choices] == ["a", "b"]
     assert widget.model_dump(by_alias=True, exclude_none=True) == {"kind": "CHOICE"}
     assert withChoices(1, 2).choices[0].value == "1"
-    assert ChoiceReturnWidget(["x"]).model_dump(by_alias=True, exclude_none=True) == {"kind": "CHOICE"}
+    assert ChoiceReturnWidget(["x"]).model_dump(by_alias=True, exclude_none=True) == {
+        "kind": "CHOICE"
+    }
 
 
 def test_state_choice_needs_exactly_one_pointer() -> None:
@@ -152,11 +167,17 @@ def test_structure_picker_is_the_catalog_picker_carrying_its_own_query() -> None
     assert widget.kind == "CUSTOM" and widget.component == "StructurePicker"
     assert widget.dependencies == ("path",)
     props = {prop.key: prop.static_value for prop in widget.props}
-    assert props["bind"] == "value" and props["ward"] == "mikro" and props["placeholder"] == "Pick a volume"
+    assert (
+        props["bind"] == "value"
+        and props["ward"] == "mikro"
+        and props["placeholder"] == "Pick a volume"
+    )
     assert "$path: ID" in props["query"] and "reachableFrom: $path" in props["query"]
     # A UI without the component still gets a working search over the same query.
     assert widget.fallback.kind == "SEARCH"
-    assert widget.fallback.query == props["query"] and widget.fallback.dependencies == ("path",)
+    assert widget.fallback.query == props["query"] and widget.fallback.dependencies == (
+        "path",
+    )
 
 
 def test_structure_picker_refuses_a_variable_no_argument_backs() -> None:
@@ -204,7 +225,10 @@ def test_a_tree_hashes_as_the_server_hashes_it() -> None:
 
 def test_a_widget_without_a_tree_hashes_as_it_did() -> None:
     assert "children" not in CustomWidget("X").model_dump()
-    assert "children" not in CustomAssignWidgetInput(component="X", children=()).model_dump()
+    assert (
+        "children"
+        not in CustomAssignWidgetInput(component="X", children=()).model_dump()
+    )
 
 
 @pytest.mark.parametrize(
@@ -218,6 +242,9 @@ def test_a_tree_reads_only_its_scope_and_calls_no_agent(source: str) -> None:
 
 def test_value_is_typed_from_the_port() -> None:
     definition = _tree_definition("STRING", BsxWidget(TREE, dependencies=["limit"]))
-    codes = [finding.code for _, finding in widget_tree_findings(definition, default_view())]
-    assert [code for code in codes if not code.startswith("catalog.")] == ["local.bind_kind"]
-
+    codes = [
+        finding.code for _, finding in widget_tree_findings(definition, default_view())
+    ]
+    assert [code for code in codes if not code.startswith("catalog.")] == [
+        "local.bind_kind"
+    ]

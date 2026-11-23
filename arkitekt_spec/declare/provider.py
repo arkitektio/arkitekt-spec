@@ -37,7 +37,6 @@ from arkitekt_spec.declare.service import (
 from arkitekt_spec.manifest import Requirement
 
 if TYPE_CHECKING:
-
     from arkitekt_spec.declare.app import AppRegistry
 
 A = TypeVar("A")
@@ -173,7 +172,9 @@ class Provider(Generic[A]):
 _AGENT_LIFECYCLE = ("aprovide", "aconnect", "aloop", "force")
 
 
-def declare_provider(registry: "AppRegistry", function: Callable[..., A]) -> Provider[A]:
+def declare_provider(
+    registry: "AppRegistry", function: Callable[..., A]
+) -> Provider[A]:
     """Read a provider off ``function``, declared on ``registry``.
 
     The function's name is the provider's, its return annotation is the agent's
@@ -199,4 +200,9 @@ def declare_provider(registry: "AppRegistry", function: Callable[..., A]) -> Pro
     )
 
 
-__all__ = ["Provider", "ProviderBuildError", "ProviderDefinitionError", "declare_provider"]
+__all__ = [
+    "Provider",
+    "ProviderBuildError",
+    "ProviderDefinitionError",
+    "declare_provider",
+]

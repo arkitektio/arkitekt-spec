@@ -115,7 +115,9 @@ def return_items(annotation: TypeAnnotation) -> list[tuple[str, TypeAnnotation]]
         items: list[tuple[str, TypeAnnotation]] = []
         for field in fields:
             if field not in hints:
-                raise DefinitionError(f"The NamedTuple {annotation.__name__} gives its field {field!r} no type hint.")
+                raise DefinitionError(
+                    f"The NamedTuple {annotation.__name__} gives its field {field!r} no type hint."
+                )
             if key_of(hints[field]) is not None:
                 raise DefinitionError(
                     f"The NamedTuple {annotation.__name__} puts a Key on its field {field!r}: a NamedTuple's returns are keyed by its field names."
@@ -123,7 +125,10 @@ def return_items(annotation: TypeAnnotation) -> list[tuple[str, TypeAnnotation]]
             items.append((field, hints[field]))
         return items
     if is_tuple(annotation):
-        return [(key_of(cls) or f"return{index}", cls) for index, cls in enumerate(get_args(annotation))]
+        return [
+            (key_of(cls) or f"return{index}", cls)
+            for index, cls in enumerate(get_args(annotation))
+        ]
     return [(key_of(annotation) or "return0", annotation)]
 
 
@@ -301,7 +306,13 @@ def convert_object_to_port(
     choices on the port, so they are promoted here when the port has none of its own.
     """
     port = _convert_object_to_port(
-        cls, key, registry, direction, assign_widget=assign_widget, return_widget=return_widget, **kwargs
+        cls,
+        key,
+        registry,
+        direction,
+        assign_widget=assign_widget,
+        return_widget=return_widget,
+        **kwargs,
     )
     widget = assign_widget if direction == "arg" else return_widget
     carried = getattr(widget, "choices", None)
@@ -711,7 +722,9 @@ def prepare_definition(
                 f"Could not find type hint for {key} in {function_name}. Please provide a type hint (or default) for this argument."
             )
 
-        if is_dependency_type(cls, structure_registry) or is_interactions_type(cls, structure_registry):
+        if is_dependency_type(cls, structure_registry) or is_interactions_type(
+            cls, structure_registry
+        ):
             continue
 
         if is_local_var(cls, structure_registry):
@@ -750,12 +763,17 @@ def prepare_definition(
     is_generator = is_generator or is_generator_type(function_outs_annotation)
 
     if return_annotations:
-        items = [(key_of(cls) or f"return{index}", cls) for index, cls in enumerate(return_annotations)]
+        items = [
+            (key_of(cls) or f"return{index}", cls)
+            for index, cls in enumerate(return_annotations)
+        ]
     else:
         if is_generator_type(function_outs_annotation):
             function_outs_annotation = get_args(function_outs_annotation)[0]
 
-        if function_outs_annotation is not None and is_dependency_type(function_outs_annotation, structure_registry):
+        if function_outs_annotation is not None and is_dependency_type(
+            function_outs_annotation, structure_registry
+        ):
             raise DefinitionError(
                 f"Function {function_name} has a return type that is a dependency. This is not allowed. Please change the return type."
             )
@@ -764,7 +782,9 @@ def prepare_definition(
     seen: set[str] = set()
     for index, (key, cls) in enumerate(items):
         if key in seen:
-            raise DefinitionError(f"Function {function_name} names two returns {key!r}. Each return needs a key of its own.")
+            raise DefinitionError(
+                f"Function {function_name} names two returns {key!r}. Each return needs a key of its own."
+            )
         seen.add(key)
         # The docstring describes the returns in order: its names stay labels, never keys.
         doc_key = f"return{index}"

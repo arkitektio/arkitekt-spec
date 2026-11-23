@@ -28,7 +28,11 @@ def test_ids_are_derived_by_name_and_occurrence() -> None:
     tree = parse_bsx("<Card><Button /><Text /><Button /></Card>")
 
     assert tree.id == "Card[0]"
-    assert [c.id for c in tree.children or ()] == ["Card[0]/Button[0]", "Card[0]/Text[0]", "Card[0]/Button[1]"]
+    assert [c.id for c in tree.children or ()] == [
+        "Card[0]/Button[0]",
+        "Card[0]/Text[0]",
+        "Card[0]/Button[1]",
+    ]
 
 
 def test_inserting_an_element_renames_no_sibling_of_another_name() -> None:
@@ -71,30 +75,55 @@ def test_an_expression_error_says_where_in_the_source() -> None:
 def text(node: ComponentNodeInput, index: int = 0) -> ComponentPropInput:
     """The value of the ``index``-th child of ``node``, which is a text node."""
     node = child(node, index)
-    assert node.component == "#text" and node.children is None and len(node.props or ()) == 1
+    assert (
+        node.component == "#text"
+        and node.children is None
+        and len(node.props or ()) == 1
+    )
     return prop(node, "value")
 
 
 def test_text_is_a_child_node_holding_its_value() -> None:
     button = parse_bsx("<Button>Grip</Button>")
 
-    assert button.props is None, "what a Button does with its text is its renderer's to say"
-    assert [(node.id, node.component) for node in button.children or ()] == [("Button[0]/#0", "#text")]
+    assert button.props is None, (
+        "what a Button does with its text is its renderer's to say"
+    )
+    assert [(node.id, node.component) for node in button.children or ()] == [
+        ("Button[0]/#0", "#text")
+    ]
     assert text(button).static_value == "Grip"
-    assert text(parse_bsx("<Badge>{task.status}</Badge>")).dynamic_value.path == "task.status"  # type: ignore[union-attr]
+    assert (
+        text(parse_bsx("<Badge>{task.status}</Badge>")).dynamic_value.path  # type: ignore[union-attr]
+        == "task.status"
+    )
 
 
 def test_parsing_text_needs_no_catalog() -> None:
     """A component nobody here knows, one that takes children, one in a scene: all the same to the parser."""
-    for source in ("<Foo>x</Foo>", "<Card>x</Card>", "<div>x</div>", "<Scene><Model>x</Model></Scene>", "<Logo><G>x</G></Logo>"):
+    for source in (
+        "<Foo>x</Foo>",
+        "<Card>x</Card>",
+        "<div>x</div>",
+        "<Scene><Model>x</Model></Scene>",
+        "<Logo><G>x</G></Logo>",
+    ):
         tree = parse_bsx(source)
-        holder = tree if tree.children and tree.children[0].component == "#text" else child(tree)
+        holder = (
+            tree
+            if tree.children and tree.children[0].component == "#text"
+            else child(tree)
+        )
         assert text(holder).static_value == "x", source
-    assert parse_bsx('<Button label="a">b</Button>').props is not None, "set twice is the catalog's to refuse"
+    assert parse_bsx('<Button label="a">b</Button>').props is not None, (
+        "set twice is the catalog's to refuse"
+    )
 
 
 def test_text_with_expressions_is_a_template() -> None:
-    call = text(parse_bsx('<Text>Arrived at {move.args.position}, {"{"}ok{"}"}</Text>')).util_call
+    call = text(
+        parse_bsx('<Text>Arrived at {move.args.position}, {"{"}ok{"}"}</Text>')
+    ).util_call
     assert call is not None and call.operation == "str.template"
     template, values = call.arguments or ()
     assert template.value_literal == "Arrived at {0}, {{ok}}"
@@ -111,8 +140,15 @@ def test_whitespace_follows_jsx() -> None:
 def test_each_run_of_text_between_elements_is_a_node() -> None:
     tree = parse_bsx("<p>Hello <span>world</span> and {viewer.user.username}</p>")
 
-    assert [(c.id, c.component) for c in tree.children or ()] == [("p[0]/#0", "#text"), ("p[0]/span[0]", "span"), ("p[0]/#1", "#text")]
-    assert text(tree, 0).static_value == "Hello " and text(child(tree, 1)).static_value == "world"
+    assert [(c.id, c.component) for c in tree.children or ()] == [
+        ("p[0]/#0", "#text"),
+        ("p[0]/span[0]", "span"),
+        ("p[0]/#1", "#text"),
+    ]
+    assert (
+        text(tree, 0).static_value == "Hello "
+        and text(child(tree, 1)).static_value == "world"
+    )
     assert text(tree, 2).util_call is not None
 
 
@@ -132,7 +168,9 @@ def test_text_where_it_cannot_go_is_refused(source: str, code: str) -> None:
 
 
 def test_text_in_a_popout_is_html_again() -> None:
-    tree = parse_bsx('<Scene><Model src={self.assets.m}><Popout node="arm"><Text>hi</Text></Popout></Model></Scene>')
+    tree = parse_bsx(
+        '<Scene><Model src={self.assets.m}><Popout node="arm"><Text>hi</Text></Popout></Model></Scene>'
+    )
 
     assert text(child(child(child(tree)))).static_value == "hi"
 
@@ -141,7 +179,9 @@ def test_text_in_a_popout_is_html_again() -> None:
 
 
 def test_operators_desugar_to_functions() -> None:
-    call = prop(parse_bsx('<Badge when={a >= 1 && !b || c == "x"} />'), "when").util_call
+    call = prop(
+        parse_bsx('<Badge when={a >= 1 && !b || c == "x"} />'), "when"
+    ).util_call
     assert call is not None and call.operation == "logic.any"
     (values,) = call.arguments or ()
     first, second = values.value_list or ()
@@ -150,31 +190,49 @@ def test_operators_desugar_to_functions() -> None:
 
 
 def test_a_ternary_is_logic_choose() -> None:
-    call = prop(parse_bsx('<Button variant={a ? "default" : "outline"} />'), "variant").util_call
+    call = prop(
+        parse_bsx('<Button variant={a ? "default" : "outline"} />'), "variant"
+    ).util_call
     assert call is not None and call.operation == "logic.choose"
     assert [a.key for a in call.arguments or ()] == ["cond", "then", "otherwise"]
 
 
 def test_positional_arguments_are_named_after_the_function() -> None:
-    call = prop(parse_bsx("<Text text={str.truncate(task.message, 20)} />"), "text").util_call
+    call = prop(
+        parse_bsx("<Text text={str.truncate(task.message, 20)} />"), "text"
+    ).util_call
     assert call is not None
-    assert [(a.key, a.value_path or a.value_literal) for a in call.arguments or ()] == [("value", "task.message"), ("length", 20)]
+    assert [(a.key, a.value_path or a.value_literal) for a in call.arguments or ()] == [
+        ("value", "task.message"),
+        ("length", 20),
+    ]
 
 
 def test_a_null_argument_has_no_value() -> None:
-    call = prop(parse_bsx("<Button onClick={self.go(to: null)} />"), "onClick").agent_call
-    assert call is not None and (call.arguments or ())[0].model_dump(exclude_none=True) == {"key": "to"}
+    call = prop(
+        parse_bsx("<Button onClick={self.go(to: null)} />"), "onClick"
+    ).agent_call
+    assert call is not None and (call.arguments or ())[0].model_dump(
+        exclude_none=True
+    ) == {"key": "to"}
 
 
 def test_a_literal_list_is_static_a_list_holding_expressions_is_refused() -> None:
-    assert prop(parse_bsx('<Route through={["robot", "ot2"]} />'), "through").static_value == ["robot", "ot2"]
+    assert prop(
+        parse_bsx('<Route through={["robot", "ot2"]} />'), "through"
+    ).static_value == ["robot", "ot2"]
     assert refused("<Chart data={[a, 1]} />").code == "expr.dynamic_container"
 
 
 def test_class_names_desugar_to_str_classes() -> None:
-    call = prop(parse_bsx('<Badge className={["px-2", task.running && "animate-pulse"]} />'), "className").util_call
+    call = prop(
+        parse_bsx('<Badge className={["px-2", task.running && "animate-pulse"]} />'),
+        "className",
+    ).util_call
     assert call is not None and call.operation == "str.classes"
-    call = prop(parse_bsx('<Badge className={{"animate-pulse": task.running}} />'), "className").util_call
+    call = prop(
+        parse_bsx('<Badge className={{"animate-pulse": task.running}} />'), "className"
+    ).util_call
     assert call is not None and (call.arguments or ())[0].value_dict is not None
 
 
@@ -188,30 +246,52 @@ def test_a_variable_is_parsed_as_an_argument() -> None:
 
 
 def test_a_callback_is_one_task_call_named_by_into() -> None:
-    onclick = prop(parse_bsx("<Button onClick={deps.robot.move_to(position: p.id) into move} />"), "onClick")
+    onclick = prop(
+        parse_bsx("<Button onClick={deps.robot.move_to(position: p.id) into move} />"),
+        "onClick",
+    )
 
     assert onclick.agent_call is not None
-    assert (onclick.agent_call.dependency, onclick.agent_call.operation, onclick.declares_value) == ("robot", "move_to", "move")
+    assert (
+        onclick.agent_call.dependency,
+        onclick.agent_call.operation,
+        onclick.declares_value,
+    ) == ("robot", "move_to", "move")
 
 
 def test_a_refetch_and_the_effects_are_callbacks_too() -> None:
-    tree = parse_bsx("<Card><Button onClick={queries.positions.refetch()} /><Button onClick={ui.copy(task.id)} /></Card>")
+    tree = parse_bsx(
+        "<Card><Button onClick={queries.positions.refetch()} /><Button onClick={ui.copy(task.id)} /></Card>"
+    )
 
     refetch = prop(child(tree, 0), "onClick").util_call
     assert refetch is not None and refetch.operation == "query.refetch"
-    assert [(a.key, a.value_literal) for a in refetch.arguments or ()] == [("query", "positions")]
+    assert [(a.key, a.value_literal) for a in refetch.arguments or ()] == [
+        ("query", "positions")
+    ]
     assert prop(child(tree, 1), "onClick").util_call.operation == "ui.copy"  # type: ignore[union-attr]
 
 
 def test_fetch_more_desugars_to_its_effect_with_the_variables_as_an_object() -> None:
-    call = prop(parse_bsx("<Button onClick={queries.cells.fetch_more(after: queries.cells.value.cursor)} />"), "onClick").util_call
+    call = prop(
+        parse_bsx(
+            "<Button onClick={queries.cells.fetch_more(after: queries.cells.value.cursor)} />"
+        ),
+        "onClick",
+    ).util_call
 
     assert call is not None and call.operation == "query.fetch_more"
     named, variables = call.arguments or ()
     assert (named.key, named.value_literal) == ("query", "cells")
-    assert variables.key == "variables" and [(v.key, v.value_path) for v in variables.value_dict or ()] == [("after", "queries.cells.value.cursor")]
-    bare = prop(parse_bsx("<Button onClick={queries.cells.fetch_more()} />"), "onClick").util_call
-    assert bare is not None and len(bare.arguments or ()) == 1, "no variables: the argument is left out"
+    assert variables.key == "variables" and [
+        (v.key, v.value_path) for v in variables.value_dict or ()
+    ] == [("after", "queries.cells.value.cursor")]
+    bare = prop(
+        parse_bsx("<Button onClick={queries.cells.fetch_more()} />"), "onClick"
+    ).util_call
+    assert bare is not None and len(bare.arguments or ()) == 1, (
+        "no variables: the argument is left out"
+    )
 
 
 @pytest.mark.parametrize(
@@ -233,14 +313,18 @@ def test_a_callback_does_exactly_one_thing(callback: str, code: str) -> None:
 
 
 def test_if_else_are_children() -> None:
-    tree = parse_bsx("<if when={a}><Text /><else when={b}><Badge /></else><else><Spinner /></else></if>")
+    tree = parse_bsx(
+        "<if when={a}><Text /><else when={b}><Badge /></else><else><Spinner /></else></if>"
+    )
 
     assert [c.component for c in tree.children or ()] == ["Text", "else", "else"]
     assert prop(child(tree, 1), "when").dynamic_value.path == "b"  # type: ignore[union-attr]
 
 
 def test_a_foreach_needs_items_and_let_its_key_is_optional() -> None:
-    tree = parse_bsx('<foreach items={xs} let="p" key={p.id}><Text text={p.name} /></foreach>')
+    tree = parse_bsx(
+        '<foreach items={xs} let="p" key={p.id}><Text text={p.name} /></foreach>'
+    )
 
     assert prop(tree, "let").declares_value == "p"
     assert prop(tree, "key").dynamic_value.path == "p.id"  # type: ignore[union-attr]

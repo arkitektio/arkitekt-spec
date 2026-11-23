@@ -116,7 +116,9 @@ class BoundInteraction(Generic[P, R]):
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         """Ask and wait for the answer, or show the blok."""
-        raise TypeError("An interactions protocol is never instantiated: annotate an action's parameter with it.")
+        raise TypeError(
+            "An interactions protocol is never instantiated: annotate an action's parameter with it."
+        )
 
 
 class InteractionMethod(Generic[P, R]):
@@ -136,7 +138,9 @@ class InteractionMethod(Generic[P, R]):
     @overload
     def __get__(self, obj: object, owner: type[Any]) -> BoundInteraction[P, R]: ...
 
-    def __get__(self, obj: object | None, owner: type[Any]) -> "InteractionMethod[P, R] | BoundInteraction[P, R]":
+    def __get__(
+        self, obj: object | None, owner: type[Any]
+    ) -> "InteractionMethod[P, R] | BoundInteraction[P, R]":
         if obj is None:
             return self
         return BoundInteraction()
@@ -223,7 +227,9 @@ def _util_calls(value: object) -> Iterator[UtilCallInput]:
             yield from _util_calls(each)
 
 
-def check_answers(component: ComponentNodeInput, definition: DefinitionInput, owner: str) -> None:
+def check_answers(
+    component: ComponentNodeInput, definition: DefinitionInput, owner: str
+) -> None:
     """Every ``task.answer(values: {...})`` of the tree keyed by the ask's returns, each
     non-nullable one answered. A ``values`` that is not written out as a dict is the
     server's to check when it comes.
@@ -236,7 +242,9 @@ def check_answers(component: ComponentNodeInput, definition: DefinitionInput, ow
     for call in _util_calls(component):
         if call.operation != ANSWER:
             continue
-        values = next((arg for arg in call.arguments or () if arg.key == "values"), None)
+        values = next(
+            (arg for arg in call.arguments or () if arg.key == "values"), None
+        )
         if values is None or values.value_dict is None:
             continue
         keys = {entry.key for entry in values.value_dict if entry.key is not None}
@@ -261,14 +269,18 @@ def check_no_answer(component: ComponentNodeInput, owner: str) -> None:
         DefinitionError: On one.
     """
     if any(call.operation == ANSWER for call in _util_calls(component)):
-        raise DefinitionError(f"{owner}: an inform answers nothing, but its blok calls task.answer: make it an @ask")
+        raise DefinitionError(
+            f"{owner}: an inform answers nothing, but its blok calls task.answer: make it an @ask"
+        )
 
 
 class DeclaredInteraction:
     """One ask or inform of an interactions protocol as one app declared it: its ports built,
     its blok checked."""
 
-    def __init__(self, method: InteractionMethod[Any, Any], owner: str, registry: "AppRegistry") -> None:
+    def __init__(
+        self, method: InteractionMethod[Any, Any], owner: str, registry: "AppRegistry"
+    ) -> None:
         self.method = method
         self.role: Role = method.role
         self.key = method.__name__
@@ -282,8 +294,12 @@ class DeclaredInteraction:
         role = self.role
         where = f"{owner}.{self.key}"
         if role == "inform" and self.definition.returns:
-            raise DefinitionError(f"{where}: an inform returns nothing (nothing answers it): annotate it `-> None`")
-        self.description = options.description or self.definition.description or self.key
+            raise DefinitionError(
+                f"{where}: an inform returns nothing (nothing answers it): annotate it `-> None`"
+            )
+        self.description = (
+            options.description or self.definition.description or self.key
+        )
         self.dependencies: tuple[AgentDependencyInput, ...] = tuple(
             registry.structure_registry.protocol_for(cls).to_dependency_input(key)
             for key, cls in (options.dependencies or {}).items()
@@ -291,14 +307,24 @@ class DeclaredInteraction:
         declared = options.component
         source = declared if isinstance(declared, str) else None
         try:
-            catalog = source_catalog(declared) if isinstance(declared, str) else blok_catalog(declared)
+            catalog = (
+                source_catalog(declared)
+                if isinstance(declared, str)
+                else blok_catalog(declared)
+            )
             view = registry.blok_view(catalog)
-            component = parse_bsx(declared, view=view) if isinstance(declared, str) else declared
+            component = (
+                parse_bsx(declared, view=view)
+                if isinstance(declared, str)
+                else declared
+            )
             header = blok_header(component)
         except BlokError as error:
             raise error.within(f"{where} ({role})") from None
         if header.context != ComponentContext.PANEL.value:
-            raise DefinitionError(f"{where}: an {role} is a panel blok, not a {header.context.lower()}")
+            raise DefinitionError(
+                f"{where}: an {role} is a panel blok, not a {header.context.lower()}"
+            )
         demo = demo_input(options.demo)
         scope = BlokScope(
             kinds=("task",),
@@ -312,15 +338,28 @@ class DeclaredInteraction:
         for finding in check_catalog_target(catalog, registry):
             if options.mode == "strict":
                 raise BlokError.from_finding(finding)
-            warn_at(f"{where} ({role}): {finding.message} [{finding.code}]", at, finding=finding, blok=where)
+            warn_at(
+                f"{where} ({role}): {finding.message} [{finding.code}]",
+                at,
+                finding=finding,
+                blok=where,
+            )
         for finding in check_blok_tree(component, scope, checked_view(view)):
             if finding.level == "error" or options.mode == "strict":
                 at_path = f", {finding.path}" if finding.path else ""
                 message = f"{where} ({role}{at_path}): {finding.message}"
-                raise BlokError.from_finding(dataclass_replace(finding, path=None, message=message), node=finding.path)
+                raise BlokError.from_finding(
+                    dataclass_replace(finding, path=None, message=message),
+                    node=finding.path,
+                )
             if finding_key(finding) not in reported:
                 reported.add(finding_key(finding))
-                warn_at(f"{where} ({role}): {finding.message} [{finding.code}]", at, finding=finding, blok=where)
+                warn_at(
+                    f"{where} ({role}): {finding.message} [{finding.code}]",
+                    at,
+                    finding=finding,
+                    blok=where,
+                )
         if role == "ask":
             check_answers(component, self.definition, where)
         else:
@@ -339,15 +378,21 @@ class DeclaredInteraction:
             "dependencies": self.dependencies or None,
             "demo": demo,
         }
-        self._fields.update({name: value for name, value in optional.items() if value is not None})
+        self._fields.update(
+            {name: value for name, value in optional.items() if value is not None}
+        )
 
     def to_ask_input(self, parameter: str) -> AskBlokInput:
         """This ask as an action whose ``parameter`` is the protocol registers it."""
-        return AskBlokInput.model_validate({"key": f"{parameter}.{self.key}", **self._fields})
+        return AskBlokInput.model_validate(
+            {"key": f"{parameter}.{self.key}", **self._fields}
+        )
 
     def to_inform_input(self, parameter: str) -> InformBlokInput:
         """This inform as an action whose ``parameter`` is the protocol registers it."""
-        return InformBlokInput.model_validate({"key": f"{parameter}.{self.key}", **self._fields})
+        return InformBlokInput.model_validate(
+            {"key": f"{parameter}.{self.key}", **self._fields}
+        )
 
 
 class DeclaredInteractions:
@@ -364,22 +409,34 @@ class DeclaredInteractions:
         self.interactions: dict[str, DeclaredInteraction] = {}
         for name, member in inspect.getmembers(cls):
             if isinstance(member, InteractionMethod):
-                self.interactions[name] = DeclaredInteraction(member, cls.__qualname__, registry)  # pyright: ignore[reportUnknownArgumentType]
+                self.interactions[name] = DeclaredInteraction(
+                    member, cls.__qualname__, registry
+                )
             elif not name.startswith("_") and callable(member):
                 raise DefinitionError(
                     f"{cls.__qualname__}.{name} is a method without @ask or @inform: every public "
                     "method of an interactions protocol is one. Decorate it, or prefix it with `_`."
                 )
         if not self.interactions:
-            raise DefinitionError(f"{cls.__qualname__} declares no interactions: give it an @ask or @inform method.")
+            raise DefinitionError(
+                f"{cls.__qualname__} declares no interactions: give it an @ask or @inform method."
+            )
 
     def to_ask_inputs(self, parameter: str) -> list[AskBlokInput]:
         """Every ask, as an action whose ``parameter`` is the protocol registers them."""
-        return [each.to_ask_input(parameter) for each in self.interactions.values() if each.role == "ask"]
+        return [
+            each.to_ask_input(parameter)
+            for each in self.interactions.values()
+            if each.role == "ask"
+        ]
 
     def to_inform_inputs(self, parameter: str) -> list[InformBlokInput]:
         """Every inform, as an action whose ``parameter`` is the protocol registers them."""
-        return [each.to_inform_input(parameter) for each in self.interactions.values() if each.role == "inform"]
+        return [
+            each.to_inform_input(parameter)
+            for each in self.interactions.values()
+            if each.role == "inform"
+        ]
 
 
 __all__ = [

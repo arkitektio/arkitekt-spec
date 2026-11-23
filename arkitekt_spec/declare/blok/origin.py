@@ -37,7 +37,9 @@ def declared_at() -> DeclaredAt | None:
         name = frame.f_globals.get("__name__")
         module = name if isinstance(name, str) else ""
         if module.split(".", 1)[0] not in LIBRARIES:
-            return DeclaredAt(filename=frame.f_code.co_filename, lineno=frame.f_lineno, module=module)
+            return DeclaredAt(
+                filename=frame.f_code.co_filename, lineno=frame.f_lineno, module=module
+            )
         frame = frame.f_back
     return None
 
@@ -47,7 +49,13 @@ def finding_key(finding: Finding) -> str:
     return f"{finding.code}\x00{finding.path or ''}\x00{finding.message}"
 
 
-def warn_at(message: str, at: DeclaredAt | None, *, finding: Finding | None = None, blok: str | None = None) -> None:
+def warn_at(
+    message: str,
+    at: DeclaredAt | None,
+    *,
+    finding: Finding | None = None,
+    blok: str | None = None,
+) -> None:
     """Warn ``message`` (a :class:`CatalogWarning`) at the app's line that declared the blok.
 
     The warning carries ``finding`` and ``blok``, so a reader that places it in the source
@@ -57,7 +65,9 @@ def warn_at(message: str, at: DeclaredAt | None, *, finding: Finding | None = No
     if at is None:
         warnings.warn(warning, stacklevel=2)
         return
-    warnings.warn_explicit(warning, CatalogWarning, at.filename, at.lineno, module=at.module)
+    warnings.warn_explicit(
+        warning, CatalogWarning, at.filename, at.lineno, module=at.module
+    )
 
 
 __all__ = ["LIBRARIES", "DeclaredAt", "declared_at", "finding_key", "warn_at"]

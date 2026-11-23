@@ -10,7 +10,9 @@ from arkitekt_spec.actions import BlokDemoInput
 from arkitekt_spec.scalars import JSONSerializable
 
 
-def demo_input(demo: "BlokDemoInput | Mapping[str, JSONSerializable] | None") -> BlokDemoInput | None:
+def demo_input(
+    demo: "BlokDemoInput | Mapping[str, JSONSerializable] | None",
+) -> BlokDemoInput | None:
     """``demo`` as the wire carries it: ``{deps, args, task, queries, subscriptions}``."""
     if demo is None or isinstance(demo, BlokDemoInput):
         return demo

@@ -31,7 +31,11 @@ from arkitekt_spec.blok.declared import blok_catalog, blok_header
 from arkitekt_spec.blok.vocabulary import BlokError, load_vocabulary
 from arkitekt_spec.declare.blok.declarations import demo_input
 from arkitekt_spec.declare.blok.origin import declared_at, finding_key, warn_at
-from arkitekt_spec.declare.blok.registry import check_catalog_target, checked_view, minor_needed
+from arkitekt_spec.declare.blok.registry import (
+    check_catalog_target,
+    checked_view,
+    minor_needed,
+)
 from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
 from arkitekt_spec.declare.catalogs import BlokCheckMode
 from arkitekt_spec.scalars import JSONSerializable
@@ -47,7 +51,12 @@ ROUTE_COMPONENT = "Route"
 """With ``through``, a line through the agents bound to those dependencies."""
 ASK_COMPONENT = "ask"
 """The run's open ask form."""
-ACTION_BLOK_COMPONENTS = (SPACE_COMPONENT, PLACED_COMPONENT, ROUTE_COMPONENT, ASK_COMPONENT)
+ACTION_BLOK_COMPONENTS = (
+    SPACE_COMPONENT,
+    PLACED_COMPONENT,
+    ROUTE_COMPONENT,
+    ASK_COMPONENT,
+)
 """The components that read a run or a dependency of one: an agent's blok never holds them."""
 
 
@@ -70,7 +79,12 @@ class ActionBlok:
     description: str | None = None
 
 
-ActionBloks = ActionBlok | str | ComponentNodeInput | Sequence[ActionBlok | str | ComponentNodeInput]
+ActionBloks = (
+    ActionBlok
+    | str
+    | ComponentNodeInput
+    | Sequence[ActionBlok | str | ComponentNodeInput]
+)
 """What ``bloks=`` takes: one blok or several, each an :class:`ActionBlok` or a bare tree."""
 
 
@@ -79,8 +93,14 @@ def as_action_bloks(bloks: ActionBloks | None) -> tuple[ActionBlok, ...]:
     bare trees wrapped."""
     if bloks is None:
         return ()
-    listed = (bloks,) if isinstance(bloks, (ActionBlok, str, ComponentNodeInput)) else tuple(bloks)
-    return tuple(each if isinstance(each, ActionBlok) else ActionBlok(each) for each in listed)
+    listed = (
+        (bloks,)
+        if isinstance(bloks, (ActionBlok, str, ComponentNodeInput))
+        else tuple(bloks)
+    )
+    return tuple(
+        each if isinstance(each, ActionBlok) else ActionBlok(each) for each in listed
+    )
 
 
 def _nodes(node: ComponentNodeInput) -> Iterator[ComponentNodeInput]:
@@ -94,7 +114,9 @@ def action_blok_components_in(node: ComponentNodeInput) -> list[ComponentNodeInp
     return [each for each in _nodes(node) if each.component in ACTION_BLOK_COMPONENTS]
 
 
-def action_blok_id(interface: str, context: ComponentContext | str, kind: str = "action") -> str:
+def action_blok_id(
+    interface: str, context: ComponentContext | str, kind: str = "action"
+) -> str:
     """What names one of an action's bloks: its interface and context (``crop:scene``), an assign
     blok's with its phase (``crop:assign:panel``)."""
     phase = "assign:" if kind == "assign" else ""
@@ -132,9 +154,17 @@ def build_action_bloks(
     for blok in as_action_bloks(bloks):
         source = blok.component if isinstance(blok.component, str) else None
         try:
-            catalog = source_catalog(blok.component) if isinstance(blok.component, str) else blok_catalog(blok.component)
+            catalog = (
+                source_catalog(blok.component)
+                if isinstance(blok.component, str)
+                else blok_catalog(blok.component)
+            )
             view = registry.blok_view(catalog)
-            component = parse_bsx(blok.component, view=view) if isinstance(blok.component, str) else blok.component
+            component = (
+                parse_bsx(blok.component, view=view)
+                if isinstance(blok.component, str)
+                else blok.component
+            )
             header = blok_header(component)
         except BlokError as error:
             raise error.within(f"{owner} (blok)") from None
@@ -143,11 +173,23 @@ def build_action_bloks(
         phase = "assign " if kind == "assign" else ""
         label = f"{owner} ({phase}{context.value.lower()} blok"
         if kind in ACTION_KINDS and context.value not in ACTION_BLOK_CONTEXTS:
-            raise ValueError(f"{owner}: an action's blok is a panel or a scene, not a {context.value.lower()} (an action's logo goes in logo=)")
-        if kind in ACTION_KINDS and any(other.context == context.value and other.phase == ("ASSIGN" if kind == "assign" else "RUN") for other in built):
-            raise ValueError(f"{owner}: the {phase}{context.value.lower()} blok is given twice; an action has one {phase}blok per context")
-        if kind == "assign" and any(node.component == ASK_COMPONENT for node in _nodes(component)):
-            raise ValueError(f"{owner}: an assign blok is shown before there is a task, so it holds no 'ask'")
+            raise ValueError(
+                f"{owner}: an action's blok is a panel or a scene, not a {context.value.lower()} (an action's logo goes in logo=)"
+            )
+        if kind in ACTION_KINDS and any(
+            other.context == context.value
+            and other.phase == ("ASSIGN" if kind == "assign" else "RUN")
+            for other in built
+        ):
+            raise ValueError(
+                f"{owner}: the {phase}{context.value.lower()} blok is given twice; an action has one {phase}blok per context"
+            )
+        if kind == "assign" and any(
+            node.component == ASK_COMPONENT for node in _nodes(component)
+        ):
+            raise ValueError(
+                f"{owner}: an assign blok is shown before there is a task, so it holds no 'ask'"
+            )
         demo = demo_input(blok.demo)
         scope = BlokScope(
             kinds=ACTION_KINDS,
@@ -157,20 +199,38 @@ def build_action_bloks(
             demo=demo,
         )
         reported: set[str] = set()
-        blok_id = action_blok_id(interface, context, kind) if interface is not None else None
+        blok_id = (
+            action_blok_id(interface, context, kind) if interface is not None else None
+        )
         for finding in check_catalog_target(catalog, registry):
             if mode == "strict":
                 raise BlokError.from_finding(finding)
-            warn_at(f"{label}): {finding.message} [{finding.code}]", at, finding=finding, blok=blok_id)
+            warn_at(
+                f"{label}): {finding.message} [{finding.code}]",
+                at,
+                finding=finding,
+                blok=blok_id,
+            )
         for finding in check_blok_tree(component, scope, checked_view(view)):
             if finding.level == "error" or mode == "strict":
                 where = f", {finding.path}" if finding.path else ""
                 message = f"{label}{where}): {finding.message}"
-                raise BlokError.from_finding(dataclass_replace(finding, path=None, message=message), node=finding.path)
+                raise BlokError.from_finding(
+                    dataclass_replace(finding, path=None, message=message),
+                    node=finding.path,
+                )
             if finding_key(finding) not in reported:
                 reported.add(finding_key(finding))
-                warn_at(f"{label}): {finding.message} [{finding.code}]", at, finding=finding, blok=blok_id)
-        fields: dict[str, object] = {"context": context, "vocab": load_vocabulary().vocab}
+                warn_at(
+                    f"{label}): {finding.message} [{finding.code}]",
+                    at,
+                    finding=finding,
+                    blok=blok_id,
+                )
+        fields: dict[str, object] = {
+            "context": context,
+            "vocab": load_vocabulary().vocab,
+        }
         if kind == "assign":
             # Set only for an assign blok: a run's blok keeps the bytes it had before there were phases.
             fields["phase"] = "ASSIGN"
@@ -182,7 +242,9 @@ def build_action_bloks(
             "description": blok.description,
             "demo": demo,
         }
-        fields.update({name: value for name, value in optional.items() if value is not None})
+        fields.update(
+            {name: value for name, value in optional.items() if value is not None}
+        )
         built.append(ActionBlokInput.model_validate(fields))
     return tuple(built)
 

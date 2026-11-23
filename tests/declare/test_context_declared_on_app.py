@@ -69,7 +69,9 @@ def test_a_functions_context_parameters_carry_the_apps_locks() -> None:
     assert variables.required_context_locks == {"session": ["camera", "stage"]}
     assert returns.context_returns == {0: "session"}
 
-    details = derive_implementation_details(use, RegisterConfig(), registry.structure_registry)
+    details = derive_implementation_details(
+        use, RegisterConfig(), registry.structure_registry
+    )
     assert details.locks == ["camera", "stage"]
 
 
@@ -125,7 +127,9 @@ def test_a_hook_is_handed_the_app_context_and_checks_its_kind() -> None:
         """Hook."""
 
     variables = WithVariables(hook, registry.structure_registry)
-    assert variables.app_context_variables.app_context_variables == {"user": UserContext}
+    assert variables.app_context_variables.app_context_variables == {
+        "user": UserContext
+    }
 
     given = UserContext()
     assert variables.get_kwargs({}, {}, given) == {"user": given}

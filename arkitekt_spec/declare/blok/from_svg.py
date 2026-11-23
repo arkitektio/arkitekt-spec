@@ -95,7 +95,9 @@ def from_svg(
             ``strict`` -- anything is lost.
     """
     if kind not in LOGO_KINDS:
-        raise ValueError(f"from_svg makes logo bloks: kind is one of {LOGO_KINDS}, not {kind!r}")
+        raise ValueError(
+            f"from_svg makes logo bloks: kind is one of {LOGO_KINDS}, not {kind!r}"
+        )
     if precision is not None and precision < 0:
         raise ValueError(f"precision is a number of decimals, not {precision!r}")
 
@@ -107,25 +109,38 @@ def from_svg(
         precision=precision,
         strict=strict,
     )
-    drawing = _finish(converter.convert(LOGO_COMPONENT, title), f"Blok[0]/{LOGO_COMPONENT}[0]")
+    drawing = _finish(
+        converter.convert(LOGO_COMPONENT, title), f"Blok[0]/{LOGO_COMPONENT}[0]"
+    )
     tree = ComponentNodeInput(
         id="Blok[0]",
         component="Blok",
-        props=(ComponentPropInput(key="kind", static_value=kind), ComponentPropInput(key="context", static_value="logo")),
+        props=(
+            ComponentPropInput(key="kind", static_value=kind),
+            ComponentPropInput(key="context", static_value="logo"),
+        ),
         children=(drawing,),
     )
 
     source = to_bsx(tree)
-    if parse_bsx(source) != tree:  # pragma: no cover - a converter bug, not an input error
+    if (
+        parse_bsx(source) != tree
+    ):  # pragma: no cover - a converter bug, not an input error
         raise SvgConversionError(
             "the converted logo does not parse back into the tree it was printed from"
         )
-    errors = [finding for finding in check_blok_tree(tree, BlokScope(kinds=(kind,), dependencies=())) if finding.level == "error"]
+    errors = [
+        finding
+        for finding in check_blok_tree(tree, BlokScope(kinds=(kind,), dependencies=()))
+        if finding.level == "error"
+    ]
     if errors:
         hint = ""
         if "path data" in errors[0].message and precision is None:
             hint = "; pass precision=2 (or fewer decimals) to round it"
-        raise SvgConversionError(f"the converted logo is too much for a logo: {errors[0].message}{hint}")
+        raise SvgConversionError(
+            f"the converted logo is too much for a logo: {errors[0].message}{hint}"
+        )
 
     for message in converter.warnings:
         warnings.warn(message, SvgConversionWarning, stacklevel=2)
@@ -145,17 +160,23 @@ def _parse(svg: str | bytes | os.PathLike[str]) -> ET.Element:
     elif isinstance(svg, (str, bytes)):
         data = svg
     else:
-        raise TypeError(f"from_svg reads SVG text (str, bytes) or a path, not {type(svg).__name__}")
+        raise TypeError(
+            f"from_svg reads SVG text (str, bytes) or a path, not {type(svg).__name__}"
+        )
 
     # Entities are how an XML file expands itself (the billion laughs); an SVG never needs one.
-    if (data.find(b"<!ENTITY") if isinstance(data, bytes) else data.find("<!ENTITY")) >= 0:
+    if (
+        data.find(b"<!ENTITY") if isinstance(data, bytes) else data.find("<!ENTITY")
+    ) >= 0:
         raise SvgConversionError("the SVG declares XML entities, which are refused")
     try:
         root = ET.fromstring(data)
     except ET.ParseError as error:
         raise SvgConversionError(f"the SVG is not well-formed XML: {error}") from error
     if _local(root.tag) != "svg" or _namespace(root.tag) not in ("", SVG_NAMESPACE):
-        raise SvgConversionError(f"the document's root is <{_local(root.tag)}>, not <svg>")
+        raise SvgConversionError(
+            f"the document's root is <{_local(root.tag)}>, not <svg>"
+        )
     return root
 
 
@@ -276,7 +297,10 @@ ENUMS = {
 }
 """The values Orkestrator's logo renderer accepts for its enumerated props."""
 
-ENUM_ALIASES = {("strokeLinejoin", "miter-clip"): "miter", ("strokeLinejoin", "arcs"): "miter"}
+ENUM_ALIASES = {
+    ("strokeLinejoin", "miter-clip"): "miter",
+    ("strokeLinejoin", "arcs"): "miter",
+}
 
 LENGTHS = frozenset(
     {
@@ -304,7 +328,14 @@ PAINTS = {"fill": "fillOpacity", "stroke": "strokeOpacity", "stopColor": "stopOp
 """Each paint prop, and the opacity prop a colour's alpha moves to when it becomes a token."""
 TRANSFORMS = frozenset({"transform", "gradientTransform"})
 
-UNITS = {"px": 1.0, "pt": 4 / 3, "pc": 16.0, "mm": 96 / 25.4, "cm": 96 / 2.54, "in": 96.0}
+UNITS = {
+    "px": 1.0,
+    "pt": 4 / 3,
+    "pc": 16.0,
+    "mm": 96 / 25.4,
+    "cm": 96 / 2.54,
+    "in": 96.0,
+}
 
 NUMBER = re.compile(r"[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][-+]?\d+)?")
 URL = re.compile(r"url\(\s*['\"]?#([^'\")\s]+)['\"]?\s*\)\s*(.*)$", re.DOTALL)
@@ -343,12 +374,15 @@ def _finish(node: _Node, node_id: str) -> ComponentNodeInput:
     for child in node.children:
         index = seen.get(child.component, 0)
         seen[child.component] = index + 1
-        children.append(_finish(child, child.id or f"{node_id}/{child.component}[{index}]"))
+        children.append(
+            _finish(child, child.id or f"{node_id}/{child.component}[{index}]")
+        )
     return ComponentNodeInput(
         id=node_id,
         component=node.component,
         props=tuple(
-            ComponentPropInput(key=key, static_value=value) for key, value in node.props.items()
+            ComponentPropInput(key=key, static_value=value)
+            for key, value in node.props.items()
         )
         or None,
         children=tuple(children) or None,
@@ -440,7 +474,12 @@ def _colour(value: str) -> RGBA | None:
         text = "#" + "".join(digit * 2 for digit in text[1:])
     if re.fullmatch(r"#[0-9a-f]{6}([0-9a-f]{2})?", text):
         channels = [int(text[i : i + 2], 16) / 255 for i in range(1, len(text), 2)]
-        return (channels[0], channels[1], channels[2], channels[3] if len(channels) == 4 else 1.0)
+        return (
+            channels[0],
+            channels[1],
+            channels[2],
+            channels[3] if len(channels) == 4 else 1.0,
+        )
 
     match = re.fullmatch(r"(rgba?|hsla?)\((.*)\)", text)
     if match is None:
@@ -452,11 +491,14 @@ def _colour(value: str) -> RGBA | None:
         alpha = _fraction(parts[3]) if len(parts) == 4 else 1.0
         if match.group(1).startswith("rgb"):
             red, green, blue = (
-                _fraction(part) if part.endswith("%") else float(part) / 255 for part in parts[:3]
+                _fraction(part) if part.endswith("%") else float(part) / 255
+                for part in parts[:3]
             )
         else:
             hue = float(parts[0].removesuffix("deg")) / 360 % 1
-            red, green, blue = colorsys.hls_to_rgb(hue, _fraction(parts[2]), _fraction(parts[1]))
+            red, green, blue = colorsys.hls_to_rgb(
+                hue, _fraction(parts[2]), _fraction(parts[1])
+            )
     except ValueError:
         return None
     return (_clamp(red), _clamp(green), _clamp(blue), _clamp(alpha))
@@ -482,7 +524,13 @@ def _token(colour: RGBA) -> str:
     _, lightness, _ = colorsys.rgb_to_hls(red, green, blue)
     if max(red, green, blue) - min(red, green, blue) < 0.12:
         return "ink" if lightness < 0.3 else "surface" if lightness > 0.85 else "muted"
-    return "brand-strong" if lightness < 0.35 else "brand-soft" if lightness > 0.75 else "brand"
+    return (
+        "brand-strong"
+        if lightness < 0.35
+        else "brand-soft"
+        if lightness > 0.75
+        else "brand"
+    )
 
 
 def _palette(palette: Mapping[str, str]) -> dict[str, str]:
@@ -492,7 +540,9 @@ def _palette(palette: Mapping[str, str]) -> dict[str, str]:
         if rgba is None:
             raise ValueError(f"palette key {colour!r} is not a CSS colour")
         if token not in LOGO_PAINT_TOKENS:
-            raise ValueError(f"palette value {token!r} is not one of {LOGO_PAINT_TOKENS}")
+            raise ValueError(
+                f"palette value {token!r} is not one of {LOGO_PAINT_TOKENS}"
+            )
         resolved[_hex(rgba)] = token
     return resolved
 
@@ -540,14 +590,21 @@ def _round_path(d: str, decimals: int) -> str:
         else:
             match = NUMBER.match(d, position)
             if match is None:
-                raise ValueError(f"cannot read path data at {d[position : position + 12]!r}")
+                raise ValueError(
+                    f"cannot read path data at {d[position : position + 12]!r}"
+                )
             tokens.append(_short(float(match.group()), decimals))
             index += 1
             position = match.end()
 
     out = ""
     for token in tokens:
-        if out and not out[-1].isalpha() and not token.isalpha() and not token.startswith("-"):
+        if (
+            out
+            and not out[-1].isalpha()
+            and not token.isalpha()
+            and not token.startswith("-")
+        ):
             out += " "
         out += token
     return out
@@ -581,7 +638,9 @@ class _Converter:
         self.strict = strict
         self.warnings: list[str] = []
         self.props = _logo_props()
-        self.by_id = {element.get("id"): element for element in root.iter() if element.get("id")}
+        self.by_id = {
+            element.get("id"): element for element in root.iter() if element.get("id")
+        }
         self.rules = self._stylesheet()
         self.resources: dict[str, _Node | None] = {}
         """Gradients and clip paths by id, in the order first referenced; ``None`` while being built."""
@@ -630,7 +689,8 @@ class _Converter:
 
         if self.resources:
             defs = _Node(
-                "Defs", children=[node for node in self.resources.values() if node is not None]
+                "Defs",
+                children=[node for node in self.resources.values() if node is not None],
             )
             root.children.append(defs)
         root.children.extend(content)
@@ -653,7 +713,9 @@ class _Converter:
                     closing += 1
                 prelude, body = text[position:opening], text[opening + 1 : closing - 1]
                 position = closing
-                if ";" in prelude:  # a statement at-rule (@import ...;) before this block
+                if (
+                    ";" in prelude
+                ):  # a statement at-rule (@import ...;) before this block
                     prelude = prelude.rsplit(";", 1)[1]
                 prelude = prelude.strip()
                 if prelude.startswith("@"):
@@ -713,7 +775,9 @@ class _Converter:
     def children(
         self, element: ET.Element, inherited: Mapping[str, str], using: tuple[str, ...]
     ) -> list[_Node]:
-        return [node for child in element for node in self.element(child, inherited, using)]
+        return [
+            node for child in element for node in self.element(child, inherited, using)
+        ]
 
     def element(
         self, element: ET.Element, inherited: Mapping[str, str], using: tuple[str, ...]
@@ -767,7 +831,9 @@ class _Converter:
         for name in ("x", "y"):
             values = declared.get(name, "").replace(",", " ").split()
             if len(values) > 1:
-                self.warn(f"<text {name}> lists a position per glyph; only the first is kept")
+                self.warn(
+                    f"<text {name}> lists a position per glyph; only the first is kept"
+                )
                 declared[name] = values[0]
         for name in ("dx", "dy", "rotate"):
             if name in declared:
@@ -782,12 +848,17 @@ class _Converter:
 
     def text_of(self, element: ET.Element, top: bool = False) -> Iterator[str]:
         if not top and any(name in element.attrib for name in ("x", "y", "dx", "dy")):
-            self.warn("<tspan> positions have no logo prop; the text runs on as one line")
+            self.warn(
+                "<tspan> positions have no logo prop; the text runs on as one line"
+            )
         yield element.text or ""
         for child in element:
             if isinstance(child.tag, str) and _local(child.tag) in ("tspan", "a"):
                 yield from self.text_of(child)
-            elif isinstance(child.tag, str) and _local(child.tag) not in ("title", "desc"):
+            elif isinstance(child.tag, str) and _local(child.tag) not in (
+                "title",
+                "desc",
+            ):
                 self.warn(f"<{_local(child.tag)}> inside <text> was dropped")
             yield child.tail or ""
 
@@ -800,7 +871,9 @@ class _Converter:
     ) -> list[_Node]:
         href = declared.pop("href", "")
         if not href.startswith("#"):
-            self.warn(f"<use href={href!r}> names no element of this file and was dropped")
+            self.warn(
+                f"<use href={href!r}> names no element of this file and was dropped"
+            )
             return []
         target = self.by_id.get(href[1:])
         if target is None:
@@ -832,7 +905,10 @@ class _Converter:
                 )
             )
             inner = self.apply(
-                _Node("G"), target_tag, _only(target_declared, (*TEXT_ATTRIBUTES, "color")), inner
+                _Node("G"),
+                target_tag,
+                _only(target_declared, (*TEXT_ATTRIBUTES, "color")),
+                inner,
             )
             node.children = self.children(target, inner, using)
         else:
@@ -865,7 +941,11 @@ class _Converter:
         return [node]
 
     def viewbox_transform(
-        self, viewbox: str | None, width: str | None, height: str | None, aspect: str | None
+        self,
+        viewbox: str | None,
+        width: str | None,
+        height: str | None,
+        aspect: str | None,
     ) -> str:
         """The transform that maps a viewBox onto a ``width`` x ``height`` viewport."""
         if not viewbox:
@@ -893,9 +973,16 @@ class _Converter:
                     "preserveAspectRatio 'slice' on a <symbol> or nested <svg> is drawn as 'meet'"
                 )
             scale_x = scale_y = min(scale_x, scale_y)
-            slack_x, slack_y = port_width - box_width * scale_x, port_height - box_height * scale_y
-            offset_x = slack_x * (0.5 if "xMid" in align else 1.0 if "xMax" in align else 0.0)
-            offset_y = slack_y * (0.5 if "YMid" in align else 1.0 if "YMax" in align else 0.0)
+            slack_x, slack_y = (
+                port_width - box_width * scale_x,
+                port_height - box_height * scale_y,
+            )
+            offset_x = slack_x * (
+                0.5 if "xMid" in align else 1.0 if "xMax" in align else 0.0
+            )
+            offset_y = slack_y * (
+                0.5 if "YMid" in align else 1.0 if "YMax" in align else 0.0
+            )
 
         steps = []
         if offset_x or offset_y:
@@ -928,7 +1015,9 @@ class _Converter:
             return False
         self.resources[ref] = None  # a clip path that clips itself ends here
         self.resources[ref] = (
-            self.clip_path(target, ref) if tag == "clipPath" else self.gradient(target, ref)
+            self.clip_path(target, ref)
+            if tag == "clipPath"
+            else self.gradient(target, ref)
         )
         return True
 
@@ -959,7 +1048,9 @@ class _Converter:
                     continue
                 elif name == "spreadMethod":
                     if value != "pad":
-                        self.warn(f"spreadMethod={value!r} has no logo prop; the gradient pads")
+                        self.warn(
+                            f"spreadMethod={value!r} has no logo prop; the gradient pads"
+                        )
                 else:
                     self.warn(f"'{name}' on <{tag}> has no logo prop and was dropped")
 
@@ -971,7 +1062,10 @@ class _Converter:
                     if isinstance(child.tag, str) and _local(child.tag) == "stop"
                 ]
                 for link in chain
-                if any(isinstance(child.tag, str) and _local(child.tag) == "stop" for child in link)
+                if any(
+                    isinstance(child.tag, str) and _local(child.tag) == "stop"
+                    for child in link
+                )
             ),
             [],
         )
@@ -999,7 +1093,11 @@ class _Converter:
     # ----------------------------------------------------------------- props
 
     def apply(
-        self, node: _Node, tag: str, declared: Mapping[str, str], inherited: Mapping[str, str]
+        self,
+        node: _Node,
+        tag: str,
+        declared: Mapping[str, str],
+        inherited: Mapping[str, str],
     ) -> dict[str, str]:
         """Set ``declared`` on ``node`` as its component's props; what its children inherit.
 
@@ -1007,7 +1105,10 @@ class _Converter:
         """
         allowed = self.props[node.component]
         inner = dict(inherited)
-        if declared.get("color", "currentColor").lower() not in ("currentcolor", "inherit"):
+        if declared.get("color", "currentColor").lower() not in (
+            "currentcolor",
+            "inherit",
+        ):
             inner["color"] = declared["color"]
         for name, value in declared.items():
             key = _camel(name)
@@ -1015,7 +1116,9 @@ class _Converter:
                 self.set_prop(node, tag, key, value, inner.get("color"))
             elif name in TEXT_ATTRIBUTES:
                 inner[name] = value
-            elif name in QUIET_ATTRIBUTES or name.startswith(("data-", "aria-", "xml:", "xmlns")):
+            elif name in QUIET_ATTRIBUTES or name.startswith(
+                ("data-", "aria-", "xml:", "xmlns")
+            ):
                 continue
             elif name.startswith("on"):
                 self.warn(f"the event handler '{name}' was dropped")
@@ -1076,7 +1179,9 @@ class _Converter:
         if transform:
             self.set_prop(node, "g", "transform", transform)
 
-    def set_paint(self, node: _Node, key: str, value: str, current: str | None = None) -> None:
+    def set_paint(
+        self, node: _Node, key: str, value: str, current: str | None = None
+    ) -> None:
         match = URL.fullmatch(value)
         if match is not None:
             kinds = ("linearGradient", "radialGradient")
@@ -1100,7 +1205,9 @@ class _Converter:
             return
         colour = _colour(value)
         if colour is None:
-            self.warn(f"{key}={value!r} is not a colour a logo can paint and was dropped")
+            self.warn(
+                f"{key}={value!r} is not a colour a logo can paint and was dropped"
+            )
             return
         token = self.palette.get(_hex(colour))
         if token is None and not self.action:
@@ -1112,7 +1219,9 @@ class _Converter:
         if colour[3] < 1 and token != "none":
             opacity = PAINTS[key]
             previous = _plain_number(node.props.get(opacity))
-            node.props[opacity] = _number(colour[3] * (1.0 if previous is None else previous), 4)
+            node.props[opacity] = _number(
+                colour[3] * (1.0 if previous is None else previous), 4
+            )
 
     def length(self, value: str) -> str:
         match = re.fullmatch(rf"({NUMBER.pattern})\s*([a-zA-Z%]*)", value)
@@ -1137,7 +1246,11 @@ class _Converter:
 
     def title_of(self, element: ET.Element) -> str:
         for child in element:
-            if isinstance(child.tag, str) and _is_svg(child) and _local(child.tag) == "title":
+            if (
+                isinstance(child.tag, str)
+                and _is_svg(child)
+                and _local(child.tag) == "title"
+            ):
                 return _collapse("".join(child.itertext()))
         return ""
 
@@ -1201,7 +1314,9 @@ def _merge(group: _Node, child: _Node, allowed: frozenset[str]) -> bool:
     """Move ``group``'s props onto its only ``child``, if the child draws the same for it."""
     if not set(group.props) <= allowed:
         return False
-    if "clipPath" in group.props and ("clipPath" in child.props or "transform" in child.props):
+    if "clipPath" in group.props and (
+        "clipPath" in child.props or "transform" in child.props
+    ):
         return False  # a clip path is in the user space of the element it is set on
     if "title" in group.props and "title" in child.props:
         return False

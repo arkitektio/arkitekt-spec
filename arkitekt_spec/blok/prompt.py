@@ -18,7 +18,12 @@ from collections.abc import Iterable, Mapping, Sequence
 
 from arkitekt_spec.blok.bsx import QUERY_SUGAR
 from arkitekt_spec.blok.catalogs import BlokView, default_view
-from arkitekt_spec.blok.vocabulary import JSON, Function, load_vocabulary, vocabulary_text
+from arkitekt_spec.blok.vocabulary import (
+    JSON,
+    Function,
+    load_vocabulary,
+    vocabulary_text,
+)
 from arkitekt_spec.declare.catalogs import CALLBACK_KIND, ComponentSpec
 
 UNIVERSAL_PROPS = ("className",)
@@ -114,11 +119,24 @@ def syntax(kind: str = "agent") -> str:
     vocabulary = load_vocabulary()
     kinds = ", ".join(vocabulary.kinds)
     contexts = ", ".join(vocabulary.blok.contexts)
-    colours = " ".join(f"bg-{role}" for role in vocabulary.theme.status_roles[:3]) or "bg-muted"
-    text = SYNTAX.format(vocab=vocabulary.vocab, kinds=kinds, contexts=contexts, colours=f"bg-muted, text-muted-foreground, {colours}")
+    colours = (
+        " ".join(f"bg-{role}" for role in vocabulary.theme.status_roles[:3])
+        or "bg-muted"
+    )
+    text = SYNTAX.format(
+        vocab=vocabulary.vocab,
+        kinds=kinds,
+        contexts=contexts,
+        colours=f"bg-muted, text-muted-foreground, {colours}",
+    )
     if kind != "custom":
         return text
-    return text.replace("deps.", "agents.").replace("agents.unbound", "deps.unbound").replace('like="self.analyze"', 'like="agents.<key>.analyze"').replace("self.analyze()", "agents.<key>.analyze()")
+    return (
+        text.replace("deps.", "agents.")
+        .replace("agents.unbound", "deps.unbound")
+        .replace('like="self.analyze"', 'like="agents.<key>.analyze"')
+        .replace("self.analyze()", "agents.<key>.analyze()")
+    )
 
 
 def roots_text(kind: str) -> str:
@@ -129,8 +147,14 @@ def roots_text(kind: str) -> str:
     assert isinstance(roots, dict)
     data, scoped = roots.get("data"), roots.get("scoped")
     assert isinstance(data, dict) and isinstance(scoped, dict)
-    lines = [f"Roots a {kind} blok reads ({vocabulary.kinds[kind].description.rstrip('.')}):"]
-    lines += [f"- {root}: {description}" for root, description in data.items() if root in allowed]
+    lines = [
+        f"Roots a {kind} blok reads ({vocabulary.kinds[kind].description.rstrip('.')}):"
+    ]
+    lines += [
+        f"- {root}: {description}"
+        for root, description in data.items()
+        if root in allowed
+    ]
     lines += [f"- {root}: {description}" for root, description in scoped.items()]
     return "\n".join(lines)
 
@@ -142,10 +166,17 @@ def _record_fields(fields: JSON, prefix: str = "") -> list[str]:
         assert isinstance(field, dict)
         key, kind = field["key"], field["kind"]
         choices = field.get("choices")
-        shape = "|".join(str(choice) for choice in choices) if isinstance(choices, list) else str(kind)
+        shape = (
+            "|".join(str(choice) for choice in choices)
+            if isinstance(choices, list)
+            else str(kind)
+        )
         nullable = " or null" if field.get("nullable") else ""
         description = field.get("description")
-        out.append(f"{prefix}{key}: {shape}{nullable}" + (f" ({description})" if description else ""))
+        out.append(
+            f"{prefix}{key}: {shape}{nullable}"
+            + (f" ({description})" if description else "")
+        )
         if field.get("children"):
             out += _record_fields(field["children"], prefix=f"{prefix}{key}.")
     return out
@@ -162,23 +193,45 @@ def records_text(kind: str | None = None) -> str:
     for name, record in records.items():
         assert isinstance(record, dict)
         # The task record is also every `into` record's, so it is always told.
-        if roots is not None and name != "task" and name in vocabulary.data_roots and name not in roots:
+        if (
+            roots is not None
+            and name != "task"
+            and name in vocabulary.data_roots
+            and name not in roots
+        ):
             continue
         description = record.get("description")
-        blocks.append(f"The {name} record" + (f" ({description})" if description else "") + ": " + "; ".join(_record_fields(record["fields"])))
+        blocks.append(
+            f"The {name} record"
+            + (f" ({description})" if description else "")
+            + ": "
+            + "; ".join(_record_fields(record["fields"]))
+        )
     return "\n".join(blocks)
 
 
-def _prop(prop_key: str, kind: str, values: Sequence[str] | None, event: Sequence[str] | None, required: bool) -> str:
+def _prop(
+    prop_key: str,
+    kind: str,
+    values: Sequence[str] | None,
+    event: Sequence[str] | None,
+    required: bool,
+) -> str:
     mark = "!" if required else ""
     if values:
         return f"{prop_key}{mark}: " + "|".join(f'"{value}"' for value in values)
     if kind == CALLBACK_KIND and event:
-        return f"{prop_key}{mark}: CALLBACK(" + ", ".join(f"event.{key}" for key in event) + ")"
+        return (
+            f"{prop_key}{mark}: CALLBACK("
+            + ", ".join(f"event.{key}" for key in event)
+            + ")"
+        )
     return f"{prop_key}{mark}: {kind}"
 
 
-def component_signature(component: ComponentSpec, *, skip: Iterable[str] = UNIVERSAL_PROPS) -> str:
+def component_signature(
+    component: ComponentSpec, *, skip: Iterable[str] = UNIVERSAL_PROPS
+) -> str:
     """One component as a line: ``Button[label](variant: "default"|"outline", onClick: CALLBACK) · children — A clickable button.``
 
     ``[prop]`` is the prop text children fill, ``!`` marks a required prop, quoted values are the
@@ -211,21 +264,33 @@ def component_signature(component: ComponentSpec, *, skip: Iterable[str] = UNIVE
     return f"{line} — {description}" if description else line
 
 
-def drawn_in(view: BlokView, context: str, kind: str | None = None) -> list[ComponentSpec]:
+def drawn_in(
+    view: BlokView, context: str, kind: str | None = None
+) -> list[ComponentSpec]:
     """The components a blok drawn in ``context`` may place at its top level, in catalog order;
     of a ``kind``, without those that belong to other kinds (``<args>`` outside an assign blok)."""
     return [
         component
         for component in view.components.values()
-        if (component.inherits_context or component.context == context) and (kind is None or not component.kinds or kind in component.kinds)
+        if (component.inherits_context or component.context == context)
+        and (kind is None or not component.kinds or kind in component.kinds)
     ]
 
 
-def components_text(view: BlokView, context: str = "PANEL", names: Iterable[str] | None = None, kind: str | None = None) -> str:
+def components_text(
+    view: BlokView,
+    context: str = "PANEL",
+    names: Iterable[str] | None = None,
+    kind: str | None = None,
+) -> str:
     """The signature lines of the components ``names`` (default: every one drawn in ``context``),
     and of those their children are drawn in when they bridge contexts (``<Scene>``)."""
     if names is not None:
-        chosen = [component for name in names if (component := view.component(name)) is not None]
+        chosen = [
+            component
+            for name in names
+            if (component := view.component(name)) is not None
+        ]
     else:
         chosen = drawn_in(view, context, kind)
     lines = [
@@ -240,17 +305,26 @@ def components_text(view: BlokView, context: str = "PANEL", names: Iterable[str]
 
 def function_signature(function: Function) -> str:
     """``fmt.number(value: FLOAT, digits?: INT) -> STRING — …``: ``?`` marks an optional parameter."""
-    params = ", ".join(f"{param.key}{'' if param.required else '?'}: {param.kind}" for param in function.params)
+    params = ", ".join(
+        f"{param.key}{'' if param.required else '?'}: {param.kind}"
+        for param in function.params
+    )
     line = f"{function.name}({params}) -> {function.returns}"
     return f"{line} — {function.description}" if function.description else line
 
 
 def effect_signature(function: Function) -> str:
     """An effect as an author writes it: a query's are its verbs (``queries.<name>.refetch()``)."""
-    verb = next((verb for verb, name in QUERY_SUGAR.items() if name == function.name), None)
+    verb = next(
+        (verb for verb, name in QUERY_SUGAR.items() if name == function.name), None
+    )
     if verb is None:
         return function_signature(function)
-    params = ", ".join(f"{param.key}: ..." for param in function.params if param.key not in ("query", "variables"))
+    params = ", ".join(
+        f"{param.key}: ..."
+        for param in function.params
+        if param.key not in ("query", "variables")
+    )
     variables = any(param.key == "variables" for param in function.params)
     line = f"queries.<name>.{verb}({params or ('<variable>: value, ...' if variables else '')})"
     return f"{line} — {function.description}" if function.description else line
@@ -265,7 +339,15 @@ def functions_text(view: BlokView, kind: str | None = None) -> str:
         function
         for function in view.functions.values()
         # An effect named after a root (task.cancel, assign.start) only where the blok reads it.
-        if function.effect and (roots is None or function.name.split(".", 1)[0] not in load_vocabulary().data_roots or (kind is not None and load_vocabulary().kinds[kind].reads(function.name.split(".", 1)[0])))
+        if function.effect
+        and (
+            roots is None
+            or function.name.split(".", 1)[0] not in load_vocabulary().data_roots
+            or (
+                kind is not None
+                and load_vocabulary().kinds[kind].reads(function.name.split(".", 1)[0])
+            )
+        )
     ]
     lines = ["Functions (call with named arguments, `?` optional):"]
     lines += [f"- {function_signature(function)}" for function in pure]
@@ -294,7 +376,13 @@ def blok_prompt(
         examples: Sources shown as they are; the caller checks they validate.
     """
     resolved = view or default_view()
-    sections = [syntax(kind), roots_text(kind), records_text(kind), components_text(resolved, context, components, kind), functions_text(resolved, kind)]
+    sections = [
+        syntax(kind),
+        roots_text(kind),
+        records_text(kind),
+        components_text(resolved, context, components, kind),
+        functions_text(resolved, kind),
+    ]
     for example in examples:
         sections.append(f"An example:\n```xml\n{example}\n```")
     return "\n\n".join(sections)

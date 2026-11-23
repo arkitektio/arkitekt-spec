@@ -23,7 +23,6 @@ if TYPE_CHECKING:
     from arkitekt_spec.declare.structures.registry import StructureRegistry
 
 
-
 class WithVariables:
     """Base for wrapped hooks: resolves the function's injectable parameters.
 
@@ -47,9 +46,15 @@ class WithVariables:
         self, func: AnyFunction, structure_registry: "StructureRegistry | None" = None
     ) -> None:
         self.func = func
-        self.state_variables, self.state_returns = prepare_state_variables(func, structure_registry)
-        self.app_context_variables, self.app_context_returns = prepare_appcontext(func, structure_registry)
-        self.context_variables, self.context_returns = prepare_context_variables(func, structure_registry)
+        self.state_variables, self.state_returns = prepare_state_variables(
+            func, structure_registry
+        )
+        self.app_context_variables, self.app_context_returns = prepare_appcontext(
+            func, structure_registry
+        )
+        self.context_variables, self.context_returns = prepare_context_variables(
+            func, structure_registry
+        )
         # The registry says which annotations are a service's client; a hook
         # registered without one can take no client.
         self.injected_variables = prepare_injected_variables(func, structure_registry)

@@ -126,7 +126,9 @@ class _Element:
     name: str
     offset: int
     attributes: list[_Attribute] = field(default_factory=list["_Attribute"])
-    children: list["_Element | _Text | _Container"] = field(default_factory=list["_Element | _Text | _Container"])
+    children: list["_Element | _Text | _Container"] = field(
+        default_factory=list["_Element | _Text | _Container"]
+    )
 
 
 class _Markup:
@@ -144,10 +146,20 @@ class _Markup:
     def declares(self, element: _Element) -> None:
         """A `<dependencies key="cells" />` is read through from here on (`cells.microscope`)."""
         if element.name == BLOK:
-            self.custom = any(attribute.name == "kind" and attribute.value == "custom" for attribute in element.attributes)
+            self.custom = any(
+                attribute.name == "kind" and attribute.value == "custom"
+                for attribute in element.attributes
+            )
         if element.name != DEPENDENCIES:
             return
-        key = next((attribute.value for attribute in element.attributes if attribute.name == "key"), None)
+        key = next(
+            (
+                attribute.value
+                for attribute in element.attributes
+                if attribute.name == "key"
+            ),
+            None,
+        )
         if isinstance(key, str) and _LOCAL.fullmatch(key):
             self.references.add(key)
 
@@ -188,7 +200,9 @@ class _Markup:
         if self.index < len(self.source):
             if self.at("<"):
                 name = _NAME.match(self.source, self.index + 1)
-                raise self.fail("bsx.multiple_roots", component=name.group(0) if name else "?")
+                raise self.fail(
+                    "bsx.multiple_roots", component=name.group(0) if name else "?"
+                )
             raise self.fail("bsx.syntax", detail="text after the root element")
         return root
 
@@ -205,7 +219,9 @@ class _Markup:
         element = _Element(name=self.name(_NAME, "an element name"), offset=offset)
         seen: set[str] = set()
         while True:
-            had_space = self.index < len(self.source) and self.source[self.index] in " \t\r\n"
+            had_space = (
+                self.index < len(self.source) and self.source[self.index] in " \t\r\n"
+            )
             self.skip_space()
             if self.index >= len(self.source):
                 raise self.fail("bsx.unclosed", offset, component=element.name)
@@ -219,10 +235,17 @@ class _Markup:
                 self.content(element)
                 return element
             if not had_space:
-                raise self.fail("bsx.syntax", detail="expected a space before the attribute")
+                raise self.fail(
+                    "bsx.syntax", detail="expected a space before the attribute"
+                )
             attribute = self.attribute()
             if attribute.name in seen:
-                raise self.fail("bsx.duplicate_attribute", attribute.offset, component=element.name, key=attribute.name)
+                raise self.fail(
+                    "bsx.duplicate_attribute",
+                    attribute.offset,
+                    component=element.name,
+                    key=attribute.name,
+                )
             seen.add(attribute.name)
             element.attributes.append(attribute)
 
@@ -240,7 +263,9 @@ class _Markup:
             quote = self.source[self.index]
             end = self.source.find(quote, self.index + 1)
             if end < 0:
-                raise self.fail("bsx.syntax", detail=f"the value of {name} is never closed")
+                raise self.fail(
+                    "bsx.syntax", detail=f"the value of {name} is never closed"
+                )
             raw = self.source[self.index + 1 : end]
             value = self.decode(raw, self.index + 1)
             self.index = end + 1
@@ -250,10 +275,20 @@ class _Markup:
             inner = self.source[start:end]
             self.index = end + 1
             if not inner.strip():
-                raise self.fail("expr.syntax", start, detail=f"the value of {name} is empty")
-            expression = parse_attribute(inner, base=start, locate=self.locate, references=frozenset(self.references), custom=self.custom)
+                raise self.fail(
+                    "expr.syntax", start, detail=f"the value of {name} is empty"
+                )
+            expression = parse_attribute(
+                inner,
+                base=start,
+                locate=self.locate,
+                references=frozenset(self.references),
+                custom=self.custom,
+            )
             return _Attribute(name=name, value=expression, offset=offset)
-        raise self.fail("bsx.syntax", detail=f'{name}= takes "a string" or {{an expression}}')
+        raise self.fail(
+            "bsx.syntax", detail=f'{name}= takes "a string" or {{an expression}}'
+        )
 
     def braces(self) -> tuple[int, int]:
         """The span inside the braces opening at the cursor: strings and nested braces skipped."""
@@ -280,7 +315,9 @@ class _Markup:
                 if depth == 0:
                     return start, index
             index += 1
-        raise self.fail("bsx.syntax", self.index, detail="an expression's braces are never closed")
+        raise self.fail(
+            "bsx.syntax", self.index, detail="an expression's braces are never closed"
+        )
 
     def content(self, element: _Element) -> None:
         while True:
@@ -292,10 +329,14 @@ class _Markup:
                 found = self.name(_NAME, "an element name")
                 self.skip_space()
                 if not self.at(">"):
-                    raise self.fail("bsx.syntax", detail=f"expected '>' to close </{found}")
+                    raise self.fail(
+                        "bsx.syntax", detail=f"expected '>' to close </{found}"
+                    )
                 self.index += 1
                 if found != element.name:
-                    raise self.fail("bsx.mismatched_tag", offset, found=found, expected=element.name)
+                    raise self.fail(
+                        "bsx.mismatched_tag", offset, found=found, expected=element.name
+                    )
                 return
             if self.skip_comment():
                 continue
@@ -308,12 +349,27 @@ class _Markup:
                 inner = self.source[start:end]
                 self.index = end + 1
                 stripped = inner.strip()
-                if not stripped or (stripped.startswith("/*") and stripped.endswith("*/")):
+                if not stripped or (
+                    stripped.startswith("/*") and stripped.endswith("*/")
+                ):
                     continue
-                element.children.append(_Container(expression=parse_expression(inner, base=start, locate=self.locate, references=frozenset(self.references), custom=self.custom), offset=offset))
+                element.children.append(
+                    _Container(
+                        expression=parse_expression(
+                            inner,
+                            base=start,
+                            locate=self.locate,
+                            references=frozenset(self.references),
+                            custom=self.custom,
+                        ),
+                        offset=offset,
+                    )
+                )
                 continue
             if self.at("}"):
-                raise self.fail("bsx.syntax", detail="unexpected '}' in text; write {'}'}")
+                raise self.fail(
+                    "bsx.syntax", detail="unexpected '}' in text; write {'}'}"
+                )
             offset = self.index
             end = len(self.source)
             for stop in ("<", "{", "}"):
@@ -333,7 +389,11 @@ class _Markup:
                 return chr(int(entity[1:]))
             if entity in _ENTITIES:
                 return _ENTITIES[entity]
-            raise self.fail("bsx.syntax", offset + match.start(), detail=f"unknown entity &{entity};")
+            raise self.fail(
+                "bsx.syntax",
+                offset + match.start(),
+                detail=f"unknown entity &{entity};",
+            )
 
         return _ENTITY.sub(replace, raw)
 
@@ -379,12 +439,16 @@ class _Lowering:
 
     # -- nodes
 
-    def node(self, element: _Element, node_id: str, parent: str | None) -> ComponentNodeInput:
+    def node(
+        self, element: _Element, node_id: str, parent: str | None
+    ) -> ComponentNodeInput:
         if element.name == ELSE and parent != IF:
             raise self.fail("bsx.else_outside_if", element.offset)
         explicit = next((a for a in element.attributes if a.name == "id"), None)
         if explicit is not None:
-            if not isinstance(explicit.value, str) or not self.vocabulary.is_explicit_id(explicit.value):
+            if not isinstance(
+                explicit.value, str
+            ) or not self.vocabulary.is_explicit_id(explicit.value):
                 written = explicit.value if isinstance(explicit.value, str) else "{...}"
                 raise self.fail("bsx.id", explicit.offset, id=written)
             if explicit.value in self.ids:
@@ -392,7 +456,11 @@ class _Lowering:
             self.ids.add(explicit.value)
             node_id = explicit.value
 
-        props = [self.prop(element.name, attribute) for attribute in element.attributes if attribute.name != "id"]
+        props = [
+            self.prop(element.name, attribute)
+            for attribute in element.attributes
+            if attribute.name != "id"
+        ]
         if element.name == FOREACH:
             self.check_foreach(element)
 
@@ -422,9 +490,15 @@ class _Lowering:
                     raise self.fail("bsx.else_order", child.offset)
             index = counts.get(child.name, 0)
             counts[child.name] = index + 1
-            children.append(self.node(child, f"{node_id}/{child.name}[{index}]", element.name))
+            children.append(
+                self.node(child, f"{node_id}/{child.name}[{index}]", element.name)
+            )
         if element.name == IF:
-            elses = [child for child in element.children if isinstance(child, _Element) and child.name == ELSE]
+            elses = [
+                child
+                for child in element.children
+                if isinstance(child, _Element) and child.name == ELSE
+            ]
             for other in elses[:-1]:
                 if not any(attribute.name == "when" for attribute in other.attributes):
                     raise self.fail("bsx.else_order", other.offset)
@@ -450,13 +524,27 @@ class _Lowering:
             raise self.fail("bsx.foreach", element.offset, missing=", ".join(missing))
         let = attributes["let"]
         if not isinstance(let.value, str) or not _LOCAL.fullmatch(let.value):
-            raise self.fail("bsx.let", let.offset, let=let.value if isinstance(let.value, str) else "{...}")
+            raise self.fail(
+                "bsx.let",
+                let.offset,
+                let=let.value if isinstance(let.value, str) else "{...}",
+            )
         index = attributes.get("index")
-        if index is not None and (not isinstance(index.value, str) or not _LOCAL.fullmatch(index.value)):
-            raise self.fail("bsx.index", index.offset, index=index.value if isinstance(index.value, str) else "{...}")
+        if index is not None and (
+            not isinstance(index.value, str) or not _LOCAL.fullmatch(index.value)
+        ):
+            raise self.fail(
+                "bsx.index",
+                index.offset,
+                index=index.value if isinstance(index.value, str) else "{...}",
+            )
         for name in ("items", "key"):
             if name in attributes and isinstance(attributes[name].value, (str, bool)):
-                raise self.fail("bsx.foreach", attributes[name].offset, missing=f"{name}={{...}}, an expression")
+                raise self.fail(
+                    "bsx.foreach",
+                    attributes[name].offset,
+                    missing=f"{name}={{...}}, an expression",
+                )
 
     def runs(self, element: _Element) -> list["list[Part] | _Element"]:
         """The children as text runs (parts between elements) and elements, in order."""
@@ -484,7 +572,9 @@ class _Lowering:
                     current.append(text)
             else:
                 expression = child.expression
-                if isinstance(expression, Literal) and isinstance(expression.value, str):
+                if isinstance(expression, Literal) and isinstance(
+                    expression.value, str
+                ):
                     current.append(expression.value)
                 else:
                     self.check_pure(expression, child.offset, text=True)
@@ -492,7 +582,9 @@ class _Lowering:
         flush()
         return runs
 
-    def text_prop(self, key: str, parts: Sequence[Part], offset: int) -> ComponentPropInput:
+    def text_prop(
+        self, key: str, parts: Sequence[Part], offset: int
+    ) -> ComponentPropInput:
         if len(parts) == 1:
             only = parts[0]
             if isinstance(only, str):
@@ -522,15 +614,29 @@ class _Lowering:
         if component == LOCAL and attribute.name == LOCAL_NAME:
             if not isinstance(value, str) or not _LOCAL.fullmatch(value):
                 written = value if isinstance(value, str) else "{...}"
-                raise self.fail("local.attribute", attribute.offset, name=written, key="name", problem="is not a name: write name=\"x\", a plain identifier")
-            return ComponentPropInput(key=attribute.name, static_value=value, declares_value=value)
+                raise self.fail(
+                    "local.attribute",
+                    attribute.offset,
+                    name=written,
+                    key="name",
+                    problem='is not a name: write name="x", a plain identifier',
+                )
+            return ComponentPropInput(
+                key=attribute.name, static_value=value, declares_value=value
+            )
         if isinstance(value, bool):
             return ComponentPropInput(key=attribute.name, static_value=value)
         if isinstance(value, str):
-            if attribute.name == LIKE and component in (LOCAL, DEPENDENCIES) and self.markup.custom:
+            if (
+                attribute.name == LIKE
+                and component in (LOCAL, DEPENDENCIES)
+                and self.markup.custom
+            ):
                 value = self.custom_like(value, attribute.offset)
             if attribute.name in ("let", "index") and component == FOREACH:
-                return ComponentPropInput(key=attribute.name, static_value=value, declares_value=value)
+                return ComponentPropInput(
+                    key=attribute.name, static_value=value, declares_value=value
+                )
             return ComponentPropInput(key=attribute.name, static_value=value)
         if attribute.name == "let" and component == FOREACH:
             raise self.fail("bsx.let", attribute.offset, let="{...}")
@@ -550,21 +656,28 @@ class _Lowering:
             call = self.agent_call(expression.call)
             if call is None:
                 raise self.fail("callback.into", expression.offset)
-            return ComponentPropInput(key=key, agent_call=call, declares_value=expression.name)
+            return ComponentPropInput(
+                key=key, agent_call=call, declares_value=expression.name
+            )
         if isinstance(expression, Literal):
             return ComponentPropInput(key=key, static_value=expression.value)
         if isinstance(expression, (ListExpr, ObjectExpr)):
             if key == CLASS_NAME:
                 return ComponentPropInput(
                     key=key,
-                    util_call=UtilCallInput(operation=CLASSES_FUNCTION, arguments=(self.argument("values", expression),)),
+                    util_call=UtilCallInput(
+                        operation=CLASSES_FUNCTION,
+                        arguments=(self.argument("values", expression),),
+                    ),
                 )
             literal = self.literal(expression)
             if literal is None:
                 raise self.fail("expr.dynamic_container", expression.offset)
             return ComponentPropInput(key=key, static_value=literal[0])
         if isinstance(expression, Path):
-            return ComponentPropInput(key=key, dynamic_value=DynamicValueInput(path=expression.dotted))
+            return ComponentPropInput(
+                key=key, dynamic_value=DynamicValueInput(path=expression.dotted)
+            )
         if isinstance(expression, Call):
             agent = self.agent_call(expression)
             if agent is not None:
@@ -572,7 +685,9 @@ class _Lowering:
             effect = self.pick_effect(expression) or self.query_effect(expression)
             if effect is not None:
                 return ComponentPropInput(key=key, util_call=effect)
-            return ComponentPropInput(key=key, util_call=self.util_call(expression, effect_allowed=True))
+            return ComponentPropInput(
+                key=key, util_call=self.util_call(expression, effect_allowed=True)
+            )
         return ComponentPropInput(key=key, util_call=self.operator(expression))
 
     def literal(self, expression: Expr) -> tuple[JSON] | None:
@@ -618,18 +733,33 @@ class _Lowering:
             if argument.name is None:
                 raise self.fail("callback.positional", argument.offset, call=call.name)
             if argument.name in seen:
-                raise self.fail("expr.duplicate_key", argument.offset, key=argument.name)
+                raise self.fail(
+                    "expr.duplicate_key", argument.offset, key=argument.name
+                )
             seen.add(argument.name)
             arguments.append(self.argument(argument.name, argument.value))
         if call.given is None:
             # Left unset, so a call without `with` is stored as it always was.
-            return AgentProbeInput(dependency=dependency, operation=operation, arguments=tuple(arguments) if arguments else None)
-        return AgentProbeInput(dependency=dependency, operation=operation, arguments=tuple(arguments) if arguments else None, given=call.given)
+            return AgentProbeInput(
+                dependency=dependency,
+                operation=operation,
+                arguments=tuple(arguments) if arguments else None,
+            )
+        return AgentProbeInput(
+            dependency=dependency,
+            operation=operation,
+            arguments=tuple(arguments) if arguments else None,
+            given=call.given,
+        )
 
     def pick_effect(self, call: Call) -> UtilCallInput | None:
         """``cells.pick(microscope: id, ...)`` as its effect (``deps.pick``), or None."""
         callee = call.callee
-        if len(callee) != 2 or callee[1] != PICK_VERB or callee[0] not in self.markup.references:
+        if (
+            len(callee) != 2
+            or callee[1] != PICK_VERB
+            or callee[0] not in self.markup.references
+        ):
             return None
         picks: list[ActionArgumentInput] = []
         seen: set[str] = set()
@@ -637,14 +767,24 @@ class _Lowering:
             if argument.name is None:
                 raise self.fail("callback.positional", argument.offset, call=call.name)
             if argument.name in seen:
-                raise self.fail("expr.duplicate_key", argument.offset, key=argument.name)
+                raise self.fail(
+                    "expr.duplicate_key", argument.offset, key=argument.name
+                )
             seen.add(argument.name)
             picks.append(self.argument(argument.name, argument.value))
         if not picks:
-            raise self.fail("expr.arguments", call.offset, function=call.name, detail="pick names the dependency to bind: pick(<dependency>: <agent id>)")
+            raise self.fail(
+                "expr.arguments",
+                call.offset,
+                function=call.name,
+                detail="pick names the dependency to bind: pick(<dependency>: <agent id>)",
+            )
         return UtilCallInput(
             operation=PICK_FUNCTION,
-            arguments=(ActionArgumentInput(key="key", value_literal=callee[0]), ActionArgumentInput(key="picks", value_dict=tuple(picks))),
+            arguments=(
+                ActionArgumentInput(key="key", value_literal=callee[0]),
+                ActionArgumentInput(key="picks", value_dict=tuple(picks)),
+            ),
         )
 
     def query_effect(self, call: Call) -> UtilCallInput | None:
@@ -659,7 +799,12 @@ class _Lowering:
         named = ActionArgumentInput(key="query", value_literal=callee[1])
         if callee[2] == "refetch":
             if call.arguments:
-                raise self.fail("expr.arguments", call.offset, function=call.name, detail="refetch takes no arguments")
+                raise self.fail(
+                    "expr.arguments",
+                    call.offset,
+                    function=call.name,
+                    detail="refetch takes no arguments",
+                )
             return UtilCallInput(operation=REFETCH_FUNCTION, arguments=(named,))
         variables: list[ActionArgumentInput] = []
         seen: set[str] = set()
@@ -667,14 +812,19 @@ class _Lowering:
             if argument.name is None:
                 raise self.fail("callback.positional", argument.offset, call=call.name)
             if argument.name in seen:
-                raise self.fail("expr.duplicate_key", argument.offset, key=argument.name)
+                raise self.fail(
+                    "expr.duplicate_key", argument.offset, key=argument.name
+                )
             seen.add(argument.name)
             variables.append(self.argument(argument.name, argument.value))
         if not variables:
             return UtilCallInput(operation=FETCH_MORE_FUNCTION, arguments=(named,))
         return UtilCallInput(
             operation=FETCH_MORE_FUNCTION,
-            arguments=(named, ActionArgumentInput(key="variables", value_dict=tuple(variables))),
+            arguments=(
+                named,
+                ActionArgumentInput(key="variables", value_dict=tuple(variables)),
+            ),
         )
 
     def util_call(self, call: Call, *, effect_allowed: bool) -> UtilCallInput:
@@ -689,53 +839,102 @@ class _Lowering:
             raise self.fail("callback.nested", call.offset, what=name)
         positional = [argument for argument in call.arguments if argument.name is None]
         named = [argument for argument in call.arguments if argument.name is not None]
-        if positional and named and call.arguments.index(named[0]) < call.arguments.index(positional[-1]):
-            raise self.fail("expr.arguments", call.offset, function=name, detail="a positional argument follows a named one")
+        if (
+            positional
+            and named
+            and call.arguments.index(named[0]) < call.arguments.index(positional[-1])
+        ):
+            raise self.fail(
+                "expr.arguments",
+                call.offset,
+                function=name,
+                detail="a positional argument follows a named one",
+            )
         if function is None:
-            arguments = [self.argument(str(index), argument.value) for index, argument in enumerate(positional)]
-            arguments += [self.argument(argument.name, argument.value) for argument in named if argument.name is not None]
-            return UtilCallInput(operation=name, arguments=tuple(arguments) if arguments else None)
+            arguments = [
+                self.argument(str(index), argument.value)
+                for index, argument in enumerate(positional)
+            ]
+            arguments += [
+                self.argument(argument.name, argument.value)
+                for argument in named
+                if argument.name is not None
+            ]
+            return UtilCallInput(
+                operation=name, arguments=tuple(arguments) if arguments else None
+            )
         keys = function.keys
         resolved: dict[str, ActionArgumentInput] = {}
         if len(keys) == 1 and keys[0] == "values" and len(positional) > 1:
             resolved["values"] = ActionArgumentInput(
-                key="values", value_list=tuple(self.argument(None, argument.value) for argument in positional)
+                key="values",
+                value_list=tuple(
+                    self.argument(None, argument.value) for argument in positional
+                ),
             )
         else:
             if len(positional) > len(keys):
                 raise self.fail(
-                    "expr.arguments", call.offset, function=name, detail=f"takes at most {len(keys)} arguments ({', '.join(keys)})"
+                    "expr.arguments",
+                    call.offset,
+                    function=name,
+                    detail=f"takes at most {len(keys)} arguments ({', '.join(keys)})",
                 )
             for key, argument in zip(keys, positional, strict=False):
                 resolved[key] = self.argument(key, argument.value)
         for argument in named:
             assert argument.name is not None
             if argument.name not in keys:
-                raise self.fail("expr.arguments", argument.offset, function=name, detail=f"has no argument {argument.name!r} ({', '.join(keys)})")
+                raise self.fail(
+                    "expr.arguments",
+                    argument.offset,
+                    function=name,
+                    detail=f"has no argument {argument.name!r} ({', '.join(keys)})",
+                )
             if argument.name in resolved:
-                raise self.fail("expr.arguments", argument.offset, function=name, detail=f"{argument.name!r} is given twice")
+                raise self.fail(
+                    "expr.arguments",
+                    argument.offset,
+                    function=name,
+                    detail=f"{argument.name!r} is given twice",
+                )
             resolved[argument.name] = self.argument(argument.name, argument.value)
         missing = [key for key in function.required_keys if key not in resolved]
         if missing:
-            raise self.fail("expr.arguments", call.offset, function=name, detail=f"needs {', '.join(missing)}")
+            raise self.fail(
+                "expr.arguments",
+                call.offset,
+                function=name,
+                detail=f"needs {', '.join(missing)}",
+            )
         ordered = tuple(resolved[key] for key in keys if key in resolved)
         return UtilCallInput(operation=name, arguments=ordered if ordered else None)
 
     def operator(self, expression: Not | Compare | Logical | Ternary) -> UtilCallInput:
         operators = self.vocabulary.operators
         if isinstance(expression, Not):
-            return UtilCallInput(operation=operators["!"], arguments=(self.argument("a", expression.operand),))
+            return UtilCallInput(
+                operation=operators["!"],
+                arguments=(self.argument("a", expression.operand),),
+            )
         if isinstance(expression, Compare):
             return UtilCallInput(
                 operation=operators[expression.operator],
-                arguments=(self.argument("a", expression.left), self.argument("b", expression.right)),
+                arguments=(
+                    self.argument("a", expression.left),
+                    self.argument("b", expression.right),
+                ),
             )
         if isinstance(expression, Logical):
             return UtilCallInput(
                 operation=operators[expression.operator],
                 arguments=(
                     ActionArgumentInput(
-                        key="values", value_list=tuple(self.argument(None, operand) for operand in expression.operands)
+                        key="values",
+                        value_list=tuple(
+                            self.argument(None, operand)
+                            for operand in expression.operands
+                        ),
                     ),
                 ),
             )
@@ -757,30 +956,50 @@ class _Lowering:
         if isinstance(expression, Path):
             return ActionArgumentInput(key=key, value_path=expression.dotted)
         if isinstance(expression, ListExpr):
-            return ActionArgumentInput(key=key, value_list=tuple(self.argument(None, item) for item in expression.items))
+            return ActionArgumentInput(
+                key=key,
+                value_list=tuple(
+                    self.argument(None, item) for item in expression.items
+                ),
+            )
         if isinstance(expression, ObjectExpr):
-            return ActionArgumentInput(key=key, value_dict=tuple(self.argument(name, item) for name, item in expression.entries))
+            return ActionArgumentInput(
+                key=key,
+                value_dict=tuple(
+                    self.argument(name, item) for name, item in expression.entries
+                ),
+            )
         if isinstance(expression, Into):
             raise self.fail("callback.into", expression.offset)
         if isinstance(expression, Call):
             self.check_pure(expression, expression.offset, text=False)
-            return ActionArgumentInput(key=key, util_call=self.util_call(expression, effect_allowed=False))
+            return ActionArgumentInput(
+                key=key, util_call=self.util_call(expression, effect_allowed=False)
+            )
         return ActionArgumentInput(key=key, util_call=self.operator(expression))
 
     def check_pure(self, expression: Expr, offset: int, *, text: bool) -> None:
         """Refuse a task call or an effect (a query's refetch or fetch_more too) where only a value may be."""
         if isinstance(expression, Call):
             callee = expression.callee
-            sugar = len(callee) == 3 and callee[0] in ("queries", "subscriptions") and callee[2] in QUERY_SUGAR
+            sugar = (
+                len(callee) == 3
+                and callee[0] in ("queries", "subscriptions")
+                and callee[2] in QUERY_SUGAR
+            )
             if self.agent_call_name(expression) or sugar:
                 if text:
                     raise self.fail("bsx.text_callback", offset)
-                raise self.fail("callback.nested", expression.offset, what=f"{expression.name}(...)")
+                raise self.fail(
+                    "callback.nested", expression.offset, what=f"{expression.name}(...)"
+                )
             function = self.view.functions.get(expression.name)
             if function is not None and function.effect:
                 if text:
                     raise self.fail("bsx.text_callback", offset)
-                raise self.fail("callback.nested", expression.offset, what=expression.name)
+                raise self.fail(
+                    "callback.nested", expression.offset, what=expression.name
+                )
             for argument in expression.arguments:
                 self.check_pure(argument.value, argument.offset, text=text)
             return
@@ -790,7 +1009,9 @@ class _Lowering:
     @staticmethod
     def agent_call_name(call: Call) -> bool:
         callee = call.callee
-        return (callee[0] == "self" and len(callee) == 2) or (callee[0] == "deps" and len(callee) == 3)
+        return (callee[0] == "self" and len(callee) == 2) or (
+            callee[0] == "deps" and len(callee) == 3
+        )
 
 
 def _children(expression: Expr) -> tuple[Expr, ...]:
@@ -827,7 +1048,9 @@ def parse_bsx(source: str, *, view: BlokView | None = None) -> ComponentNodeInpu
     return parse_bsx_with_spans(source, view=view)[0]
 
 
-def parse_bsx_with_spans(source: str, *, view: BlokView | None = None) -> tuple[ComponentNodeInput, dict[str, tuple[int, int]]]:
+def parse_bsx_with_spans(
+    source: str, *, view: BlokView | None = None
+) -> tuple[ComponentNodeInput, dict[str, tuple[int, int]]]:
     """:func:`parse_bsx`, and per node id the line and column (1-based) its element starts at.
 
     The stored tree keeps no positions; this map is how a checker that parsed the source points
@@ -837,7 +1060,9 @@ def parse_bsx_with_spans(source: str, *, view: BlokView | None = None) -> tuple[
         BlokError: As :func:`parse_bsx`.
     """
     if len(source.encode("utf-8")) > MAX_SOURCE_BYTES:
-        raise BlokError("bsx.syntax", detail=f"a blok's source is at most {MAX_SOURCE_BYTES} bytes")
+        raise BlokError(
+            "bsx.syntax", detail=f"a blok's source is at most {MAX_SOURCE_BYTES} bytes"
+        )
     locate = Locator(source)
     markup = _Markup(source, locate)
     root = markup.document()
@@ -850,8 +1075,19 @@ CATALOG_ATTRIBUTE = "catalog"
 
 
 def _root_catalog(root: _Element) -> str | None:
-    attribute = next((attribute for attribute in root.attributes if attribute.name == CATALOG_ATTRIBUTE), None)
-    return attribute.value if attribute is not None and isinstance(attribute.value, str) else None
+    attribute = next(
+        (
+            attribute
+            for attribute in root.attributes
+            if attribute.name == CATALOG_ATTRIBUTE
+        ),
+        None,
+    )
+    return (
+        attribute.value
+        if attribute is not None and isinstance(attribute.value, str)
+        else None
+    )
 
 
 def _catalog_view(catalog: str | None) -> BlokView:
@@ -875,7 +1111,9 @@ def source_catalog(source: str) -> str | None:
     return _root_catalog(_Markup(source, locate).document())
 
 
-def parse_argument(key: str | None, text: str, *, view: BlokView | None = None) -> ActionArgumentInput:
+def parse_argument(
+    key: str | None, text: str, *, view: BlokView | None = None
+) -> ActionArgumentInput:
     """An expression (``args.slide.id``) as a call argument is stored: a query's variable.
 
     Raises:
@@ -883,7 +1121,20 @@ def parse_argument(key: str | None, text: str, *, view: BlokView | None = None) 
     """
     locate = Locator(text)
     expression = parse_expression(text, locate=locate)
-    return _Lowering(view or default_view(), locate, _Markup(text, locate)).argument(key, expression)
+    return _Lowering(view or default_view(), locate, _Markup(text, locate)).argument(
+        key, expression
+    )
 
 
-__all__ = ["FETCH_MORE_FUNCTION", "MAX_SOURCE_BYTES", "PICK_FUNCTION", "QUERY_SUGAR", "REFETCH_FUNCTION", "jsx_text", "parse_argument", "parse_bsx", "parse_bsx_with_spans", "source_catalog"]
+__all__ = [
+    "FETCH_MORE_FUNCTION",
+    "MAX_SOURCE_BYTES",
+    "PICK_FUNCTION",
+    "QUERY_SUGAR",
+    "REFETCH_FUNCTION",
+    "jsx_text",
+    "parse_argument",
+    "parse_bsx",
+    "parse_bsx_with_spans",
+    "source_catalog",
+]

@@ -66,7 +66,12 @@ from arkitekt_spec.declare.blok.action import ActionBloks, action_blok_component
 from arkitekt_spec.declare.blok.declarations import (
     demo_input,
 )
-from arkitekt_spec.declare.blok.origin import DeclaredAt, declared_at, finding_key, warn_at
+from arkitekt_spec.declare.blok.origin import (
+    DeclaredAt,
+    declared_at,
+    finding_key,
+    warn_at,
+)
 from arkitekt_spec.declare.blok.port import check_port_blok_reads
 from arkitekt_spec.declare.blok.registry import as_registered, build_declared_bloks
 from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
@@ -121,7 +126,11 @@ def _function_origin(function: Any) -> DeclaredAt | None:
     code = getattr(inspect.unwrap(function), "__code__", None)
     if code is None:
         return None
-    return DeclaredAt(filename=code.co_filename, lineno=code.co_firstlineno, module=str(getattr(function, "__module__", "")))
+    return DeclaredAt(
+        filename=code.co_filename,
+        lineno=code.co_firstlineno,
+        module=str(getattr(function, "__module__", "")),
+    )
 
 
 class BlokDeclaration(BaseModel):
@@ -178,14 +187,18 @@ def _asset_kind(path: Path, data: bytes, kind: AssetKind | None) -> AssetKind:
             None,
         )
         if kind is None:
-            known = sorted(ext for extensions, _ in _ASSET_FORMATS.values() for ext in extensions)
+            known = sorted(
+                ext for extensions, _ in _ASSET_FORMATS.values() for ext in extensions
+            )
             raise ValueError(
                 f"Cannot tell what kind of asset '{path.name}' is: say it with kind=, "
                 f"or use one of {known}"
             )
     kind = AssetKind(kind)
     starts = _ASSET_FORMATS[kind][1]
-    if not data.startswith(starts) or (data.startswith(b"RIFF") and data[8:12] != b"WEBP"):
+    if not data.startswith(starts) or (
+        data.startswith(b"RIFF") and data[8:12] != b"WEBP"
+    ):
         raise ValueError(f"'{path.name}' is not a valid {kind.label} file")
     return kind
 
@@ -302,7 +315,9 @@ def _refuse_unpersistable(
     if persist is None:
         return
     if persist != "synchronous" and (
-        isinstance(persist, bool) or not isinstance(persist, (int, float)) or persist <= 0
+        isinstance(persist, bool)
+        or not isinstance(persist, (int, float))
+        or persist <= 0
     ):
         raise ValueError(
             f"The state '{state.interface}' has persist={persist!r}: use \"synchronous\" "
@@ -429,7 +444,9 @@ class AppRegistry(BaseModel):
         """
 
         def declare(function: Callable[..., T]) -> Service[T]:
-            declared = declare_service(self, function, schema=schema, turms=turms, image=image)
+            declared = declare_service(
+                self, function, schema=schema, turms=turms, image=image
+            )
             self._take_service(declared)
             return declared
 
@@ -697,7 +714,10 @@ class AppRegistry(BaseModel):
         refuses each without it."""
         scopes: set[str] = set()
         for implementation in self.implementations.values():
-            if any(dependency.action_dependencies for dependency in implementation.dependencies or ()):
+            if any(
+                dependency.action_dependencies
+                for dependency in implementation.dependencies or ()
+            ):
                 scopes.add(DEPENDENCY_CALL_SCOPE)
             if implementation.dynamic_asks:
                 scopes.add(DYNAMIC_ASK_SCOPE)
@@ -838,7 +858,11 @@ class AppRegistry(BaseModel):
         at = declared_at()
         source: str | None = None
         try:
-            catalog = source_catalog(component) if isinstance(component, str) else blok_catalog(component)
+            catalog = (
+                source_catalog(component)
+                if isinstance(component, str)
+                else blok_catalog(component)
+            )
             view = self.blok_view(catalog)
             if isinstance(component, str):
                 source = component
@@ -862,7 +886,9 @@ class AppRegistry(BaseModel):
             for key, cls in (args or {}).items()
         )
         if arg_ports and context != ComponentContext.PANEL:
-            raise ValueError(f"Blok '{name}': only a panel blok is opened for an item, so only it takes args")
+            raise ValueError(
+                f"Blok '{name}': only a panel blok is opened for an item, so only it takes args"
+            )
         if for_node is not None and for_model is None:
             raise ValueError(f"Blok '{name}' names for_node without a for_model")
         if for_model is not None:
@@ -871,7 +897,9 @@ class AppRegistry(BaseModel):
                     f"Blok '{name}': for_model must be 'sha256:' and 64 lowercase hex characters, not {for_model!r}"
                 )
             if context != ComponentContext.PANEL:
-                raise ValueError(f"Blok '{name}': only a panel blok can decorate a model")
+                raise ValueError(
+                    f"Blok '{name}': only a panel blok can decorate a model"
+                )
         declaration = BlokDeclaration(
             component=component,
             source=source,
@@ -914,23 +942,43 @@ class AppRegistry(BaseModel):
             arg_ports=self_arg_ports(self),
         )
         reported: set[str] = set()
-        for finding in (*check_catalog_target(catalog, self), *check_blok_tree(component, scope, checked_view(view))):
+        for finding in (
+            *check_catalog_target(catalog, self),
+            *check_blok_tree(component, scope, checked_view(view)),
+        ):
             if finding.level == "error" or mode == "strict":
                 where = f" ({finding.path})" if finding.path else ""
-                raise BlokError.from_finding(dataclass_replace(finding, path=None, message=f"Blok {name!r}{where}: {finding.message}"), node=finding.path)
+                raise BlokError.from_finding(
+                    dataclass_replace(
+                        finding,
+                        path=None,
+                        message=f"Blok {name!r}{where}: {finding.message}",
+                    ),
+                    node=finding.path,
+                )
             key = finding_key(finding)
             if key not in reported:
                 reported.add(key)
-                warn_at(f"Blok {name!r}: {finding.message} [{finding.code}]", at, finding=finding, blok=name)
+                warn_at(
+                    f"Blok {name!r}: {finding.message} [{finding.code}]",
+                    at,
+                    finding=finding,
+                    blok=name,
+                )
         declaration = declaration.model_copy(update={"reported": frozenset(reported)})
         replaced = [
             other
             for other, existing in self.registered_bloks.items()
-            if default and other != name and existing.default and existing.context == context
+            if default
+            and other != name
+            and existing.default
+            and existing.context == context
         ]
         for other in replaced:
             # At most one default per context: the newly declared one replaces it.
-            self.registered_bloks[other] = self.registered_bloks[other].model_copy(update={"default": False})
+            self.registered_bloks[other] = self.registered_bloks[other].model_copy(
+                update={"default": False}
+            )
         self.registered_bloks[name] = declaration
 
     def register_asset(
@@ -1090,9 +1138,15 @@ class AppRegistry(BaseModel):
         module only the server holds, which leaves an unknown operation unknowable, so
         nothing is said about one then. Base operations are fully known either way.
         """
-        declared = [self.declared_catalogs[name] for name in names if name in self.declared_catalogs]
+        declared = [
+            self.declared_catalogs[name]
+            for name in names
+            if name in self.declared_catalogs
+        ]
         complete = all(
-            name in self.declared_catalogs or name in (BASE_CATALOG_NAME, BASE_CATALOG_ID) for name in names
+            name in self.declared_catalogs
+            or name in (BASE_CATALOG_NAME, BASE_CATALOG_ID)
+            for name in names
         )
         return resolve_catalogs(declared, authoritative=complete)
 
@@ -1115,13 +1169,19 @@ class AppRegistry(BaseModel):
                 )
             except ValueError as error:
                 # Two catalogs defining one operation differently: the view itself cannot be built.
-                findings = [Diagnostic(level=WARNING, code="catalog_conflict", message=str(error))]
+                findings = [
+                    Diagnostic(
+                        level=WARNING, code="catalog_conflict", message=str(error)
+                    )
+                ]
             for finding in findings:
                 message = f"Action {interface!r}: {finding.message} [{finding.code}]"
                 warn_at(
                     message,
                     at,
-                    finding=Finding(code=finding.code, level="warning", message=finding.message),
+                    finding=Finding(
+                        code=finding.code, level="warning", message=finding.message
+                    ),
                     blok=interface,
                 )
             for port, finding in widget_tree_findings(definition, self.blok_view(None)):
@@ -1129,7 +1189,9 @@ class AppRegistry(BaseModel):
                 warn_at(
                     message,
                     at,
-                    finding=Finding(code=finding.code, level="warning", message=finding.message),
+                    finding=Finding(
+                        code=finding.code, level="warning", message=finding.message
+                    ),
                     blok=interface,
                 )
 
@@ -1192,14 +1254,16 @@ class AppRegistry(BaseModel):
             optional["assets"] = self.get_declared_assets()
         # What the port bloks of its actions read of the agent is declared by now.
         check_port_blok_reads(self)
-        return check_agent_input(ImplementAgentInput(
-            name=name,
-            implementations=tuple(self.get_implementations()),
-            states=tuple(self.states.values()),
-            locks=tuple(self.get_locks()),
-            bloks=tuple(self.get_declared_bloks().values()),
-            **optional,
-        ))
+        return check_agent_input(
+            ImplementAgentInput(
+                name=name,
+                implementations=tuple(self.get_implementations()),
+                states=tuple(self.states.values()),
+                locks=tuple(self.get_locks()),
+                bloks=tuple(self.get_declared_bloks().values()),
+                **optional,
+            )
+        )
 
     def to_registered_agent_input(
         self,
@@ -1216,7 +1280,9 @@ class AppRegistry(BaseModel):
         checked = self.to_implement_agent_input(name=name, description=description)
         # A copy, not a second validation: the whole declaration was checked with the
         # dependencies in place, and the rules that read them have nothing to say of what is sent.
-        return checked.model_copy(update={"bloks": tuple(as_registered(blok) for blok in checked.bloks or ())})
+        return checked.model_copy(
+            update={"bloks": tuple(as_registered(blok) for blok in checked.bloks or ())}
+        )
 
     # ------------------------------------------------------------------ #
     # Merging                                                            #
@@ -1289,7 +1355,9 @@ class AppRegistry(BaseModel):
                     interface
                 ]
             if interface in other.state_interface_classes:
-                self.state_interface_classes[interface] = other.state_interface_classes[interface]
+                self.state_interface_classes[interface] = other.state_interface_classes[
+                    interface
+                ]
 
         for name, blok in other.registered_bloks.items():
             if name in self.registered_bloks:
@@ -1301,7 +1369,9 @@ class AppRegistry(BaseModel):
         for name, asset in other.registered_assets.items():
             existing = self.registered_assets.get(name)
             if existing is not None and existing.ref != asset.ref:
-                raise ValueError(f"Two services both declare the asset '{name}', differently.")
+                raise ValueError(
+                    f"Two services both declare the asset '{name}', differently."
+                )
             self.registered_assets[name] = asset
 
         for name, catalog in other.declared_catalogs.items():
@@ -2008,4 +2078,10 @@ class AppRegistry(BaseModel):
         )
 
 
-__all__ = ["DEPENDENCY_CALL_SCOPE", "DYNAMIC_ASK_SCOPE", "DYNAMIC_CALL_SCOPE", "DYNAMIC_INFORM_SCOPE", "AppRegistry"]
+__all__ = [
+    "DEPENDENCY_CALL_SCOPE",
+    "DYNAMIC_ASK_SCOPE",
+    "DYNAMIC_CALL_SCOPE",
+    "DYNAMIC_INFORM_SCOPE",
+    "AppRegistry",
+]

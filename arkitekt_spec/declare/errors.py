@@ -5,15 +5,12 @@ class RekuestError(Exception):
     """Base class for all Rekuest exceptions."""
 
 
-
 class CriticalCallError(RekuestError):
     """Raised when a critical error occurs during a remote call."""
 
 
-
 class ErrorCallError(RekuestError):
     """Raised when an error occurs during a remote call."""
-
 
 
 class NonDeterministicWorkflow(RekuestError):
@@ -26,17 +23,14 @@ class NonDeterministicWorkflow(RekuestError):
     """
 
 
-
 class StateChanged(RekuestError):
     """A guarded state changed while the workflow was down: something other than its own
     calls changed it, or its agent restarted and set it up again. ``task.guard`` raises it
     when a resumed workflow enters the guard again."""
 
 
-
 class NotAWorkflowError(RekuestError):
     """A plain action called another action. Only a workflow may: ``@app.workflow``."""
-
 
 
 class DeniedError(RekuestError):
@@ -49,10 +43,11 @@ class DeniedError(RekuestError):
     """
 
     def __init__(self, answer: str | None = None, *, task: str | None = None) -> None:
-        super().__init__(f"The call was denied: {answer}" if answer else "The call was denied.")
+        super().__init__(
+            f"The call was denied: {answer}" if answer else "The call was denied."
+        )
         self.answer = answer
         self.task = task
-
 
 
 class DismissedError(RekuestError):
@@ -65,17 +60,17 @@ class DismissedError(RekuestError):
     """
 
     def __init__(self, answer: str | None = None, *, task: str | None = None) -> None:
-        super().__init__(f"The ask was dismissed: {answer}" if answer else "The ask was dismissed.")
+        super().__init__(
+            f"The ask was dismissed: {answer}" if answer else "The ask was dismissed."
+        )
         self.answer = answer
         self.task = task
-
 
 
 class NotDeclaredError(RekuestError):
     """A task asked or informed through a blok made at run time, or called an action found
     at run time, but its action does not declare it may (``dynamic_asks``/``dynamic_informs``/
     ``dynamic_calls``)."""
-
 
 
 class BlokRefused(RekuestError):
@@ -119,7 +114,6 @@ class StatePreconditionFailed(ErrorCallError):
         self.task = task
 
 
-
 class AgentLost(RekuestError):
     """The agent running a call died while it ran. Not a failure: how it ended is unknown.
 
@@ -151,7 +145,13 @@ class AgentLost(RekuestError):
         self.task = task
 
     @classmethod
-    def from_details(cls, details: dict | None, *, message: str | None = None, task: str | None = None) -> "AgentLost":
+    def from_details(
+        cls,
+        details: dict | None,
+        *,
+        message: str | None = None,
+        task: str | None = None,
+    ) -> "AgentLost":
         """Build it from what the server recorded on the LOST event."""
         details = details or {}
         return cls(
@@ -161,7 +161,6 @@ class AgentLost(RekuestError):
             effects=details.get("effects"),
             task=task,
         )
-
 
 
 class RootOnlyCallError(RekuestError):

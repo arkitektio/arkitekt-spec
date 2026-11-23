@@ -55,7 +55,9 @@ class ReleaseFlavour(WireModel):
     """One flavour of a release: an image, and where it may be placed."""
 
     name: str = Field(description="The name of the flavour, unique within the release.")
-    description: str | None = Field(default=None, description="What sets this flavour apart.")
+    description: str | None = Field(
+        default=None, description="What sets this flavour apart."
+    )
     image: str = Field(
         description="The image, pinned by digest (`registry/repository@sha256:...`). "
         "For a multi-platform flavour this is the digest of the index."
@@ -70,7 +72,9 @@ class ReleaseFlavour(WireModel):
         default_factory=list,
         description="What the image must be granted on the machine it runs on.",
     )
-    inspection: Inspection = Field(description="What the image declared when it was run.")
+    inspection: Inspection = Field(
+        description="What the image declared when it was run."
+    )
     built_at: datetime.datetime | None = Field(
         default=None, description="When the image was built."
     )
@@ -82,7 +86,9 @@ class ReleaseFlavour(WireModel):
         return value
 
     @model_serializer(mode="wrap")
-    def _without_no_capabilities(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+    def _without_no_capabilities(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, Any]:
         # Left out when there are none: the bytes of everything written before flavours
         # had capabilities stay what they were, and a descriptor's digest is its identity.
         data: dict[str, Any] = handler(self)
@@ -104,7 +110,9 @@ class ReleaseFlavour(WireModel):
 class ReleaseDescriptor(WireModel):
     """One release of an app, as its registry repository carries it."""
 
-    spec_version: str = Field(description="The arkitekt-spec that wrote the descriptor.")
+    spec_version: str = Field(
+        description="The arkitekt-spec that wrote the descriptor."
+    )
     manifest: AppManifest
     channel: str | None = Field(
         default=None,
@@ -156,7 +164,11 @@ def release_manifest(blob: bytes) -> dict[str, Any]:
     Nothing here needs a registry newer than the first OCI spec.
     """
     blob_digest = digest_of(blob)
-    reference = {"mediaType": RELEASE_MEDIA_TYPE, "digest": blob_digest, "size": len(blob)}
+    reference = {
+        "mediaType": RELEASE_MEDIA_TYPE,
+        "digest": blob_digest,
+        "size": len(blob),
+    }
     return {
         "schemaVersion": 2,
         "mediaType": OCI_MANIFEST_MEDIA_TYPE,
@@ -202,7 +214,9 @@ def parse_repository(reference: str) -> tuple[str, str]:
         if "/" not in repository:
             repository = f"library/{repository}"
     if not repository or repository != repository.lower() or " " in repository:
-        raise ValueError(f"'{repository}' is not a valid repository path (lowercase, no spaces).")
+        raise ValueError(
+            f"'{repository}' is not a valid repository path (lowercase, no spaces)."
+        )
     return registry, repository
 
 

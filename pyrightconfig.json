@@ -1,0 +1,22 @@
+{
+  "extends": "./pyright.shared.json",
+  "include": [
+    "."
+  ],
+  "exclude": [
+    "**/migrations",
+    "**/__pycache__",
+    "**/node_modules",
+    ".venv",
+    "build",
+    "dist"
+  ],
+  "strict": [
+    "arkitekt_spec/*.py",
+    "arkitekt_spec/blok/vocabulary.py",
+    "arkitekt_spec/blok/expr.py",
+    "arkitekt_spec/blok/bsx.py",
+    "arkitekt_spec/blok/unparse.py",
+    "arkitekt_spec/blok/catalogs/__init__.py"
+  ]
+}

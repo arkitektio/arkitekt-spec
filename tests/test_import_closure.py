@@ -12,7 +12,9 @@ RUNTIMES = ("rekuest", "arkitekt", "rath", "koil", "fakts", "websockets", "graph
 
 def _loaded_after(statement: str) -> set[str]:
     code = f"import sys; {statement}; print(sorted({{m.split('.')[0] for m in sys.modules}}))"
-    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    out = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=True
+    )
     return set(ast.literal_eval(out.stdout.strip()))
 
 

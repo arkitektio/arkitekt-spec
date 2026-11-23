@@ -42,7 +42,9 @@ PORT_KIND = "port"
 """The kind a port's blok is."""
 
 
-def port_bloks(ports: Sequence[ArgPortInput]) -> Iterator[tuple[ArgPortInput, BlokAssignWidgetInput]]:
+def port_bloks(
+    ports: Sequence[ArgPortInput],
+) -> Iterator[tuple[ArgPortInput, BlokAssignWidgetInput]]:
     """Every port blok among ``ports`` and the ports below them, with the port it is the widget
     of: a port's own widget, or the one another widget falls back to."""
     for port in ports:
@@ -54,7 +56,12 @@ def port_bloks(ports: Sequence[ArgPortInput]) -> Iterator[tuple[ArgPortInput, Bl
         yield from port_bloks(port.children or ())
 
 
-def port_scope(port: ArgPortInput, arg_keys: Sequence[str], dependencies: Sequence[AgentDependencyInput], mount: str) -> BlokScope:
+def port_scope(
+    port: ArgPortInput,
+    arg_keys: Sequence[str],
+    dependencies: Sequence[AgentDependencyInput],
+    mount: str,
+) -> BlokScope:
     """Where a port's blok is mounted: its own port as ``port``, the action's arguments as
     ``args`` and the action's dependencies as ``deps`` (``self`` is the agent that runs it)."""
     return BlokScope(
@@ -91,29 +98,52 @@ def check_port_bloks(
             tree = parse_bsx(widget.source, view=view)
         except BlokError as error:
             raise error.within(f"{label})") from None
-        scope = port_scope(port, arg_keys, dependencies, f"the widget of port {port.key!r}")
+        scope = port_scope(
+            port, arg_keys, dependencies, f"the widget of port {port.key!r}"
+        )
         reported: set[str] = set()
         for finding in check_catalog_target(catalog, registry):
             if mode == "strict":
                 raise BlokError.from_finding(finding)
-            warn_at(f"{label}): {finding.message} [{finding.code}]", at, finding=finding, blok=interface)
+            warn_at(
+                f"{label}): {finding.message} [{finding.code}]",
+                at,
+                finding=finding,
+                blok=interface,
+            )
         for finding in check_blok_tree(tree, scope, checked_view(view)):
             if finding.level == "error" or mode == "strict":
                 where = f", {finding.path}" if finding.path else ""
-                raise BlokError.from_finding(dataclass_replace(finding, path=None, message=f"{label}{where}): {finding.message}"), node=finding.path)
+                raise BlokError.from_finding(
+                    dataclass_replace(
+                        finding,
+                        path=None,
+                        message=f"{label}{where}): {finding.message}",
+                    ),
+                    node=finding.path,
+                )
             if finding_key(finding) not in reported:
                 reported.add(finding_key(finding))
-                warn_at(f"{label}): {finding.message} [{finding.code}]", at, finding=finding, blok=interface)
+                warn_at(
+                    f"{label}): {finding.message} [{finding.code}]",
+                    at,
+                    finding=finding,
+                    blok=interface,
+                )
 
 
-def port_bloks_read_self(ports: Sequence[ArgPortInput], registry: "AppRegistry") -> bool:
+def port_bloks_read_self(
+    ports: Sequence[ArgPortInput], registry: "AppRegistry"
+) -> bool:
     """Whether a port blok of an action reads the agent that runs it (``self``).
 
     Such an action is stateful: what its form shows depends on which agent it is run on, so a
     caller names that agent, and the form is drawn for it.
     """
     for _, widget in port_bloks(ports):
-        tree = parse_bsx(widget.source, view=registry.blok_view(source_catalog(widget.source)))
+        tree = parse_bsx(
+            widget.source, view=registry.blok_view(source_catalog(widget.source))
+        )
         if self_reads(tree).agent:
             return True
     return False
@@ -133,7 +163,10 @@ def widgets_read_self(ports: Sequence[ArgPortInput], registry: "AppRegistry") ->
         for port in ports:
             widget = port.widget
             while widget is not None:
-                if isinstance(widget, StateChoiceAssignWidgetInput) and widget.dependency is None:
+                if (
+                    isinstance(widget, StateChoiceAssignWidgetInput)
+                    and widget.dependency is None
+                ):
                     return True
                 widget = getattr(widget, "fallback", None)
             if own_state_choice(port.children or ()):
@@ -154,11 +187,23 @@ def check_port_blok_reads(registry: "AppRegistry") -> None:
     """
     for interface, implementation in registry.implementations.items():
         for port, widget in port_bloks(implementation.definition.args or ()):
-            tree = parse_bsx(widget.source, view=registry.blok_view(source_catalog(widget.source)))
+            tree = parse_bsx(
+                widget.source, view=registry.blok_view(source_catalog(widget.source))
+            )
             try:
                 self_dependency(self_reads(tree), registry)
             except BlokError as error:
-                raise error.within(f"Action {interface!r} (widget of port {port.key!r})") from None
+                raise error.within(
+                    f"Action {interface!r} (widget of port {port.key!r})"
+                ) from None
 
 
-__all__ = ["PORT_KIND", "check_port_blok_reads", "check_port_bloks", "port_bloks", "port_bloks_read_self", "port_scope", "widgets_read_self"]
+__all__ = [
+    "PORT_KIND",
+    "check_port_blok_reads",
+    "check_port_bloks",
+    "port_bloks",
+    "port_bloks_read_self",
+    "port_scope",
+    "widgets_read_self",
+]

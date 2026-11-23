@@ -40,7 +40,9 @@ class BaseSelector(BaseModel):
         "prefer candidates with the highest sum of satisfied weights.",
     )
 
-    model_config = ConfigDict(extra="forbid", validate_by_name=True, validate_by_alias=True)
+    model_config = ConfigDict(
+        extra="forbid", validate_by_name=True, validate_by_alias=True
+    )
 
 
 class CpuSelector(BaseSelector):
@@ -48,7 +50,9 @@ class CpuSelector(BaseSelector):
 
     kind: Literal["cpu"] = "cpu"
     min_count: int | None = Field(
-        default=None, alias="minCount", description="The minimum number of CPU cores required."
+        default=None,
+        alias="minCount",
+        description="The minimum number of CPU cores required.",
     )
     frequency: float | None = Field(
         default=None, description="The minimum CPU frequency required, in MHz."
@@ -105,10 +109,14 @@ class RocmSelector(BaseSelector):
 
     kind: Literal["rocm"] = "rocm"
     api_version: str | None = Field(
-        default=None, alias="apiVersion", description="The minimum ROCm API version required."
+        default=None,
+        alias="apiVersion",
+        description="The minimum ROCm API version required.",
     )
     api_thing: str | None = Field(
-        default=None, alias="apiThing", description="An additional ROCm capability qualifier."
+        default=None,
+        alias="apiThing",
+        description="An additional ROCm capability qualifier.",
     )
 
 
@@ -117,7 +125,9 @@ class OneApiSelector(BaseSelector):
 
     kind: Literal["oneapi"] = "oneapi"
     oneapi_version: str | None = Field(
-        default=None, alias="oneapiVersion", description="The minimum oneAPI version required."
+        default=None,
+        alias="oneapiVersion",
+        description="The minimum oneAPI version required.",
     )
 
 
@@ -133,7 +143,12 @@ class LabelSelector(BaseSelector):
 
 
 Selector = Annotated[
-    CpuSelector | RamSelector | CudaSelector | RocmSelector | OneApiSelector | LabelSelector,
+    CpuSelector
+    | RamSelector
+    | CudaSelector
+    | RocmSelector
+    | OneApiSelector
+    | LabelSelector,
     Field(discriminator="kind"),
 ]
 """Any selector, dispatched on ``kind``."""

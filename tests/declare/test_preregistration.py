@@ -84,7 +84,6 @@ class PlainThing:
     """A plain class, which can only ever live on this agent's shelve."""
 
 
-
 # --------------------------------------------------------------------------- #
 # Enums still derive
 # --------------------------------------------------------------------------- #
@@ -193,10 +192,18 @@ class Method(Enum):
 
 
 def test_a_given_identifier_is_kept_in_a_namespaced_registry() -> None:
-    named = StructureRegistry(namespace=AppNamespace(identifier="myapp", module=__name__))
-    assert named.register_as_memory_structure(PlainThing, "@kept/thing").identifier == "@kept/thing"
+    named = StructureRegistry(
+        namespace=AppNamespace(identifier="myapp", module=__name__)
+    )
+    assert (
+        named.register_as_memory_structure(PlainThing, "@kept/thing").identifier
+        == "@kept/thing"
+    )
     assert named.derive_enum(Method).identifier == "@myapp/method"
 
 
 def test_a_registry_no_app_owns_falls_back_to_the_module() -> None:
-    assert StructureRegistry().derive_enum(Method).identifier == f"@{Method.__module__.lower()}/method"
+    assert (
+        StructureRegistry().derive_enum(Method).identifier
+        == f"@{Method.__module__.lower()}/method"
+    )

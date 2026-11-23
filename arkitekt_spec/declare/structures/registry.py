@@ -37,7 +37,10 @@ from arkitekt_spec.actions import (
     ValidatorInput,
 )
 from arkitekt_spec.declare.agents.errors import StateRequirementsNotMet
-from arkitekt_spec.declare.agents.types import resolve_service_clients, unwrap_injectable
+from arkitekt_spec.declare.agents.types import (
+    resolve_service_clients,
+    unwrap_injectable,
+)
 from arkitekt_spec.declare.structures.convert import (
     AppNamespace,
     cls_to_identifier,
@@ -233,7 +236,9 @@ def _as_bound_app(app: "BoundApp | Mapping[str, Any]") -> "BoundApp":
     return app
 
 
-def _named_by(function: Callable[..., Any], clients: Mapping[str, Any]) -> dict[str, Any]:
+def _named_by(
+    function: Callable[..., Any], clients: Mapping[str, Any]
+) -> dict[str, Any]:
     """The part of ``clients`` that ``function`` has a parameter for."""
     parameters = inspect.signature(function).parameters
     return {name: client for name, client in clients.items() if name in parameters}
@@ -355,6 +360,7 @@ class StructureRegistry(BaseModel):
         """The namespace ``cls`` derives its identifier in: the app's for a class the app
         defines itself, else ``None`` (the class's module)."""
         return self.namespace.of(cls) if self.namespace is not None else None
+
     clients: dict[str, type] = Field(default_factory=dict, exclude=True)
     """What each registered service returns, by service name: the client classes.
 
@@ -442,7 +448,9 @@ class StructureRegistry(BaseModel):
         """Get the fullfilled memory structure for a given identifier."""
         return self._lookup("identifier_memory_structure_map", identifier)
 
-    def declared_as_another(self, value: object, identifier: str) -> FullFilledStructure | None:
+    def declared_as_another(
+        self, value: object, identifier: str
+    ) -> FullFilledStructure | None:
         """The structure ``value`` was declared as, when that is not ``identifier``.
 
         A structure travels as its id, and by default that is just ``value.id``:
@@ -1038,7 +1046,10 @@ class StructureRegistry(BaseModel):
             target = ensure_model_dataclass(target)
             self.register_as_model(
                 target,
-                identifier or model_identifier(self.namespace_of(target) or target.__module__, target),
+                identifier
+                or model_identifier(
+                    self.namespace_of(target) or target.__module__, target
+                ),
                 description=description or target.__doc__,
             )
             return target

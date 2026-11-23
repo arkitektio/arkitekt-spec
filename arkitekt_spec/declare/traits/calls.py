@@ -59,7 +59,9 @@ def resolve_base_arguments(
                 f"{owner}: {operation} does not accept argument {argument.key!r} (accepts {', '.join(keys)})"
             )
         if argument.key in resolved:
-            raise ValueError(f"{owner}: {operation} got multiple values for {argument.key!r}")
+            raise ValueError(
+                f"{owner}: {operation} got multiple values for {argument.key!r}"
+            )
         resolved[argument.key] = argument
 
     missing = [key for key in spec.required_keys if key not in resolved]

@@ -1,6 +1,5 @@
 """General Tests for defininin actions"""
 
-
 import pytest
 
 from arkitekt_spec.actions import (

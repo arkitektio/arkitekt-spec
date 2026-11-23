@@ -99,49 +99,57 @@ def test_self_state_choice_without_own_state_is_rejected(
     simple_registry: StructureRegistry,
 ) -> None:
     with pytest.raises(ValueError, match="camera_state"):
-        check_agent_input(ImplementAgentInput(
-            implementations=(
-                _implementation(
-                    simple_registry, state_path="self.camera_state.exposure_ms"
+        check_agent_input(
+            ImplementAgentInput(
+                implementations=(
+                    _implementation(
+                        simple_registry, state_path="self.camera_state.exposure_ms"
+                    ),
                 ),
-            ),
-            states=(),
-        ))
+                states=(),
+            )
+        )
 
 
 def test_self_state_choice_with_unknown_field_is_rejected(
     simple_registry: StructureRegistry,
 ) -> None:
     with pytest.raises(ValueError, match="missing_field"):
-        check_agent_input(ImplementAgentInput(
-            implementations=(
-                _implementation(
-                    simple_registry, state_path="self.camera_state.missing_field"
+        check_agent_input(
+            ImplementAgentInput(
+                implementations=(
+                    _implementation(
+                        simple_registry, state_path="self.camera_state.missing_field"
+                    ),
                 ),
-            ),
-            states=(_camera_state(),),
-        ))
+                states=(_camera_state(),),
+            )
+        )
 
 
 def test_duplicate_implementation_interface_is_rejected(
     simple_registry: StructureRegistry,
 ) -> None:
     with pytest.raises(ValueError, match="Duplicate implementation interface"):
-        check_agent_input(ImplementAgentInput(
-            implementations=(
-                _implementation(simple_registry, interface="dup"),
-                _implementation(simple_registry, interface="dup"),
-            ),
-        ))
+        check_agent_input(
+            ImplementAgentInput(
+                implementations=(
+                    _implementation(simple_registry, interface="dup"),
+                    _implementation(simple_registry, interface="dup"),
+                ),
+            )
+        )
 
 
 def test_lock_reference_without_lock_implementation_is_rejected(
     simple_registry: StructureRegistry,
 ) -> None:
     with pytest.raises(ValueError, match="references lock 'mylock'"):
-        check_agent_input(ImplementAgentInput(
-            implementations=(_implementation(simple_registry, locks=("mylock",)),),
-        ))
+        check_agent_input(
+            ImplementAgentInput(
+                implementations=(_implementation(simple_registry, locks=("mylock",)),),
+            )
+        )
 
 
 def test_real_registration_path_self_widget_validates(

@@ -63,7 +63,12 @@ def test_the_action_language_is_typed_and_reads_both_spellings():
 def test_an_unknown_envelope_key_is_ignored_not_refused():
     """A newer producer adds a field; an older reader must survive it."""
     inspection = Inspection.model_validate(
-        {"spec_version": "8.0.0", "description": "x", "somethingNewer": 1, "implementations": []}
+        {
+            "spec_version": "8.0.0",
+            "description": "x",
+            "somethingNewer": 1,
+            "implementations": [],
+        }
     )
     assert inspection.description == "x"
 
@@ -75,9 +80,9 @@ def test_a_selector_refuses_an_unknown_key():
 
 def test_a_selector_reads_both_spellings():
     adapter = selector_adapter()
-    assert adapter.validate_python({"kind": "cuda", "cuda_cores": 3}) == adapter.validate_python(
-        {"kind": "cuda", "cudaCores": 3}
-    )
+    assert adapter.validate_python(
+        {"kind": "cuda", "cuda_cores": 3}
+    ) == adapter.validate_python({"kind": "cuda", "cudaCores": 3})
 
 
 def test_a_label_selector_needs_its_key():
@@ -86,7 +91,9 @@ def test_a_label_selector_needs_its_key():
 
 
 def test_empty_or_missing_file_is_an_empty_deployments_file():
-    assert load_deployments(None) == DeploymentsFile(spec_version=current_spec_version())
+    assert load_deployments(None) == DeploymentsFile(
+        spec_version=current_spec_version()
+    )
     assert load_deployments("") == DeploymentsFile(spec_version=current_spec_version())
 
 

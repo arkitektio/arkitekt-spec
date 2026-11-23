@@ -36,22 +36,34 @@ def _hardware_value(hardware: Mapping[str, Any], name: str) -> Any:
     if name == "gpu_count":
         return len(hardware["gpus"]) if "gpus" in hardware else None
     if name == "gpu_memory_mib":
-        memories = [gpu["memory_mib"] for gpu in hardware.get("gpus", ()) if gpu.get("memory_mib") is not None]
+        memories = [
+            gpu["memory_mib"]
+            for gpu in hardware.get("gpus", ())
+            if gpu.get("memory_mib") is not None
+        ]
         return max(memories) if memories else None
     return hardware.get(name)
 
 
-def _fits_read(path: str, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]) -> Number | None:
+def _fits_read(
+    path: str, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]
+) -> Number | None:
     root, name = path.split("/", 1)
     value = (
         descriptors.get(name.replace("~1", "/").replace("~0", "~"))
         if root == "value"
         else _hardware_value(hardware, name)
     )
-    return value if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+    return (
+        value
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+        else None
+    )
 
 
-def _fits_number(argument: Any, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]) -> Number | None:
+def _fits_number(
+    argument: Any, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]
+) -> Number | None:
     if argument.value_path is not None:
         return _fits_read(argument.value_path, descriptors, hardware)
     if argument.util_call is None:
@@ -82,7 +94,9 @@ def _fits_number(argument: Any, descriptors: Mapping[str, Any], hardware: Mappin
     return None
 
 
-def fits_holds(call: Any, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]) -> bool:
+def fits_holds(
+    call: Any, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]
+) -> bool:
     """Whether an object fits, the way the database predicate that matches actions answers it.
 
     The first evaluator of a call tree in Python, and only of the subset a ``Fits`` may use
@@ -91,9 +105,15 @@ def fits_holds(call: Any, descriptors: Mapping[str, Any], hardware: Mapping[str,
     arguments = {argument.key: argument for argument in call.arguments or ()}
     match call.operation:
         case "logic.all":
-            return all(fits_holds(item.util_call, descriptors, hardware) for item in arguments["values"].value_list)
+            return all(
+                fits_holds(item.util_call, descriptors, hardware)
+                for item in arguments["values"].value_list
+            )
         case "logic.any":
-            return any(fits_holds(item.util_call, descriptors, hardware) for item in arguments["values"].value_list)
+            return any(
+                fits_holds(item.util_call, descriptors, hardware)
+                for item in arguments["values"].value_list
+            )
     a = _fits_number(arguments["a"], descriptors, hardware)
     b = _fits_number(arguments["b"], descriptors, hardware)
     if a is None or b is None:
@@ -110,7 +130,9 @@ def fits_holds(call: Any, descriptors: Mapping[str, Any], hardware: Mapping[str,
     return False
 
 
-def fits_can_be_tested(call: Any, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]) -> bool:
+def fits_can_be_tested(
+    call: Any, descriptors: Mapping[str, Any], hardware: Mapping[str, Any]
+) -> bool:
     """Whether everything a formula reads is known here.
 
     An agent describes an object from what it fetched, and may not know its own memory. Like a
@@ -158,7 +180,9 @@ def holds(operator: object, actual: object, expected: object) -> bool:
         return bool(actual != expected)
     if name in ("GTE", "LTE"):
         if not _is_number(actual) or not _is_number(expected):
-            raise TypeError(f"{name} orders numbers; {actual!r} and {expected!r} are not both numbers")
+            raise TypeError(
+                f"{name} orders numbers; {actual!r} and {expected!r} are not both numbers"
+            )
         return bool(actual >= expected if name == "GTE" else actual <= expected)  # type: ignore[operator]
     if name in ("IN", "NOT_IN"):
         if isinstance(expected, str) or not isinstance(expected, Sequence):
@@ -172,7 +196,9 @@ def holds(operator: object, actual: object, expected: object) -> bool:
     raise ValueError(f"Unknown descriptor operator {name!r}")
 
 
-def unfulfilled(constraints: Iterable[Constraint], descriptors: Mapping[str, Any]) -> tuple[str, ...]:
+def unfulfilled(
+    constraints: Iterable[Constraint], descriptors: Mapping[str, Any]
+) -> tuple[str, ...]:
     """Every constraint these descriptors do not satisfy, one line each.
 
     A constraint on a key the descriptors do not hold is skipped: it cannot be
@@ -229,7 +255,9 @@ def resolve_pointer(document: Any, pointer: str) -> Any:
     return current
 
 
-def unmet_state(requirements: Iterable[StateRequirement], states: Mapping[str, Any]) -> tuple[str, ...]:
+def unmet_state(
+    requirements: Iterable[StateRequirement], states: Mapping[str, Any]
+) -> tuple[str, ...]:
     """Every state requirement these states do not satisfy, one line each.
 
     Unlike :func:`unfulfilled`, nothing is skipped: a state the agent does not have, or

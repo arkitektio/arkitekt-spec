@@ -63,7 +63,10 @@ def inspect_state(
 
 
 @overload
-def declare_state(cls: type[T], /, *,
+def declare_state(
+    cls: type[T],
+    /,
+    *,
     name: str | None = None,
     required_locks: list[str] | None = None,
     persist: Literal["synchronous"] | float | None = None,
@@ -73,7 +76,10 @@ def declare_state(cls: type[T], /, *,
 
 
 @overload
-def declare_state(cls: None = None, /, *,
+def declare_state(
+    cls: None = None,
+    /,
+    *,
     name: str | None = None,
     required_locks: list[str] | None = None,
     persist: Literal["synchronous"] | float | None = None,

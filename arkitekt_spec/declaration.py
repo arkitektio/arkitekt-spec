@@ -12,7 +12,6 @@ shapes, each read by a different party:
 so none of them can say something the others do not.
 """
 
-
 from pydantic import Field
 
 from arkitekt_spec.actions import (

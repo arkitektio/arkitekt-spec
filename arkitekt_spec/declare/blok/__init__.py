@@ -1,6 +1,10 @@
 """Blok declaration, validation and dependency inference (blok language v2)."""
 
-from arkitekt_spec.declare.blok.from_svg import SvgConversionError, SvgConversionWarning, from_svg
+from arkitekt_spec.declare.blok.from_svg import (
+    SvgConversionError,
+    SvgConversionWarning,
+    from_svg,
+)
 from arkitekt_spec.declare.blok.parser import (
     PortCallParser,
     bsx,

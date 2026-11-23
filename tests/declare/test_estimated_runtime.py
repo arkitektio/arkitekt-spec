@@ -18,7 +18,9 @@ from arkitekt_spec.actions import (
 from arkitekt_spec.declare.blok.parser import parse_estimated_runtime, parse_fits
 from arkitekt_spec.declare.descriptors import fits_holds
 
-CORPUS = json.loads((Path(__file__).parent.parent / "fixtures" / "fits_corpus.json").read_text())
+CORPUS = json.loads(
+    (Path(__file__).parent.parent / "fixtures" / "fits_corpus.json").read_text()
+)
 
 
 def _definition() -> DefinitionInput:
@@ -28,8 +30,12 @@ def _definition() -> DefinitionInput:
         version="1",
         kind=ActionKind.FUNCTION,
         args=(
-            ArgPortInput(key="image", kind=PortKind.STRUCTURE, identifier="@mikro/arraylens"),
-            ArgPortInput(key="other", kind=PortKind.STRUCTURE, identifier="@mikro/arraylens"),
+            ArgPortInput(
+                key="image", kind=PortKind.STRUCTURE, identifier="@mikro/arraylens"
+            ),
+            ArgPortInput(
+                key="other", kind=PortKind.STRUCTURE, identifier="@mikro/arraylens"
+            ),
             ArgPortInput(key="scales", kind=PortKind.INT),
         ),
     )
@@ -39,7 +45,11 @@ def _estimate(formula: str, ui: str | None = None) -> ImplementationInput:
     return ImplementationInput(
         interface="segment",
         definition=_definition(),
-        estimated_runtime=EstimatedRuntimeInput(call=parse_estimated_runtime(formula), source=formula, ui_call=parse_estimated_runtime(ui) if ui else None),
+        estimated_runtime=EstimatedRuntimeInput(
+            call=parse_estimated_runtime(formula),
+            source=formula,
+            ui_call=parse_estimated_runtime(ui) if ui else None,
+        ),
     )
 
 
@@ -47,17 +57,32 @@ def test_a_formula_names_what_the_renderer_implements() -> None:
     call = parse_estimated_runtime('args.image["@mikro/size"] / agent.cpu_count')
 
     assert call.operation == "math.div"
-    assert [argument.value_path for argument in call.arguments] == ["args/image/@mikro~1size", "agent/cpu_count"]
+    assert [argument.value_path for argument in call.arguments] == [
+        "args/image/@mikro~1size",
+        "agent/cpu_count",
+    ]
 
 
-@pytest.mark.parametrize("formula", ["args.scales * 2", "args.image[\"@mikro/size\"] ** 2", "math.sqrt(args.image[\"@mikro/size\"]) * 2", "agent.state.camera.exposure * 2", "args.image[\"@mikro/size\"] + args.other[\"@mikro/size\"]"])
+@pytest.mark.parametrize(
+    "formula",
+    [
+        "args.scales * 2",
+        'args.image["@mikro/size"] ** 2',
+        'math.sqrt(args.image["@mikro/size"]) * 2',
+        "agent.state.camera.exposure * 2",
+        'args.image["@mikro/size"] + args.other["@mikro/size"]',
+    ],
+)
 def test_the_estimate_is_what_the_server_can_compute(formula: str) -> None:
     with pytest.raises(ValueError):
         _estimate(formula)
 
 
 def test_the_form_has_the_rest_but_not_agent_state() -> None:
-    _estimate('args.image["@mikro/size"] * 2', ui='math.sqrt(args.image["@mikro/size"]) * args.scales ** 2')
+    _estimate(
+        'args.image["@mikro/size"] * 2',
+        ui='math.sqrt(args.image["@mikro/size"]) * args.scales ** 2',
+    )
 
     with pytest.raises(ValueError, match="an agent has"):
         _estimate('args.image["@mikro/size"] * 2', ui="agent.state.camera.exposure * 2")
@@ -84,11 +109,17 @@ def test_a_fits_goes_on_a_single_structure_argument() -> None:
     call = parse_fits("@mikro/size < 4")
 
     with pytest.raises(ValueError, match="only a single structure"):
-        ImplementationInput(interface="segment", definition=_definition(), fits=(FitsInput(port="scales", call=call),))
+        ImplementationInput(
+            interface="segment",
+            definition=_definition(),
+            fits=(FitsInput(port="scales", call=call),),
+        )
 
 
 def test_neither_changes_the_action_hash() -> None:
-    assert definition_hash(_estimate('args.image["@mikro/size"] * 2').definition) == definition_hash(_definition())
+    assert definition_hash(
+        _estimate('args.image["@mikro/size"] * 2').definition
+    ) == definition_hash(_definition())
 
 
 @pytest.mark.parametrize("row", CORPUS["fits"], ids=lambda row: row["formula"])

@@ -47,12 +47,17 @@ def test_merging_two_different_declarations_is_refused() -> None:
 def test_require_app_context_checks_what_the_run_passed() -> None:
     registry = AppRegistry()
     registry.require_app_context(None, whose="App 'x'")
-    with pytest.raises(AppContextError, match="declares no app context, but was given a Config"):
+    with pytest.raises(
+        AppContextError, match="declares no app context, but was given a Config"
+    ):
         registry.require_app_context(Config(), whose="App 'x'")
 
     registry.app_context(Config)
     registry.require_app_context(Config(), whose="App 'x'")
-    with pytest.raises(AppContextError, match="declares an app context of class Config, but none was given"):
+    with pytest.raises(
+        AppContextError,
+        match="declares an app context of class Config, but none was given",
+    ):
         registry.require_app_context(None, whose="App 'x'")
     with pytest.raises(AppContextError, match="but was given a OtherConfig"):
         registry.require_app_context(OtherConfig(), whose="App 'x'")

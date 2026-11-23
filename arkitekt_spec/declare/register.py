@@ -128,9 +128,13 @@ def _warn_if_cancel_cannot_stop(function: AnyFunction, config: RegisterConfig) -
     Warned here, at registration, rather than raised: a threaded action that *does*
     poll for cancellation is perfectly valid, and nothing can tell from outside.
     """
-    runs_threaded = not (
-        inspect.iscoroutinefunction(function) or inspect.isasyncgenfunction(function)
-    ) and not config.in_process
+    runs_threaded = (
+        not (
+            inspect.iscoroutinefunction(function)
+            or inspect.isasyncgenfunction(function)
+        )
+        and not config.in_process
+    )
     if config.policy.cancels_on_disconnect and runs_threaded:
         warnings.warn(
             f"{getattr(function, '__name__', function)!r} asks to be cancelled on "
@@ -157,7 +161,9 @@ def code_hash_of(function_or_actor: AnyFunction) -> str | None:
     return hashlib.sha256(code).hexdigest()
 
 
-def _logo_of(config: RegisterConfig, interface: str, registry: "AppRegistry") -> dict[str, Any]:
+def _logo_of(
+    config: RegisterConfig, interface: str, registry: "AppRegistry"
+) -> dict[str, Any]:
     """The ``logo`` field of an implementation: the action logo blok's name, declaring an inline one."""
     if config.logo is None:
         return {}
@@ -208,7 +214,13 @@ def _fits_of(function_or_actor: AnyFunction, interface: str) -> tuple[FitsInput,
     for key, hint in get_type_hints(function_or_actor, include_extras=True).items():
         for marker in _fits_markers(hint):
             try:
-                fits.append(FitsInput(port=key, call=parse_fits(marker.expression), source=marker.expression))
+                fits.append(
+                    FitsInput(
+                        port=key,
+                        call=parse_fits(marker.expression),
+                        source=marker.expression,
+                    )
+                )
             except ValueError as error:
                 raise DefinitionError(f"{interface}: {error}") from error
     return tuple(fits)
@@ -218,14 +230,19 @@ def _estimated_runtime_of(config: RegisterConfig, interface: str) -> dict[str, A
     """The ``estimated_runtime`` field of an implementation, only when it has one."""
     if config.estimated_runtime is None:
         if config.estimated_runtime_ui is not None:
-            raise DefinitionError(f"{interface}: estimated_runtime_ui needs estimated_runtime, which is what the action query filters by")
+            raise DefinitionError(
+                f"{interface}: estimated_runtime_ui needs estimated_runtime, which is what the action query filters by"
+            )
         return {}
     try:
         estimate = EstimatedRuntimeInput(
             call=parse_estimated_runtime(config.estimated_runtime),
             source=config.estimated_runtime,
             **(
-                {"ui_call": parse_estimated_runtime(config.estimated_runtime_ui), "ui_source": config.estimated_runtime_ui}
+                {
+                    "ui_call": parse_estimated_runtime(config.estimated_runtime_ui),
+                    "ui_source": config.estimated_runtime_ui,
+                }
                 if config.estimated_runtime_ui is not None
                 else {}
             ),
@@ -308,15 +325,26 @@ def register_func(
 
     asks: list[AskBlokInput] = []
     informs: list[InformBlokInput] = []
-    for key, cls in implementation_details.interaction_variables.interaction_variables.items():
+    for (
+        key,
+        cls,
+    ) in implementation_details.interaction_variables.interaction_variables.items():
         declared = structure_registry.interactions_for(cls)
         asks.extend(declared.to_ask_inputs(key))
         informs.extend(declared.to_inform_inputs(key))
 
     # A port's own blok is checked where it is mounted: against its port, the action's
     # arguments and the action's dependencies.
-    check_port_bloks(definition.args or (), tuple(dependencies), implementation_registry, f"Action {interface!r}", interface=interface)
-    if not definition.stateful and widgets_read_self(definition.args or (), implementation_registry):
+    check_port_bloks(
+        definition.args or (),
+        tuple(dependencies),
+        implementation_registry,
+        f"Action {interface!r}",
+        interface=interface,
+    )
+    if not definition.stateful and widgets_read_self(
+        definition.args or (), implementation_registry
+    ):
         # A widget that shows the agent's own state makes it matter which agent runs the action:
         # it is stateful, so a caller names the agent and the form is drawn for that one.
         definition = definition.model_copy(update={"stateful": True})
@@ -326,7 +354,16 @@ def register_func(
         arg_keys = tuple(port.key for port in definition.args or ())
         owner = f"Action {interface!r}"
         definition = definition.model_copy(
-            update={"bloks": build_action_bloks(config.bloks, tuple(dependencies), implementation_registry, owner, arg_keys=arg_keys, interface=interface)}
+            update={
+                "bloks": build_action_bloks(
+                    config.bloks,
+                    tuple(dependencies),
+                    implementation_registry,
+                    owner,
+                    arg_keys=arg_keys,
+                    interface=interface,
+                )
+            }
         )
 
     optimistics: list[OptimisticInput] = [
@@ -346,30 +383,30 @@ def register_func(
     # queries, state references) is checked here, at the decorator.
     implementation_registry.register_at_interface(
         interface,
-        check_implementation(ImplementationInput(
-            interface=interface,
-            definition=definition,
-            locks=tuple(implementation_details.locks or []),
-            optimistics=tuple(optimistics),
-            dependencies=tuple(dependencies),
-            needs_token=True,  # TODO: Make this configurable in the future, but for now, we want to ensure that all actors require tokens for security reasons.
-            manipulates=tuple(implementation_details.manipulates or []),
-            effects=config.effects or implementation_registry.default_effects,
-            execution=config.execution,
-            code_hash=code_hash_of(function_or_actor),
-            # Set only when there is one, so an action without a logo keeps its wire bytes.
-            **_logo_of(config, interface, implementation_registry),
-            # The same for interactions and the dynamic flags: an action declaring none keeps its hash.
-            **_declared_interactions(asks, informs, config),
-            **_estimated_runtime_of(config, interface),
-            **declared_fits,
-        )),
+        check_implementation(
+            ImplementationInput(
+                interface=interface,
+                definition=definition,
+                locks=tuple(implementation_details.locks or []),
+                optimistics=tuple(optimistics),
+                dependencies=tuple(dependencies),
+                needs_token=True,  # TODO: Make this configurable in the future, but for now, we want to ensure that all actors require tokens for security reasons.
+                manipulates=tuple(implementation_details.manipulates or []),
+                effects=config.effects or implementation_registry.default_effects,
+                execution=config.execution,
+                code_hash=code_hash_of(function_or_actor),
+                # Set only when there is one, so an action without a logo keeps its wire bytes.
+                **_logo_of(config, interface, implementation_registry),
+                # The same for interactions and the dynamic flags: an action declaring none keeps its hash.
+                **_declared_interactions(asks, informs, config),
+                **_estimated_runtime_of(config, interface),
+                **declared_fits,
+            )
+        ),
         DeclaredImplementation(function_or_actor, config, actifier),
     )
 
     return definition
-
-
 
 
 @overload

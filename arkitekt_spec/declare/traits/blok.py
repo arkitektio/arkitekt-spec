@@ -13,7 +13,10 @@ Spec = TypeVar("Spec", bound=BaseModel)
 def _as(model: type[Spec], values: object) -> tuple[Spec, ...]:
     """Generated client inputs (models or dicts) as the spec's models, through their dumps."""
     items: list[object] = list(values) if isinstance(values, (list, tuple)) else []  # pyright: ignore[reportUnknownArgumentType]
-    return tuple(model.model_validate(item.model_dump() if isinstance(item, BaseModel) else item) for item in items)
+    return tuple(
+        model.model_validate(item.model_dump() if isinstance(item, BaseModel) else item)
+        for item in items
+    )
 
 
 class CreateBlokInputTrait(BaseModel):
@@ -40,7 +43,9 @@ class CreateBlokInputTrait(BaseModel):
         scope = BlokScope(
             kinds=("custom",),
             mount="createBlok",
-            dependencies=_as(AgentDependencyInput, getattr(model, "dependencies", None)),
+            dependencies=_as(
+                AgentDependencyInput, getattr(model, "dependencies", None)
+            ),
         )
         trees = list(_as(ComponentNodeInput, getattr(model, "components", None)))
         source: object = getattr(model, "source", None)

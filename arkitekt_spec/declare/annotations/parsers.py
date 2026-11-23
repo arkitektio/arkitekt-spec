@@ -130,7 +130,11 @@ try:
         ]
         return UtilCallInput(
             operation=operation,
-            arguments=tuple(resolve_base_arguments(operation, positional, f"annotated_types {operation}")),
+            arguments=tuple(
+                resolve_base_arguments(
+                    operation, positional, f"annotated_types {operation}"
+                )
+            ),
         )
 
     def _own_value_source(operation: str, *literals: Any) -> str:

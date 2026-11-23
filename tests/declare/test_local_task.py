@@ -30,7 +30,13 @@ def test_a_local_task_is_a_task_and_only_logs(caplog: pytest.LogCaptureFixture) 
     task = Task.local(id="t1")
     assert isinstance(task, LocalTask) and isinstance(task, Task)
     assert is_task(LocalTask) and is_task(Task)
-    assert (task.id, task.user, task.assigner, task.org, task.token) == ("t1", "local", "local", "local", None)
+    assert (task.id, task.user, task.assigner, task.org, task.token) == (
+        "t1",
+        "local",
+        "local",
+        "local",
+        None,
+    )
     with caplog.at_level(logging.INFO, logger="arkitekt.task"):
         task.log("hello")
         task.log("careful", LogLevel.WARN)
@@ -40,7 +46,9 @@ def test_a_local_task_is_a_task_and_only_logs(caplog: pytest.LogCaptureFixture) 
     assert task.pausepoint() is None
 
 
-def test_a_local_task_reports_asynchronously_too(caplog: pytest.LogCaptureFixture) -> None:
+def test_a_local_task_reports_asynchronously_too(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     task = Task.local(id="t2")
 
     async def report() -> None:
@@ -109,9 +117,13 @@ def test_a_local_task_takes_effects_without_recording_them() -> None:
     assert isinstance(task, Task), "still the spec's Task"
 
 
-def test_a_local_task_holds_for_nobody_and_carries_on_approved(caplog: pytest.LogCaptureFixture) -> None:
+def test_a_local_task_holds_for_nobody_and_carries_on_approved(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     task = Task.local()
-    prompt = AssignPrompt(title="Overwrite the plate", description="It holds last week's run.")
+    prompt = AssignPrompt(
+        title="Overwrite the plate", description="It holds last week's run."
+    )
 
     with caplog.at_level(logging.WARNING, logger="arkitekt.task"):
         decision = task.hold("Overwrite?", prompt=prompt)

@@ -34,7 +34,17 @@ if TYPE_CHECKING:
 BASE_CATALOG_NAME = "base"
 BASE_CATALOG_VERSION = 1
 BASE_CATALOG_ID = f"{BASE_CATALOG_NAME}@{BASE_CATALOG_VERSION}"
-VALUE_KINDS = ("STRING", "INT", "FLOAT", "BOOL", "DICT", "LIST", "ANY", "CALLBACK", "ASSET")
+VALUE_KINDS = (
+    "STRING",
+    "INT",
+    "FLOAT",
+    "BOOL",
+    "DICT",
+    "LIST",
+    "ANY",
+    "CALLBACK",
+    "ASSET",
+)
 
 ASSET_KIND = "ASSET"
 """The prop kind that names a file an app registered: bound to ``<dependency>.assets.<name>``."""
@@ -58,8 +68,11 @@ def asset_path_parts(path: str) -> tuple[str, str] | None:
     if len(parts) < 2 or parts[1] != ASSETS_SEGMENT:
         return None
     if len(parts) != 3 or not all(parts):
-        raise ValueError(f"an asset is named '<dependency>.assets.<name>', not {path!r}")
+        raise ValueError(
+            f"an asset is named '<dependency>.assets.<name>', not {path!r}"
+        )
     return parts[0], parts[2]
+
 
 PANEL_CONTEXT = "PANEL"
 SCENE_CONTEXT = "SCENE"
@@ -69,7 +82,15 @@ COMPONENT_CONTEXTS = (PANEL_CONTEXT, SCENE_CONTEXT, LOGO_CONTEXT)
 BLOK_ARGS_ROOT = "args"
 """The path root a blok reads the items it is opened for at (``@args.image``): null until it is opened for one."""
 
-LOGO_PAINT_TOKENS = ("ink", "muted", "brand", "brand-strong", "brand-soft", "surface", "none")
+LOGO_PAINT_TOKENS = (
+    "ink",
+    "muted",
+    "brand",
+    "brand-strong",
+    "brand-soft",
+    "surface",
+    "none",
+)
 """The palette: colours of the viewer's theme, never of the logo's own.
 
 Orkestrator draws each from its brand hue (``var(--logo-<token>)``), so a logo painted
@@ -210,17 +231,25 @@ def _parse(raw: dict) -> Catalog:  # type: ignore[type-arg]
     for entry in raw["operations"]:
         name = entry["name"]
         if not name or name in seen:
-            raise ValueError(f"base catalog: duplicate or empty operation name {name!r}")
+            raise ValueError(
+                f"base catalog: duplicate or empty operation name {name!r}"
+            )
         seen.add(name)
         if entry["returns"] not in VALUE_KINDS:
-            raise ValueError(f"base catalog: {name} returns unknown kind {entry['returns']!r}")
+            raise ValueError(
+                f"base catalog: {name} returns unknown kind {entry['returns']!r}"
+            )
         arguments: list[ArgumentSpec] = []
         keys: set[str] = set()
         for argument in entry.get("arguments", []):
             if not argument["key"] or argument["key"] in keys:
-                raise ValueError(f"base catalog: {name} has a duplicate or empty argument key {argument['key']!r}")
+                raise ValueError(
+                    f"base catalog: {name} has a duplicate or empty argument key {argument['key']!r}"
+                )
             if argument["kind"] not in VALUE_KINDS:
-                raise ValueError(f"base catalog: {name}.{argument['key']} has unknown kind {argument['kind']!r}")
+                raise ValueError(
+                    f"base catalog: {name}.{argument['key']} has unknown kind {argument['kind']!r}"
+                )
             keys.add(argument["key"])
             arguments.append(
                 ArgumentSpec(
@@ -244,7 +273,9 @@ def _parse(raw: dict) -> Catalog:  # type: ignore[type-arg]
         name=raw["name"],
         version=int(raw["version"]),
         operations=tuple(operations),
-        components=tuple(_parse_components(raw, raw.get("components", []), camel=False)),
+        components=tuple(
+            _parse_components(raw, raw.get("components", []), camel=False)
+        ),
         description=raw.get("description"),
     )
 
@@ -252,7 +283,11 @@ def _parse(raw: dict) -> Catalog:  # type: ignore[type-arg]
 @functools.lru_cache(maxsize=1)
 def load_base_catalog() -> Catalog:
     """The vendored manifest, parsed and validated (cached)."""
-    text = resources.files(__package__ or "arkitekt_spec.declare.catalogs").joinpath("base_v1.json").read_text(encoding="utf-8")
+    text = (
+        resources.files(__package__ or "arkitekt_spec.declare.catalogs")
+        .joinpath("base_v1.json")
+        .read_text(encoding="utf-8")
+    )
     return _parse(json.loads(text))
 
 
@@ -285,33 +320,44 @@ def is_base_component(name: str) -> bool:
 
 # --------------------------------------------------------------------------- catalog payloads
 
+
 def _parse_context(raw: dict, component: str, value: object) -> str | None:  # type: ignore[type-arg]
     if value is None:
         return None
     if value not in COMPONENT_CONTEXTS:
-        raise ValueError(f"catalog {raw.get('name')!r}: {component} has unknown context {value!r}")
+        raise ValueError(
+            f"catalog {raw.get('name')!r}: {component} has unknown context {value!r}"
+        )
     return str(value)
 
 
-def _parse_components(raw: dict, entries: Iterable[dict], *, camel: bool) -> list[ComponentSpec]:  # type: ignore[type-arg]
+def _parse_components(
+    raw: dict, entries: Iterable[dict], *, camel: bool
+) -> list[ComponentSpec]:  # type: ignore[type-arg]
     """Component entries as :class:`ComponentSpec`: a published catalog spells its keys in camelCase, the base manifest in snake_case."""
 
     def field(entry: dict, snake: str) -> object:  # type: ignore[type-arg]
         head, *rest = snake.split("_")
-        return entry.get(head + "".join(part.title() for part in rest) if camel else snake)
+        return entry.get(
+            head + "".join(part.title() for part in rest) if camel else snake
+        )
 
     components: list[ComponentSpec] = []
     seen: set[str] = set()
     for entry in entries:
         name = entry["name"]
         if not name or name in seen:
-            raise ValueError(f"catalog {raw.get('name')!r}: duplicate or empty component name {name!r}")
+            raise ValueError(
+                f"catalog {raw.get('name')!r}: duplicate or empty component name {name!r}"
+            )
         seen.add(name)
         props: list[PropSpec] = []
         keys: set[str] = set()
         for prop in entry.get("props", []):
             if prop["key"] in keys:
-                raise ValueError(f"catalog {raw.get('name')!r}: {name} repeats the prop {prop['key']!r}")
+                raise ValueError(
+                    f"catalog {raw.get('name')!r}: {name} repeats the prop {prop['key']!r}"
+                )
             if prop["kind"] not in VALUE_KINDS:
                 raise ValueError(
                     f"catalog {raw.get('name')!r}: {name}.{prop['key']} has unknown kind {prop['kind']!r}"
@@ -319,8 +365,13 @@ def _parse_components(raw: dict, entries: Iterable[dict], *, camel: bool) -> lis
             keys.add(prop["key"])
             event = prop.get("event")
             values = prop.get("values")
-            if values is not None and (not isinstance(values, list) or not all(isinstance(value, str) for value in values)):
-                raise ValueError(f"catalog {raw.get('name')!r}: {name}.{prop['key']} has values that are not a list of strings")
+            if values is not None and (
+                not isinstance(values, list)
+                or not all(isinstance(value, str) for value in values)
+            ):
+                raise ValueError(
+                    f"catalog {raw.get('name')!r}: {name}.{prop['key']} has values that are not a list of strings"
+                )
             props.append(
                 PropSpec(
                     key=prop["key"],
@@ -329,7 +380,11 @@ def _parse_components(raw: dict, entries: Iterable[dict], *, camel: bool) -> lis
                     description=prop.get("description"),
                     event=(
                         tuple(
-                            EventFieldSpec(key=field["key"], kind=field["kind"], description=field.get("description"))
+                            EventFieldSpec(
+                                key=field["key"],
+                                kind=field["kind"],
+                                description=field.get("description"),
+                            )
                             for field in event
                         )
                         if isinstance(event, list)
@@ -346,8 +401,11 @@ def _parse_components(raw: dict, entries: Iterable[dict], *, camel: bool) -> lis
                 accepts_children=bool(field(entry, "accepts_children") or False),
                 props=tuple(props),
                 description=entry.get("description"),
-                context=_parse_context(raw, name, entry.get("context")) or PANEL_CONTEXT,
-                children_context=_parse_context(raw, name, field(entry, "children_context")),
+                context=_parse_context(raw, name, entry.get("context"))
+                or PANEL_CONTEXT,
+                children_context=_parse_context(
+                    raw, name, field(entry, "children_context")
+                ),
                 inherits_context=bool(field(entry, "inherits_context") or False),
                 downstream_of=tuple(field(entry, "downstream_of") or ()),  # type: ignore[arg-type]
                 not_downstream_of=tuple(field(entry, "not_downstream_of") or ()),  # type: ignore[arg-type]
@@ -357,14 +415,18 @@ def _parse_components(raw: dict, entries: Iterable[dict], *, camel: bool) -> lis
                 since=int(entry.get("since") or 0),
                 group=entry.get("group") or None,
                 touch=entry.get("touch") or None,
-                catalog=f"{raw.get('name')}@{version}" if version is not None else raw.get("name"),
+                catalog=f"{raw.get('name')}@{version}"
+                if version is not None
+                else raw.get("name"),
             )
         )
 
     return components
 
 
-def parse_catalog_components(raw: "Mapping[str, object]", *, camel: bool) -> list[ComponentSpec]:
+def parse_catalog_components(
+    raw: "Mapping[str, object]", *, camel: bool
+) -> list[ComponentSpec]:
     """Every component of a catalog payload, base ones included: a published catalog spells its
     keys in camelCase, the spec's own files (the base catalog, an app catalog) in snake_case.
 
@@ -373,7 +435,9 @@ def parse_catalog_components(raw: "Mapping[str, object]", *, camel: bool) -> lis
     """
     try:
         entries: object = raw.get("components", [])
-        return _parse_components(dict(raw), entries if isinstance(entries, list) else [], camel=camel)  # pyright: ignore[reportUnknownArgumentType]
+        return _parse_components(
+            dict(raw), entries if isinstance(entries, list) else [], camel=camel
+        )
     except (KeyError, TypeError) as error:
         raise ValueError(f"not a catalog payload: {error!r}") from error
 
@@ -385,7 +449,9 @@ def _parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]
     only extends the base, and a published one lists everything the app evaluates, base included.
     """
     components = [
-        component for component in _parse_components(raw, raw.get("components", []), camel=True) if not is_base_component(component.name)
+        component
+        for component in _parse_components(raw, raw.get("components", []), camel=True)
+        if not is_base_component(component.name)
     ]
 
     operations: list[OperationSpec] = []
@@ -465,7 +531,9 @@ class Diagnostic:
     path: str | None = None
 
 
-def _finding(findings: "list[Diagnostic] | None", code: str, message: str, owner: str) -> None:
+def _finding(
+    findings: "list[Diagnostic] | None", code: str, message: str, owner: str
+) -> None:
     """Record a catalog finding in ``findings``, or raise it when there is no list to record it in."""
     if findings is None:
         raise ValueError(message)
@@ -484,7 +552,9 @@ class CatalogWarning(UserWarning):
         blok: The key of the blok it is about (``monitor``, or an action's interface).
     """
 
-    def __init__(self, message: str, *, finding: "Finding | None" = None, blok: str | None = None) -> None:
+    def __init__(
+        self, message: str, *, finding: "Finding | None" = None, blok: str | None = None
+    ) -> None:
         super().__init__(message)
         self.finding = finding
         self.blok = blok
@@ -519,15 +589,25 @@ def check_extension_does_not_shadow_base(catalog: Catalog) -> None:
     Raises:
         ValueError: If the catalog defines an operation or component the base catalog already provides.
     """
-    shadowed = sorted({operation.name for operation in catalog.operations} & set(base_operations()))
+    shadowed = sorted(
+        {operation.name for operation in catalog.operations} & set(base_operations())
+    )
     if shadowed:
-        raise ValueError(f"catalog {catalog.name!r} cannot redefine base operations {shadowed}")
-    shadowed = sorted({component.name for component in catalog.components} & set(base_components()))
+        raise ValueError(
+            f"catalog {catalog.name!r} cannot redefine base operations {shadowed}"
+        )
+    shadowed = sorted(
+        {component.name for component in catalog.components} & set(base_components())
+    )
     if shadowed:
-        raise ValueError(f"catalog {catalog.name!r} cannot redefine base components {shadowed}")
+        raise ValueError(
+            f"catalog {catalog.name!r} cannot redefine base components {shadowed}"
+        )
 
 
-def resolve_catalogs(catalogs: Sequence[Catalog], *, authoritative: bool) -> CatalogView:
+def resolve_catalogs(
+    catalogs: Sequence[Catalog], *, authoritative: bool
+) -> CatalogView:
     """The view in force for the base catalog extended by ``catalogs``.
 
     Two catalogs may provide the same operation or component only if they define it
@@ -549,7 +629,11 @@ def resolve_catalogs(catalogs: Sequence[Catalog], *, authoritative: bool) -> Cat
             if is_base_operation(operation.name):
                 continue
             previous = operations.get(operation.name)
-            if previous is not None and operation.name in operation_provider and previous != operation:
+            if (
+                previous is not None
+                and operation.name in operation_provider
+                and previous != operation
+            ):
                 raise ValueError(
                     f"operation {operation.name!r} is defined differently by catalogs "
                     f"{operation_provider[operation.name]!r} and {catalog.name!r}"
@@ -620,10 +704,24 @@ def check_call(
     passed = set(argument_keys)
     unknown = sorted(passed - set(accepted))
     if unknown:
-        _finding(findings, OPERATION_ARGUMENTS, f"{owner}: operation {operation!r} does not accept arguments {unknown}", owner)
-    missing = sorted(key for key, argument in accepted.items() if argument.required and key not in passed)
+        _finding(
+            findings,
+            OPERATION_ARGUMENTS,
+            f"{owner}: operation {operation!r} does not accept arguments {unknown}",
+            owner,
+        )
+    missing = sorted(
+        key
+        for key, argument in accepted.items()
+        if argument.required and key not in passed
+    )
     if missing:
-        _finding(findings, OPERATION_ARGUMENTS, f"{owner}: operation {operation!r} requires arguments {missing}", owner)
+        _finding(
+            findings,
+            OPERATION_ARGUMENTS,
+            f"{owner}: operation {operation!r} requires arguments {missing}",
+            owner,
+        )
     return None
 
 
@@ -671,16 +769,33 @@ def check_component(
         _finding(findings, UNKNOWN_COMPONENT, message, owner)
         return
     if has_children and not spec.accepts_children:
-        _finding(findings, COMPONENT_CHILDREN, f"{owner}: component {component!r} does not accept children", owner)
+        _finding(
+            findings,
+            COMPONENT_CHILDREN,
+            f"{owner}: component {component!r} does not accept children",
+            owner,
+        )
 
     prop_specs = {prop.key: prop for prop in spec.props}
     present = set(prop_keys)
     unknown = sorted(present - set(prop_specs))
     if unknown:
-        _finding(findings, COMPONENT_PROPS, f"{owner}: component {component!r} has no props {unknown}", owner)
-    missing = sorted(key for key, prop in prop_specs.items() if prop.required and key not in present)
+        _finding(
+            findings,
+            COMPONENT_PROPS,
+            f"{owner}: component {component!r} has no props {unknown}",
+            owner,
+        )
+    missing = sorted(
+        key for key, prop in prop_specs.items() if prop.required and key not in present
+    )
     if missing:
-        _finding(findings, COMPONENT_PROPS, f"{owner}: component {component!r} requires props {missing}", owner)
+        _finding(
+            findings,
+            COMPONENT_PROPS,
+            f"{owner}: component {component!r} requires props {missing}",
+            owner,
+        )
 
     for key in sorted(present & set(prop_specs)):
         prop_spec = prop_specs[key]
@@ -692,11 +807,13 @@ def check_component(
             try:
                 named = asset_path_parts(path) if path is not None else None
             except ValueError as error:
-                _finding(findings, ASSET_PROP, f"prop {key!r} of {owner}: {error}", owner)
+                _finding(
+                    findings, ASSET_PROP, f"prop {key!r} of {owner}: {error}", owner
+                )
                 continue
             if named is None:
                 message = (
                     f"prop {key!r} of {owner} is an ASSET prop and must name an asset "
-                    f"the app registered, as in {key}=\"@self.assets.<name>\""
+                    f'the app registered, as in {key}="@self.assets.<name>"'
                 )
                 _finding(findings, ASSET_PROP, message, owner)

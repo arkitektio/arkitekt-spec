@@ -26,7 +26,10 @@ FAKTS_MARKER = "__arkitekt_fakts__"
 
 def is_fakts_client(annotation: Any) -> bool:
     """Whether a parameter annotation asks for the whole configuration client."""
-    return isinstance(annotation, type) and getattr(annotation, FAKTS_MARKER, False) is True
+    return (
+        isinstance(annotation, type)
+        and getattr(annotation, FAKTS_MARKER, False) is True
+    )
 
 
 class MeshError(Exception):
@@ -121,7 +124,11 @@ class Alias(BaseModel):
         it is pinned (:meth:`is_pinned`), the public roots otherwise."""
         from arkitekt_spec.declare import tls
 
-        return tls.pinned_context(self.certificates) if self.is_pinned() else tls.default_context()
+        return (
+            tls.pinned_context(self.certificates)
+            if self.is_pinned()
+            else tls.default_context()
+        )
 
     def through_mesh(self, proxy: str, node: MeshNode | None = None) -> Self:
         """A copy of this alias, reached through the mesh: over the HTTP
@@ -139,7 +146,9 @@ class Alias(BaseModel):
         if self._mesh is not None:
             return self._mesh
         if not self.is_mesh():
-            raise MeshError(f"alias {self.id} ({self.host}) is not on the mesh; it has no {what}")
+            raise MeshError(
+                f"alias {self.id} ({self.host}) is not on the mesh; it has no {what}"
+            )
         raise MeshError(
             f"alias {self.id} was not resolved through a mesh node this process runs, "
             f"so it has no {what}: turn the mesh on (ARKITEKT_MESH=1) rather than "
@@ -157,7 +166,9 @@ class Alias(BaseModel):
                 process.
         """
         node = self._mesh_node("TCP forward")
-        return await node.forward(self.host, port or self.port or (443 if self.ssl else 80))
+        return await node.forward(
+            self.host, port or self.port or (443 if self.ssl else 80)
+        )
 
     async def aturn(self) -> TurnInfo:
         """The TURN relay of the mesh node this alias is reached through, as an

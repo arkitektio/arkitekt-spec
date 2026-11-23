@@ -28,7 +28,9 @@ def is_app_context(cls: Any, structure_registry: "StructureRegistry | None") -> 
     return structure_registry is not None and structure_registry.is_app_context(cls)
 
 
-def is_read_only_state(cls: Any, structure_registry: "StructureRegistry | None") -> bool:
+def is_read_only_state(
+    cls: Any, structure_registry: "StructureRegistry | None"
+) -> bool:
     """Whether ``cls`` is a state of the app marked read-only, i.e. ``ReadOnly[SomeState]``.
 
     The marker is a :class:`~arkitekt_spec.declare.state.types.ReadOnlyAnnotation` *instance*

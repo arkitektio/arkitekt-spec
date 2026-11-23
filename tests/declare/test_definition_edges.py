@@ -5,7 +5,10 @@ from enum import Enum
 from typing import Literal, Protocol
 
 from arkitekt_spec.actions import ActionKind, PortKind, definition_hash
-from arkitekt_spec.declare.annotations.parsers import PortAnnotations, extract_annotations
+from arkitekt_spec.declare.annotations.parsers import (
+    PortAnnotations,
+    extract_annotations,
+)
 from arkitekt_spec.declare.definition.define import prepare_definition
 from arkitekt_spec.declare.structures.registry import StructureRegistry
 
@@ -64,14 +67,6 @@ def test_empty_list_default_is_kept() -> None:
     assert definition.args[0].default == []
 
 
-
-
-
-
-
-
-
-
 def test_hash_tells_functions_and_generators_apart() -> None:
     registry = StructureRegistry()
     function = prepare_definition(returns_int, registry)
@@ -123,10 +118,6 @@ def takes_flag(x: bool) -> bool:
     return x
 
 
-
-
 def returns_flag() -> bool:
     """Flag"""
     return True
-
-

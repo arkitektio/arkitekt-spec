@@ -25,4 +25,3 @@ async def id_shrink(
 def build_instance_predicate(cls: type[object]) -> Predicator:
     """Build a predicate function that checks if an object is an instance of the given class."""
     return lambda value: isinstance(value, cls)
-

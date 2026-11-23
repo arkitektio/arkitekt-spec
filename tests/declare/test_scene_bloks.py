@@ -48,13 +48,30 @@ SCOPE = f"""{SCENE}
 def test_a_scene_blok_registers_and_carries_its_context_and_default() -> None:
     registry = _scope()
     registry.register_blok("scope_3d", SCOPE, default=True, mode="strict")
-    registry.register_blok("turret_panel", f"{PANEL}<Card /></Blok>", default=True, for_model=REF, for_node="turret")
+    registry.register_blok(
+        "turret_panel",
+        f"{PANEL}<Card /></Blok>",
+        default=True,
+        for_model=REF,
+        for_node="turret",
+    )
 
     declared = build_declared_bloks(registry)
-    wire = declared["scope_3d"].model_dump(mode="json", by_alias=True, exclude_none=True)
-    assert (wire["context"], wire["default"]) == ("SCENE", True) and "catalog" not in wire
-    panel = declared["turret_panel"].model_dump(mode="json", by_alias=True, exclude_none=True)
-    assert (panel["context"], panel["forModel"], panel["forNode"]) == ("PANEL", REF, "turret")
+    wire = declared["scope_3d"].model_dump(
+        mode="json", by_alias=True, exclude_none=True
+    )
+    assert (wire["context"], wire["default"]) == (
+        "SCENE",
+        True,
+    ) and "catalog" not in wire
+    panel = declared["turret_panel"].model_dump(
+        mode="json", by_alias=True, exclude_none=True
+    )
+    assert (panel["context"], panel["forModel"], panel["forNode"]) == (
+        "PANEL",
+        REF,
+        "turret",
+    )
 
 
 @pytest.mark.parametrize(
@@ -63,12 +80,26 @@ def test_a_scene_blok_registers_and_carries_its_context_and_default() -> None:
         (f"{SCENE}<Card /></Blok>", {}, "blok.content"),
         (f"{PANEL}<Model src={SRC} /></Blok>", {}, "catalog.placement"),
         (f'{SCENE}<Scene><Model src="{REF}" /></Scene></Blok>', {}, "catalog.asset"),
-        (f"{SCENE}<Scene><Model src={{self.Stage.x}} /></Scene></Blok>", {}, "catalog.asset"),
-        (f'{SCENE}<Scene><Move node="a" axis="x" /></Scene></Blok>', {}, "catalog.placement"),
-        (f"{SCENE}<Scene><Model src={SRC}><Badge /></Model></Scene></Blok>", {}, "catalog.placement"),
+        (
+            f"{SCENE}<Scene><Model src={{self.Stage.x}} /></Scene></Blok>",
+            {},
+            "catalog.asset",
+        ),
+        (
+            f'{SCENE}<Scene><Move node="a" axis="x" /></Scene></Blok>',
+            {},
+            "catalog.placement",
+        ),
+        (
+            f"{SCENE}<Scene><Model src={SRC}><Badge /></Model></Scene></Blok>",
+            {},
+            "catalog.placement",
+        ),
     ],
 )
-def test_a_scene_blok_that_breaks_the_rules_is_refused(tree: str, options: dict, code: str) -> None:
+def test_a_scene_blok_that_breaks_the_rules_is_refused(
+    tree: str, options: dict, code: str
+) -> None:
     with pytest.raises(BlokError) as caught:
         _scope().register_blok("bad", tree, **options, mode="strict")
     assert caught.value.code == code
@@ -77,8 +108,16 @@ def test_a_scene_blok_that_breaks_the_rules_is_refused(tree: str, options: dict,
 @pytest.mark.parametrize(
     ("tree", "options", "message"),
     [
-        (f"{PANEL}<Card /></Blok>", {"for_model": "9f2c"}, "for_model must be 'sha256:'"),
-        (f"{PANEL}<Card /></Blok>", {"for_node": "turret"}, "for_node without a for_model"),
+        (
+            f"{PANEL}<Card /></Blok>",
+            {"for_model": "9f2c"},
+            "for_model must be 'sha256:'",
+        ),
+        (
+            f"{PANEL}<Card /></Blok>",
+            {"for_node": "turret"},
+            "for_node without a for_model",
+        ),
         (SCOPE, {"for_model": REF}, "only a panel blok can decorate a model"),
     ],
 )
@@ -95,11 +134,14 @@ def test_a_handler_reading_the_event_declares_no_dependency_for_it() -> None:
         mode="strict",
     )
     (dependency,) = build_declared_bloks(registry)["arm_3d"].dependencies
-    assert [demand.key for demand in dependency.action_dependencies or ()] == ["move_joint"]
+    assert [demand.key for demand in dependency.action_dependencies or ()] == [
+        "move_joint"
+    ]
 
 
 def test_an_event_field_the_component_does_not_hand_is_refused() -> None:
     with pytest.raises(BlokError, match="callback.event_field"):
         _scope().register_blok(
-            "arm_3d", f"{SCENE}<Scene><Robot src={SRC} onJointChange={{self.move_joint(name: event.joint, position: 1)}} /></Scene></Blok>"
+            "arm_3d",
+            f"{SCENE}<Scene><Robot src={SRC} onJointChange={{self.move_joint(name: event.joint, position: 1)}} /></Scene></Blok>",
         )

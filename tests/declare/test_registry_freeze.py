@@ -31,7 +31,9 @@ def test_the_register_methods_are_refused() -> None:
         registry.register_memory_structure(Frame)
 
     with pytest.raises(RegistryFrozenError):
-        registry.register_blok(name="b", component='<Blok kind="agent" context="panel"><Card /></Blok>')
+        registry.register_blok(
+            name="b", component='<Blok kind="agent" context="panel"><Card /></Blok>'
+        )
 
 
 def test_freezing_an_app_registry_freezes_its_hooks_too() -> None:

@@ -105,7 +105,9 @@ class AppNamespace(BaseModel):
     def defines(self, cls: type[Any]) -> bool:
         """Whether ``cls`` is a class this app defines itself (see the class docstring)."""
         module_name = cls.__module__
-        if module_name == "__main__" or (self.module is not None and module_name == self.module):
+        if module_name == "__main__" or (
+            self.module is not None and module_name == self.module
+        ):
             return True
         if self.root is None:
             return False
@@ -145,7 +147,11 @@ def cls_to_identifier(cls: type[Any], namespace: str | None = None) -> Identifie
     so the namespace goes in the package slot and the class name in the key slot.
     """
     try:
-        package = package_slot(namespace) if namespace is not None else MOVED_BY_PYTHON.get(cls.__module__, cls.__module__).lower()
+        package = (
+            package_slot(namespace)
+            if namespace is not None
+            else MOVED_BY_PYTHON.get(cls.__module__, cls.__module__).lower()
+        )
         return validate_identifier(f"@{package}/{cls.__name__.lower()}")
     except AttributeError as e:
         raise StructureDefinitionError(
@@ -202,7 +208,9 @@ def is_global_structure(cls: type[Any]) -> bool:
     )
 
 
-def fullfilled_enum_from_cls(cls: type[Enum], namespace: str | None = None) -> FullFilledEnum:
+def fullfilled_enum_from_cls(
+    cls: type[Enum], namespace: str | None = None
+) -> FullFilledEnum:
     """Build a FullFilledEnum from an Enum subclass, its identifier in ``namespace`` (see :func:`cls_to_identifier`)."""
     choices = enum_choices(cls)
 

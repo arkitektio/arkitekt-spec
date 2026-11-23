@@ -142,7 +142,18 @@ class Into:
     offset: int
 
 
-Expr = Literal | ListExpr | ObjectExpr | Path | Call | Not | Compare | Logical | Ternary | Into
+Expr = (
+    Literal
+    | ListExpr
+    | ObjectExpr
+    | Path
+    | Call
+    | Not
+    | Compare
+    | Logical
+    | Ternary
+    | Into
+)
 
 
 # --------------------------------------------------------------------------- tokens
@@ -159,11 +170,55 @@ class Token:
 
 
 _OPERATORS = (
-    "===", "!==", "=>", "==", "!=", ">=", "<=", "&&", "||", "??", "?.", "**",
-    "(", ")", "[", "]", "{", "}", ",", ":", ".", "?", "!", ">", "<", "=", ";",
-    "+", "-", "*", "/", "%", "&", "|", "^", "~", "`",
+    "===",
+    "!==",
+    "=>",
+    "==",
+    "!=",
+    ">=",
+    "<=",
+    "&&",
+    "||",
+    "??",
+    "?.",
+    "**",
+    "(",
+    ")",
+    "[",
+    "]",
+    "{",
+    "}",
+    ",",
+    ":",
+    ".",
+    "?",
+    "!",
+    ">",
+    "<",
+    "=",
+    ";",
+    "+",
+    "-",
+    "*",
+    "/",
+    "%",
+    "&",
+    "|",
+    "^",
+    "~",
+    "`",
 )
-_ESCAPES = {"\\": "\\", '"': '"', "'": "'", "n": "\n", "t": "\t", "r": "\r", "/": "/", "b": "\b", "f": "\f"}
+_ESCAPES = {
+    "\\": "\\",
+    '"': '"',
+    "'": "'",
+    "n": "\n",
+    "t": "\t",
+    "r": "\r",
+    "/": "/",
+    "b": "\b",
+    "f": "\f",
+}
 _ARITHMETIC = {"+": "add", "-": "sub", "*": "mul", "/": "div", "%": "mod", "**": "pow"}
 
 
@@ -188,7 +243,10 @@ class _Lexer:
 
     def tokens(self) -> list[Token]:
         """The tokens, each at its offset into the whole source."""
-        return [Token(t.kind, t.value, t.offset + self.base, t.literal) for t in self._tokens()]
+        return [
+            Token(t.kind, t.value, t.offset + self.base, t.literal)
+            for t in self._tokens()
+        ]
 
     def _tokens(self) -> list[Token]:
         text = self.text
@@ -216,11 +274,17 @@ class _Lexer:
                 out.append(Token("string", text[index:end], index, value))
                 index = end
                 continue
-            operator = next((op for op in _OPERATORS if text.startswith(op, index)), None)
+            operator = next(
+                (op for op in _OPERATORS if text.startswith(op, index)), None
+            )
             if operator is None:
                 raise self.fail("expr.syntax", index, detail=f"unexpected {char!r}")
             if operator == "`":
-                raise self.fail("expr.syntax", index, detail="template literals are not supported; use text children or str.template")
+                raise self.fail(
+                    "expr.syntax",
+                    index,
+                    detail="template literals are not supported; use text children or str.template",
+                )
             out.append(Token("op", operator, index))
             index += len(operator)
         out.append(Token("end", "", len(text)))
@@ -232,9 +296,16 @@ class _Lexer:
         while index < len(text) and text[index].isdigit():
             index += 1
         if text[start] == "0" and index - start > 1:
-            raise self.fail("expr.syntax", start, detail="a number has no leading zeros")
+            raise self.fail(
+                "expr.syntax", start, detail="a number has no leading zeros"
+            )
         is_float = False
-        if index < len(text) and text[index] == "." and index + 1 < len(text) and text[index + 1].isdigit():
+        if (
+            index < len(text)
+            and text[index] == "."
+            and index + 1 < len(text)
+            and text[index + 1].isdigit()
+        ):
             is_float = True
             index += 1
             while index < len(text) and text[index].isdigit():
@@ -249,7 +320,11 @@ class _Lexer:
                 while index < len(text) and text[index].isdigit():
                     index += 1
         if index < len(text) and _is_name_part(text[index]):
-            raise self.fail("expr.syntax", start, detail=f"{text[start:index + 1]!r} is not a number")
+            raise self.fail(
+                "expr.syntax",
+                start,
+                detail=f"{text[start : index + 1]!r} is not a number",
+            )
         written = text[start:index]
         return index, float(written) if is_float else int(written)
 
@@ -265,18 +340,26 @@ class _Lexer:
             if char == quote:
                 return index + 1, "".join(parts)
             if char == "\n":
-                raise self.fail("expr.syntax", start, detail="a string is never closed on its line")
+                raise self.fail(
+                    "expr.syntax", start, detail="a string is never closed on its line"
+                )
             if char == "\\":
                 escape = text[index + 1] if index + 1 < len(text) else ""
                 if escape == "u":
                     digits = text[index + 2 : index + 6]
-                    if len(digits) != 4 or any(c not in "0123456789abcdefABCDEF" for c in digits):
-                        raise self.fail("expr.syntax", index, detail="\\u takes four hex digits")
+                    if len(digits) != 4 or any(
+                        c not in "0123456789abcdefABCDEF" for c in digits
+                    ):
+                        raise self.fail(
+                            "expr.syntax", index, detail="\\u takes four hex digits"
+                        )
                     parts.append(chr(int(digits, 16)))
                     index += 6
                     continue
                 if escape not in _ESCAPES:
-                    raise self.fail("expr.syntax", index, detail=f"unknown escape \\{escape}")
+                    raise self.fail(
+                        "expr.syntax", index, detail=f"unknown escape \\{escape}"
+                    )
                 parts.append(_ESCAPES[escape])
                 index += 2
                 continue
@@ -320,7 +403,14 @@ PICK_VERB = "pick"
 
 
 class _Parser:
-    def __init__(self, text: str, base: int, locate: Locator, references: frozenset[str] = frozenset(), custom: bool = False) -> None:
+    def __init__(
+        self,
+        text: str,
+        base: int,
+        locate: Locator,
+        references: frozenset[str] = frozenset(),
+        custom: bool = False,
+    ) -> None:
         self.references = references
         self.custom = custom
         """In a custom blok: its bound agents are written ``agents.<key>`` (stored ``deps.<key>``)."""
@@ -337,7 +427,9 @@ class _Parser:
 
     def fail(self, code: str, offset: int | None = None, **fields: object) -> BlokError:
         """Refuse at ``offset`` (into the whole source), the current token's when left out."""
-        line, column = self.lexer.locate(self.token.offset if offset is None else offset)
+        line, column = self.lexer.locate(
+            self.token.offset if offset is None else offset
+        )
         return BlokError(code, line=line, column=column, **fields)
 
     def advance(self) -> Token:
@@ -356,7 +448,9 @@ class _Parser:
     def unexpected(self, expected: str) -> BlokError:
         token = self.token
         if token.kind == "end":
-            return self.fail("expr.syntax", detail=f"{expected}, but the expression ends")
+            return self.fail(
+                "expr.syntax", detail=f"{expected}, but the expression ends"
+            )
         if token.kind == "op":
             refused = self._refused(token)
             if refused is not None:
@@ -367,7 +461,9 @@ class _Parser:
         """The code of an operator the language refuses by design."""
         value = token.value
         if value in _ARITHMETIC:
-            return self.fail("expr.arithmetic", operator=value, function=_ARITHMETIC[value])
+            return self.fail(
+                "expr.arithmetic", operator=value, function=_ARITHMETIC[value]
+            )
         if value == "=>":
             return self.fail("expr.lambda")
         if value == "=":
@@ -377,9 +473,13 @@ class _Parser:
         if value == "[":
             return self.fail("expr.subscript")
         if value in ("===", "!=="):
-            return self.fail("expr.syntax", detail=f"write {value[:2]}: equality is always deep")
+            return self.fail(
+                "expr.syntax", detail=f"write {value[:2]}: equality is always deep"
+            )
         if value == "?.":
-            return self.fail("expr.syntax", detail="?. is not supported; missing paths read as null")
+            return self.fail(
+                "expr.syntax", detail="?. is not supported; missing paths read as null"
+            )
         return None
 
     # -- entry points
@@ -391,7 +491,11 @@ class _Parser:
         if self.token.kind == "name" and self.token.value == "with":
             with_ = self.advance()
             name = self.token
-            if not isinstance(expression, Call) or name.kind != "name" or name.value == "into":
+            if (
+                not isinstance(expression, Call)
+                or name.kind != "name"
+                or name.value == "into"
+            ):
                 raise self.fail("callback.with", with_.offset)
             self.advance()
             expression = replace(expression, given=name.value)
@@ -427,7 +531,13 @@ class _Parser:
         return Ternary(cond=cond, then=then, otherwise=otherwise, offset=offset)
 
     def logical(self, operator: str) -> Expr:
-        inner = (lambda: self.logical("||")) if operator == "??" else (lambda: self.logical("&&")) if operator == "||" else self.equality
+        inner = (
+            (lambda: self.logical("||"))
+            if operator == "??"
+            else (lambda: self.logical("&&"))
+            if operator == "||"
+            else self.equality
+        )
         first = inner()
         operands = [first]
         offset = first.offset
@@ -446,7 +556,9 @@ class _Parser:
         right = self.relation()
         if self.is_op("==", "!=", ">", ">=", "<", "<="):
             raise self.fail("expr.chained_comparison")
-        return Compare(operator=operator.value, left=left, right=right, offset=operator.offset)
+        return Compare(
+            operator=operator.value, left=left, right=right, offset=operator.offset
+        )
 
     def relation(self) -> Expr:
         left = self.unary()
@@ -456,7 +568,9 @@ class _Parser:
         right = self.unary()
         if self.is_op(">", ">=", "<", "<="):
             raise self.fail("expr.chained_comparison")
-        return Compare(operator=operator.value, left=left, right=right, offset=operator.offset)
+        return Compare(
+            operator=operator.value, left=left, right=right, offset=operator.offset
+        )
 
     def unary(self) -> Expr:
         if self.is_op("!"):
@@ -478,7 +592,10 @@ class _Parser:
         if self.is_op("(") and not isinstance(expression, Call):
             raise self.fail("expr.syntax", detail="only a path can be called")
         if isinstance(expression, Call) and self.is_op("."):
-            raise self.fail("expr.syntax", detail="a call's result has no fields; read them from its record")
+            raise self.fail(
+                "expr.syntax",
+                detail="a call's result has no fields; read them from its record",
+            )
         return expression
 
     def primary(self) -> Expr:
@@ -493,8 +610,22 @@ class _Parser:
             if token.value == "null":
                 self.advance()
                 return Literal(value=None, offset=token.offset)
-            if token.value in ("undefined", "function", "new", "await", "async", "typeof", "this", "let", "const", "var"):
-                raise self.fail("expr.syntax", detail=f"{token.value!r} is not part of the blok language")
+            if token.value in (
+                "undefined",
+                "function",
+                "new",
+                "await",
+                "async",
+                "typeof",
+                "this",
+                "let",
+                "const",
+                "var",
+            ):
+                raise self.fail(
+                    "expr.syntax",
+                    detail=f"{token.value!r} is not part of the blok language",
+                )
             return self.path_or_call()
         if token.kind == "op":
             if token.value == "(":
@@ -523,8 +654,16 @@ class _Parser:
             raise self.fail("expr.lambda")
         # A read or a call through declared dependencies (`cells.microscope.stage`) is one of
         # the blok's dependencies, `deps.cells__microscope`; `cells.pick(...)` stays as written.
-        if segments[0] in self.references and len(segments) > 1 and not (self.is_op("(") and segments[1:] == [PICK_VERB]):
-            segments = ["deps", f"{segments[0]}{REFERENCE_SEPARATOR}{segments[1]}", *segments[2:]]
+        if (
+            segments[0] in self.references
+            and len(segments) > 1
+            and not (self.is_op("(") and segments[1:] == [PICK_VERB])
+        ):
+            segments = [
+                "deps",
+                f"{segments[0]}{REFERENCE_SEPARATOR}{segments[1]}",
+                *segments[2:],
+            ]
         elif self.custom and segments[0] == AGENTS_ROOT:
             segments[0] = "deps"
         elif self.custom and segments[0] == "deps":
@@ -539,16 +678,32 @@ class _Parser:
                 break
             self.advance()
         self.expect(")")
-        return Call(callee=tuple(segments), arguments=tuple(arguments), offset=first.offset)
+        return Call(
+            callee=tuple(segments), arguments=tuple(arguments), offset=first.offset
+        )
 
     def argument(self) -> Argument:
         token = self.token
-        if token.kind == "name" and self.peek().kind == "op" and self.peek().value == ":":
+        if (
+            token.kind == "name"
+            and self.peek().kind == "op"
+            and self.peek().value == ":"
+        ):
             self.advance()
             self.advance()
-            return Argument(name=token.value, value=self.expression(), offset=token.offset)
-        if token.kind == "name" and self.peek().kind == "op" and self.peek().value == "=":
-            raise self.fail("expr.syntax", self.peek().offset, detail=f"name an argument with ':' ({token.value}: ...)")
+            return Argument(
+                name=token.value, value=self.expression(), offset=token.offset
+            )
+        if (
+            token.kind == "name"
+            and self.peek().kind == "op"
+            and self.peek().value == "="
+        ):
+            raise self.fail(
+                "expr.syntax",
+                self.peek().offset,
+                detail=f"name an argument with ':' ({token.value}: ...)",
+            )
         return Argument(name=None, value=self.expression(), offset=token.offset)
 
     def list_literal(self) -> ListExpr:
@@ -587,7 +742,14 @@ class _Parser:
         return ObjectExpr(entries=tuple(entries), offset=offset)
 
 
-def parse_expression(text: str, *, base: int = 0, locate: Locator | None = None, references: frozenset[str] = frozenset(), custom: bool = False) -> Expr:
+def parse_expression(
+    text: str,
+    *,
+    base: int = 0,
+    locate: Locator | None = None,
+    references: frozenset[str] = frozenset(),
+    custom: bool = False,
+) -> Expr:
     """Parse a value expression (no ``into``).
 
     Args:
@@ -606,7 +768,14 @@ def parse_expression(text: str, *, base: int = 0, locate: Locator | None = None,
     return expression
 
 
-def parse_attribute(text: str, *, base: int = 0, locate: Locator | None = None, references: frozenset[str] = frozenset(), custom: bool = False) -> Expr:
+def parse_attribute(
+    text: str,
+    *,
+    base: int = 0,
+    locate: Locator | None = None,
+    references: frozenset[str] = frozenset(),
+    custom: bool = False,
+) -> Expr:
     """Parse an attribute's expression: a value, or a callback (``<call> into <name>``).
 
     Raises:

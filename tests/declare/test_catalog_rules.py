@@ -29,7 +29,9 @@ from .catalog_cases import (
     [case[1:] for case in CALL_CASES],
     ids=[case[0] for case in CALL_CASES],
 )
-def test_check_call(operation: str, keys: tuple, authoritative: bool, expectation: str) -> None:
+def test_check_call(
+    operation: str, keys: tuple, authoritative: bool, expectation: str
+) -> None:
     view = resolve_catalogs([ELECTRON], authoritative=authoritative)
 
     if expectation is ERROR:
@@ -50,7 +52,11 @@ def test_check_call(operation: str, keys: tuple, authoritative: bool, expectatio
     ids=[case[0] for case in COMPONENT_CASES],
 )
 def test_check_component(
-    component: str, prop_keys: tuple, has_children: bool, bindings: dict, expectation: str
+    component: str,
+    prop_keys: tuple,
+    has_children: bool,
+    bindings: dict,
+    expectation: str,
 ) -> None:
     view = electron_view()
 
@@ -67,7 +73,11 @@ def test_check_component(
     ids=[case[0] for case in COMPONENT_CASES],
 )
 def test_every_component_rule_is_skipped_without_specs(
-    component: str, prop_keys: tuple, has_children: bool, bindings: dict, expectation: str
+    component: str,
+    prop_keys: tuple,
+    has_children: bool,
+    bindings: dict,
+    expectation: str,
 ) -> None:
     """With no registered components nothing is knowable, so nothing is invented.
 

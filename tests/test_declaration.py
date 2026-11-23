@@ -8,13 +8,17 @@ from arkitekt_spec.actions import ImplementationInput
 FIXTURES = Path(__file__).parent / "fixtures"
 IMPLEMENTATIONS = [
     ImplementationInput.model_validate(v["implementation"])
-    for v in yaml.safe_load((FIXTURES / "definitions.yaml").read_text())["definitions"][2:]
+    for v in yaml.safe_load((FIXTURES / "definitions.yaml").read_text())["definitions"][
+        2:
+    ]
 ]
 
 
 def declaration(description: str | None = "Segments nuclei") -> AppDeclaration:
     return AppDeclaration(
-        manifest=AppManifest(identifier="starmist", version="0.1.0", description=description),
+        manifest=AppManifest(
+            identifier="starmist", version="0.1.0", description=description
+        ),
         requirements=[Requirement(key="mikro", service="live.arkitekt.mikro")],
         implementations=IMPLEMENTATIONS,
     )

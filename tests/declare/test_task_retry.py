@@ -44,7 +44,11 @@ def test_a_step_that_started_is_not_tried_again_unless_you_say_so() -> None:
 
 
 def test_it_gives_up_after_its_attempts() -> None:
-    call = flaky(AgentLost(started=False), AgentLost(started=False), AgentLost(started=False, last_progress=10))
+    call = flaky(
+        AgentLost(started=False),
+        AgentLost(started=False),
+        AgentLost(started=False, last_progress=10),
+    )
 
     with pytest.raises(AgentLost) as lost:
         retry(call, 3, attempts=3)

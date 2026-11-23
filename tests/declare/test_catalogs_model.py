@@ -25,8 +25,17 @@ def test_base_catalog_is_a_catalog() -> None:
     base = load_base_catalog()
     assert isinstance(base, Catalog)
     assert base.name == "base" and base.version == BASE_CATALOG_VERSION
-    assert {component.name for component in base.components} >= {"foreach", "if", "match", "case", "default", "when"}
-    assert all(component.name == component.name.lower() for component in base.components)
+    assert {component.name for component in base.components} >= {
+        "foreach",
+        "if",
+        "match",
+        "case",
+        "default",
+        "when",
+    }
+    assert all(
+        component.name == component.name.lower() for component in base.components
+    )
 
 
 def test_resolve_extends_base_without_replacing_it() -> None:
@@ -40,7 +49,9 @@ def test_resolve_extends_base_without_replacing_it() -> None:
 def test_components_are_none_until_some_catalog_registers_any() -> None:
     """The base catalog has none, so component names are unknowable until a UI app registers."""
     assert resolve_catalogs([], authoritative=True).components is None
-    assert resolve_catalogs([Catalog(name="empty")], authoritative=True).components is None
+    assert (
+        resolve_catalogs([Catalog(name="empty")], authoritative=True).components is None
+    )
     assert resolve_catalogs([ELECTRON], authoritative=True).components is not None
 
 

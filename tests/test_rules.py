@@ -17,8 +17,17 @@ def port(key: str, kind: str = "INT", **extra: object) -> dict[str, object]:
     return {"key": key, "kind": kind, "nullable": False, **extra}
 
 
-def definition(args: tuple[object, ...] | list[object] = (), **extra: object) -> dict[str, object]:
-    return {"key": "f", "version": "1", "name": "F", "kind": "FUNCTION", "args": list(args), **extra}
+def definition(
+    args: tuple[object, ...] | list[object] = (), **extra: object
+) -> dict[str, object]:
+    return {
+        "key": "f",
+        "version": "1",
+        "name": "F",
+        "kind": "FUNCTION",
+        "args": list(args),
+        **extra,
+    }
 
 
 def test_a_structure_port_needs_an_identifier():
@@ -34,7 +43,9 @@ def test_a_list_has_exactly_one_child():
 def test_a_dict_may_have_named_children_but_not_mixed_with_the_item_key():
     ArgPortInput.model_validate(port("x", "DICT", children=[port("a"), port("b")]))
     with pytest.raises(ValidationError, match="homogeneous"):
-        ArgPortInput.model_validate(port("x", "DICT", children=[port("..."), port("b")]))
+        ArgPortInput.model_validate(
+            port("x", "DICT", children=[port("..."), port("b")])
+        )
 
 
 def test_a_default_must_be_json():
@@ -58,7 +69,9 @@ def test_a_validator_may_only_reach_its_dependencies():
 
 
 def test_dependencies_are_inferred_from_value_paths():
-    call = ValidatorInput.model_validate({"call": _call("/other/x"), "dependencies": ["other"]}).call
+    call = ValidatorInput.model_validate(
+        {"call": _call("/other/x"), "dependencies": ["other"]}
+    ).call
     assert infer_dependencies(call) == ("other",)
 
 
@@ -71,7 +84,9 @@ def test_a_definition_dependency_must_resolve_to_a_port():
 def test_an_agent_refuses_duplicate_interfaces_and_missing_locks():
     implementation = {"definition": definition(), "interface": "f"}
     with pytest.raises(ValidationError, match="Duplicate implementation interface"):
-        ImplementAgentInput.model_validate({"implementations": [implementation, implementation]})
+        ImplementAgentInput.model_validate(
+            {"implementations": [implementation, implementation]}
+        )
     with pytest.raises(ValidationError, match="references lock 'gpu'"):
         ImplementAgentInput.model_validate(
             {"implementations": [{**implementation, "locks": ["gpu"]}]}

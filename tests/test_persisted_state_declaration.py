@@ -18,7 +18,12 @@ def test_a_startup_hook_takes_a_persisted_states_old_value() -> None:
 
     hook = registry.hooks_registry.startup_hooks["start"]
     assert hook.previous_state_variables == {"old": "camera"}
-    assert hook.get_startup_kwargs(None, None, {"camera": Camera(exposure=3)})["old"].exposure == 3
+    assert (
+        hook.get_startup_kwargs(None, None, {"camera": Camera(exposure=3)})[
+            "old"
+        ].exposure
+        == 3
+    )
     assert hook.get_startup_kwargs(None, None)["old"] is None, "a first run has none"
 
 

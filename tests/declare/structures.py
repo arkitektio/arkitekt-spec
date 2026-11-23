@@ -80,7 +80,6 @@ class IdentifiableSerializableObject(BaseModel):
 class SecondObject:
     """Another SerializableObject that has a id"""
 
-
     def __init__(self, id: str) -> None:
         """Initialize the object with an id.
 

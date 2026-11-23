@@ -87,7 +87,9 @@ def _kind(value: Any) -> str:
     return str(getattr(value, "value", value))
 
 
-def _shown(key: str | None, kind: Any, identifier: str | None, nullable: bool | None) -> str:
+def _shown(
+    key: str | None, kind: Any, identifier: str | None, nullable: bool | None
+) -> str:
     """A port or a match as a message names it: ``'name' (STRING, nullable)``."""
     details = [_kind(kind)] if kind is not None else []
     if identifier:
@@ -108,7 +110,9 @@ def _fits(match: PortMatchInput, port: Any) -> bool:
         return False
     if match.nullable is not None and match.nullable != bool(port.nullable):
         return False
-    if match.dimension is not None and match.dimension != getattr(port, "dimension", None):
+    if match.dimension is not None and match.dimension != getattr(
+        port, "dimension", None
+    ):
         return False
     return unmet_match(match.children or (), port.children or ()) is None
 
@@ -215,18 +219,28 @@ def check_demands(
             definition = implementation.definition
             args, returns = definition.args or (), definition.returns or ()
             if demand.name is not None and demand.name != definition.name:
-                found(PORT_MISMATCH, action.key, f"{app}'s {key} is named {definition.name!r}, not {demand.name!r}")
+                found(
+                    PORT_MISMATCH,
+                    action.key,
+                    f"{app}'s {key} is named {definition.name!r}, not {demand.name!r}",
+                )
                 continue
             for what, matches, ports, forced in (
                 ("argument", demand.arg_matches, args, demand.force_arg_length),
                 ("return", demand.return_matches, returns, demand.force_return_length),
             ):
                 if forced is not None and forced != len(ports):
-                    found(PORT_MISMATCH, action.key, f"{app}'s {key} has {len(ports)} {what}s, not {forced}")
+                    found(
+                        PORT_MISMATCH,
+                        action.key,
+                        f"{app}'s {key} has {len(ports)} {what}s, not {forced}",
+                    )
                     break
                 reason = unmet_match(matches or (), ports)
                 if reason is not None:
-                    found(PORT_MISMATCH, action.key, f"{app}'s {key}, {what}s: {reason}")
+                    found(
+                        PORT_MISMATCH, action.key, f"{app}'s {key}, {what}s: {reason}"
+                    )
                     break
 
         for state in dependency.state_dependencies or ():
@@ -238,7 +252,9 @@ def check_demands(
             if declared is None:
                 found(STATE_MISSING, state.key, f"{app} has no state {key!r}")
                 continue
-            reason = unmet_match(state_demand.matches or (), declared.definition.ports or ())
+            reason = unmet_match(
+                state_demand.matches or (), declared.definition.ports or ()
+            )
             if reason is not None:
                 found(STATE_MISMATCH, state.key, f"{app}'s state {key}: {reason}")
     return findings

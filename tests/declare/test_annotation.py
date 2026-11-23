@@ -73,7 +73,9 @@ def test_annotation_good(simple_registry: StructureRegistry) -> None:
     assert validators[0].call.arguments[0].key == "a"
     assert validators[0].call.arguments[0].value_path == "value"
     assert validators[0].call.arguments[1].value_literal == 0
-    assert validators[0].error_message == "You must select at least one service to install"
+    assert (
+        validators[0].error_message == "You must select at least one service to install"
+    )
 
 
 @pytest.mark.define
@@ -113,7 +115,7 @@ def test_validator_func_wrong_deps() -> None:
                                     dependency="stage", operation="move"
                                 )
                             ),
-                        )
+                        ),
                     ),
                 ),
             ),

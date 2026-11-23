@@ -40,7 +40,9 @@ async def shrink_book_through(book: Book, library: Library) -> str:
 
 def bound(shrink: Shrinker) -> FullFilledStructure:
     registry = StructureRegistry(clients={"library": Library})
-    registry.register_as_structure(Book, "@test/book", aexpand=expand_book, ashrink=shrink)
+    registry.register_as_structure(
+        Book, "@test/book", aexpand=expand_book, ashrink=shrink
+    )
     registry.bind({"library": Library("central")})
     return registry.get_fullfilled_structure("@test/book")
 

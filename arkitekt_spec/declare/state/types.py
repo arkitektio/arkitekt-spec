@@ -12,7 +12,6 @@ class ReadOnlyAnnotation:
     """Metadata marker for read-only fields."""
 
 
-
 # 3. Create the generic TypeAlias
 # The syntax ReadOnlyType[T] allows you to pass any type into it
 ReadOnly: TypeAlias = Annotated[T, ReadOnlyAnnotation()]
