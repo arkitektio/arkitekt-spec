@@ -2,7 +2,7 @@
  "id": "https://arkitekt.live/catalogs/base/v4",
  "name": "base",
  "version": 4,
- "minor": 3,
+ "minor": 4,
  "extends": null,
  "description": "The base catalog: everything every renderer draws. The language's own elements (control flow, async boundaries, the Blok element, the declarations, text), the html components, the structure and run parts a host supplies, the scene and the logo shapes. A renderer speaks it whole, in the contexts it draws; functions and effects are in vocabulary.json.",
  "components": [
@@ -290,6 +290,33 @@
     "custom"
    ],
    "since": 3
+  },
+  {
+   "name": "logo",
+   "group": "language",
+   "description": "Declares the blok's own logo: what stands for it in lists, pins and tabs. A drawing of the logo catalog on a 24-unit grid, painted with the logo pens, drawn with the action logos' pen unless a shape says otherwise; literals only. A child of <Blok>, one; draws nothing in the blok.",
+   "context": "PANEL",
+   "children_context": "LOGO",
+   "inherits_context": false,
+   "accepts_children": true,
+   "downstream_of": [],
+   "not_downstream_of": [],
+   "text_prop": null,
+   "props": [
+    {
+     "key": "title",
+     "kind": "STRING",
+     "required": false,
+     "description": "What the logo is called: read out in place of the drawing."
+    },
+    {
+     "key": "viewBox",
+     "kind": "STRING",
+     "required": false,
+     "description": "The drawing's grid; 0 0 24 24 when left out."
+    }
+   ],
+   "since": 4
   },
   {
    "name": "#text",

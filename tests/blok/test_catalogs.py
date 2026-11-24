@@ -73,7 +73,7 @@ def test_the_base_catalog_is_one_list_named_by_its_address() -> None:
         BASE_ID,
         "base",
         4,
-        3,
+        4,
         None,
     )
     assert load_vocabulary().base_catalog == BASE_ID
@@ -113,6 +113,7 @@ def test_the_base_catalog_holds_every_family() -> None:
         "subscription",
         "var",
         "dependencies",
+        "logo",
         "#text",
     }
     assert groups["html"] == {"div", "p", "span"}

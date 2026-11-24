@@ -56,7 +56,7 @@ def test_then_replaces_now_in_every_kind_but_the_action_logo() -> None:
 def test_catalogs_are_versioned_and_kinds_compatible() -> None:
     vocabulary = load_vocabulary()
 
-    assert (vocabulary.vocab, vocabulary.minor) == (2, 7)
+    assert (vocabulary.vocab, vocabulary.minor) == (2, 8)
     assert vocabulary.base_catalog == "https://arkitekt.live/catalogs/base/v4"
     assert list(vocabulary.bundled_catalogs.values()) == [
         "catalogs/base@4.json",

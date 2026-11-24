@@ -26,7 +26,7 @@ from arkitekt_spec.actions import (
     ComponentPropInput,
     UtilCallInput,
 )
-from arkitekt_spec.blok.declared import LOCAL_COMPONENT, NAME_PROP
+from arkitekt_spec.blok.declared import LOCAL_COMPONENT, LOGO_COMPONENT, NAME_PROP
 from arkitekt_spec.blok.vocabulary import load_vocabulary
 
 FOREACH_COMPONENT = "foreach"
@@ -267,6 +267,10 @@ def _walk_node(
         if name is not None:
             inner[name] = visitor.bind_local(name, child, dict(inner))
     for child in children:
+        # A blok's own <logo> draws nothing in it and reads nothing: it is checked as a logo
+        # blok of its own (`blok_logo_tree`), never as part of the blok it stands for.
+        if child.component == LOGO_COMPONENT:
+            continue
         _walk_node(child, visitor, inner, (*ancestors, node), in_slot)
 
 

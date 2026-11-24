@@ -6,7 +6,9 @@ Every blok is one ``<Blok kind=... context=...>`` element (``vocabulary.json`` `
   host's chrome, all literals on the root;
 - its declarations, each a node of its own that draws nothing: ``<local>`` anywhere (first among
   its parent's children, in scope in its parent's subtree), ``<query>`` and ``<subscription>``
-  as children of the ``<Blok>``, each with ``<var>`` children for its variables.
+  as children of the ``<Blok>``, each with ``<var>`` children for its variables, and the blok's
+  own ``<logo>`` (:func:`declared_logo`): a drawing of the logo catalog that stands for the blok
+  in lists, pins and tabs, checked and drawn as a logo blok of its own (:func:`blok_logo_tree`).
 
 Nothing here checks a rule beyond what makes a declaration readable at all; the validator
 (:mod:`arkitekt_spec.declare.blok.validate`) says the rest.
@@ -32,6 +34,8 @@ QUERY_COMPONENT = "query"
 SUBSCRIPTION_COMPONENT = "subscription"
 VAR_COMPONENT = "var"
 DEPENDENCIES_COMPONENT = "dependencies"
+LOGO_COMPONENT = "logo"
+"""A blok's own logo: a child of its ``<Blok>`` holding a drawing of the logo catalog."""
 DECLARATION_COMPONENTS = frozenset(
     {
         LOCAL_COMPONENT,
@@ -39,6 +43,7 @@ DECLARATION_COMPONENTS = frozenset(
         SUBSCRIPTION_COMPONENT,
         VAR_COMPONENT,
         DEPENDENCIES_COMPONENT,
+        LOGO_COMPONENT,
     }
 )
 """The components that declare what a blok owns and draw nothing."""
@@ -52,6 +57,20 @@ KIND_ATTRIBUTE = "kind"
 CONTEXT_ATTRIBUTE = "context"
 CATALOG_ATTRIBUTE = "catalog"
 CHROME_ATTRIBUTE = "chrome"
+LOGO_TITLE_PROP = "title"
+LOGO_VIEW_BOX_PROP = "viewBox"
+LOGO_VIEW_BOX = "0 0 24 24"
+"""A logo's grid when its ``<logo>`` names none: 24 units, the grid of the action logos."""
+LOGO_PEN: tuple[tuple[str, str], ...] = (
+    ("fill", "none"),
+    ("stroke", "ink"),
+    ("strokeWidth", "1.8"),
+    ("strokeLinecap", "round"),
+    ("strokeLinejoin", "round"),
+)
+"""The pen a ``<logo>`` draws with unless a shape says otherwise: the action logos' pen."""
+LOGO_KIND = "agent"
+"""The kind a ``<logo>`` is drawn as (:func:`blok_logo_tree`): one drawn in the logo context."""
 _LOCAL_FIELDS = frozenset(BlokLocalInput.model_fields) - {"key"}
 """What a ``<local>`` may say beside its name: a port's fields and ``persist``."""
 
@@ -526,12 +545,75 @@ def declared_subscriptions(
     )
 
 
+def declared_logo(tree: ComponentNodeInput) -> ComponentNodeInput | None:
+    """The blok's own ``<logo>``: the first among the children of its ``<Blok>``, or None.
+
+    A ``<logo>`` anywhere else, or a second one, stands for nothing (the validator says so:
+    ``logo.misplaced``, ``logo.twice``).
+    """
+    return next(
+        (child for child in tree.children or () if child.component == LOGO_COMPONENT),
+        None,
+    )
+
+
+def blok_logo_tree(tree: ComponentNodeInput) -> ComponentNodeInput | None:
+    """The blok's ``<logo>`` as a logo blok of its own, or None when it declares none.
+
+    ``<Blok kind="agent" context="logo"><Logo viewBox title><G pen>...</G></Logo></Blok>``:
+    what is checked (pens, the logo catalog, the logo limits) and drawn for it. Its kind is
+    ``agent`` whatever the blok's (a custom blok is drawn in no logo context): a ``<logo>`` is
+    literals only and reads nothing, so no kind's roots matter to it. The drawing's
+    nodes are the ``<logo>``'s own, so a finding about one points into the blok; the frame takes
+    the ``<logo>``'s id (and two ids made from it).
+    """
+    logo = declared_logo(tree)
+    if logo is None:
+        return None
+    props = {prop.key: prop for prop in logo.props or ()}
+    title = props.get(LOGO_TITLE_PROP)
+    view_box = props.get(LOGO_VIEW_BOX_PROP)
+    drawing_props = [
+        view_box
+        if view_box is not None
+        else ComponentPropInput(key=LOGO_VIEW_BOX_PROP, static_value=LOGO_VIEW_BOX)
+    ]
+    if title is not None:
+        drawing_props.append(title)
+    pen = ComponentNodeInput(
+        id=f"{logo.id}.pen",
+        component="G",
+        props=tuple(
+            ComponentPropInput(key=key, static_value=value) for key, value in LOGO_PEN
+        ),
+        children=logo.children,
+    )
+    drawing = ComponentNodeInput(
+        id=f"{logo.id}.drawing",
+        component="Logo",
+        props=tuple(drawing_props),
+        children=(pen,),
+    )
+    return ComponentNodeInput(
+        id=logo.id,
+        component=BLOK_COMPONENT,
+        props=(
+            ComponentPropInput(key=KIND_ATTRIBUTE, static_value=LOGO_KIND),
+            ComponentPropInput(key=CONTEXT_ATTRIBUTE, static_value="logo"),
+        ),
+        children=(drawing,),
+    )
+
+
 __all__ = [
     "BLOK_COMPONENT",
     "DECLARATION_COMPONENTS",
     "DEPENDENCIES_COMPONENT",
     "LIKE_PROP",
     "LOCAL_COMPONENT",
+    "LOGO_COMPONENT",
+    "LOGO_PEN",
+    "LOGO_VIEW_BOX",
     "NAME_PROP",
     "QUERY_COMPONENT",
     "SUBSCRIPTION_COMPONENT",
@@ -542,11 +624,13 @@ __all__ = [
     "blok_context",
     "blok_header",
     "blok_kind",
+    "blok_logo_tree",
     "content",
     "declaration_problem",
     "declared_dependencies",
     "declared_local",
     "declared_locals",
+    "declared_logo",
     "declared_queries",
     "declared_subscriptions",
     "header_problem",

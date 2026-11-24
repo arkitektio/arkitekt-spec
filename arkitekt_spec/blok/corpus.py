@@ -1113,6 +1113,41 @@ CHECKS: Sequence[Check] = (
         ("palette.logo_paint",),
     ),
     Check(
+        "a panel says what it looks like",
+        '<Blok kind="agent" context="panel"><logo title="Scope"><Circle cx="12" cy="12" r="7" /><Path d="M12 5v14" /></logo><Card><Text text="hi" /></Card></Blok>',
+        (),
+    ),
+    Check(
+        "a custom blok and a scene have a logo too",
+        '<Blok kind="custom" context="scene"><logo><Circle r="4" /></logo><Scene /></Blok>',
+        (),
+    ),
+    Check(
+        "a blok's own logo paints with pens",
+        '<Blok kind="agent" context="panel"><logo><Circle r="4" fill="#ff0000" /></logo><Card /></Blok>',
+        ("palette.logo_paint",),
+    ),
+    Check(
+        "a logo is a child of its blok",
+        '<Blok kind="agent" context="panel"><Card><logo><Circle r="4" /></logo></Card></Blok>',
+        ("logo.misplaced",),
+    ),
+    Check(
+        "a blok has one logo",
+        '<Blok kind="agent" context="panel"><logo><Circle r="4" /></logo><logo><Circle r="4" /></logo><Card /></Blok>',
+        ("logo.twice",),
+    ),
+    Check(
+        "a logo blok declares no logo",
+        '<Blok kind="agent" context="logo"><logo><Circle r="4" /></logo><Logo><Circle r="4" /></Logo></Blok>',
+        ("logo.in_logo",),
+    ),
+    Check(
+        "a blok's own logo is a fixed drawing",
+        '<Blok kind="agent" context="panel"><logo><Circle r={viewer.name} /></logo><Card /></Blok>',
+        ("logo.dynamic", "path.unknown"),
+    ),
+    Check(
         "a space is an action's",
         '<Blok kind="agent" context="scene"><Space room="room:lab" /></Blok>',
         ("catalog.kind",),
