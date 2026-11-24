@@ -203,7 +203,13 @@ class _Uses:
             )
             local = scope.get(path) if path is not None else None
             if bind is not None and local is not None:
-                self.binds.setdefault(local, []).append(bind.kind)
+                writes = (
+                    bind.port.children[0].port
+                    if bind.port.kind == "BINDING" and bind.port.children
+                    else bind.port
+                )
+                if writes.kind is not None:
+                    self.binds.setdefault(local, []).append(writes.kind)
 
     def visit_path(
         self, path: str, where: Where, scope: Mapping[str, str | None]

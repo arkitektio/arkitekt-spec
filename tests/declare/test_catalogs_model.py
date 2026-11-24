@@ -14,6 +14,7 @@ from arkitekt_spec.declare.catalogs import (
     check_extension_does_not_shadow_base,
     resolve_catalogs,
 )
+from arkitekt_spec.declare.catalogs.ports import scalar
 
 from .catalog_cases import BOX, CLAMP, ELECTRON, SLIDER
 
@@ -59,7 +60,7 @@ def test_conflicting_operation_across_catalogs_is_an_error() -> None:
     """The UI could not know which one to run."""
     other = Catalog(
         name="other",
-        operations=(OperationSpec(name="clamp", returns="INT", arguments=()),),
+        operations=(OperationSpec(name="clamp", returns=scalar("INT"), arguments=()),),
     )
     with pytest.raises(ValueError, match="defined differently"):
         resolve_catalogs([ELECTRON, other], authoritative=True)
@@ -89,7 +90,7 @@ def test_identical_component_across_catalogs_is_fine() -> None:
 def test_a_catalog_may_not_redefine_a_base_operation() -> None:
     shadowing = Catalog(
         name="rogue",
-        operations=(OperationSpec(name="gt", returns="BOOL", arguments=()),),
+        operations=(OperationSpec(name="gt", returns=scalar("BOOL"), arguments=()),),
     )
     with pytest.raises(ValueError, match="cannot redefine base operations"):
         check_extension_does_not_shadow_base(shadowing)
@@ -105,9 +106,9 @@ def test_specs_are_frozen_and_comparable() -> None:
         name="Slider",
         accepts_children=False,
         props=(
-            PropSpec(key="min", kind="FLOAT", required=True),
-            PropSpec(key="max", kind="FLOAT", required=False),
-            PropSpec(key="onChange", kind="CALLBACK", required=False),
+            PropSpec(key="min", port=scalar("FLOAT"), required=True),
+            PropSpec(key="max", port=scalar("FLOAT"), required=False),
+            PropSpec(key="onChange", port=scalar("CALLBACK"), required=False),
         ),
     )
     with pytest.raises(Exception):  # noqa: B017 -- frozen models raise pydantic or dataclass errors
@@ -117,10 +118,10 @@ def test_specs_are_frozen_and_comparable() -> None:
 def test_operation_spec_keys_are_positional_order() -> None:
     spec = OperationSpec(
         name="f",
-        returns="BOOL",
+        returns=scalar("BOOL"),
         arguments=(
-            ArgumentSpec(key="a", kind="ANY", required=True),
-            ArgumentSpec(key="b", kind="ANY", required=False),
+            ArgumentSpec(key="a", port=scalar("ANY"), required=True),
+            ArgumentSpec(key="b", port=scalar("ANY"), required=False),
         ),
     )
     assert spec.keys == ("a", "b") and spec.required_keys == ("a",)

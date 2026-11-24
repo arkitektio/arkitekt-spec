@@ -430,7 +430,17 @@ def check_widget_tree(
 
 
 class PortRules(BaseModel):
-    """A port: a JSON default, and the per-kind structure."""
+    """A port: a JSON default, the per-kind structure, and no kind only a catalog types by."""
+
+    @field_validator("kind", check_fields=False)
+    @classmethod
+    def _no_catalog_only_kind(cls, value: Any) -> Any:  # noqa: ANN401
+        if getattr(value, "value", value) in ("CALLBACK", "ASSET", "BINDING"):
+            name = getattr(value, "value", value)
+            raise ValueError(
+                f"a {name} port: CALLBACK, ASSET and BINDING type a catalog's props, never an action's, a state's or a local's (port.catalog_only)"
+            )
+        return value
 
     @field_validator("default", check_fields=False)
     @classmethod

@@ -25,6 +25,7 @@ from arkitekt_spec.blok.vocabulary import (
     vocabulary_text,
 )
 from arkitekt_spec.declare.catalogs import CALLBACK_KIND, ComponentSpec
+from arkitekt_spec.declare.catalogs.ports import CatalogPort, summary
 
 UNIVERSAL_PROPS = ("className",)
 """Props nearly every HTML component takes: said once, left out of the signatures."""
@@ -210,23 +211,19 @@ def records_text(kind: str | None = None) -> str:
     return "\n".join(blocks)
 
 
-def _prop(
-    prop_key: str,
-    kind: str,
-    values: Sequence[str] | None,
-    event: Sequence[str] | None,
-    required: bool,
-) -> str:
+def _prop(prop_key: str, port: CatalogPort, required: bool) -> str:
     mark = "!" if required else ""
-    if values:
-        return f"{prop_key}{mark}: " + "|".join(f'"{value}"' for value in values)
-    if kind == CALLBACK_KIND and event:
+    if port.kind == CALLBACK_KIND and port.children:
         return (
             f"{prop_key}{mark}: CALLBACK("
-            + ", ".join(f"event.{key}" for key in event)
+            + ", ".join(f"event.{child.key}" for child in port.children)
             + ")"
         )
-    return f"{prop_key}{mark}: {kind}"
+    if port.choices and port.kind == "STRING":
+        return f"{prop_key}{mark}: " + "|".join(
+            f'"{choice.value}"' for choice in port.choices
+        )
+    return f"{prop_key}{mark}: {summary(port)}"
 
 
 def component_signature(
@@ -239,13 +236,7 @@ def component_signature(
     """
     skipped = set(skip)
     props = ", ".join(
-        _prop(
-            prop.key,
-            prop.kind,
-            prop.values,
-            [field.key for field in prop.event] if prop.event else None,
-            prop.required,
-        )
+        _prop(prop.key, prop.port, prop.required)
         for prop in component.props
         if prop.key not in skipped
     )

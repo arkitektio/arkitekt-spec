@@ -33,7 +33,7 @@ def test_base_manifest_loads_via_importlib_resources() -> None:
         .is_file()
     )
     gt = base_operation("gt")
-    assert gt is not None and gt.keys == ("a", "b") and gt.returns == "BOOL"
+    assert gt is not None and gt.keys == ("a", "b") and gt.returns.kind == "BOOL"
     assert base_operation("len_between").required_keys == ("value", "min")
     assert (
         is_base_operation("if")
@@ -42,7 +42,7 @@ def test_base_manifest_loads_via_importlib_resources() -> None:
     )
     assert (
         base_operation("neg").keys == ("a",)
-        and base_operation("div").returns == "FLOAT"
+        and base_operation("div").returns.kind == "FLOAT"
     )
     assert {
         "eq",

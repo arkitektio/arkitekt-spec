@@ -15,14 +15,15 @@ from arkitekt_spec.declare.catalogs import (
     PropSpec,
     resolve_catalogs,
 )
+from arkitekt_spec.declare.catalogs.ports import CatalogChildPort, CatalogPort, scalar
 
 SLIDER = ComponentSpec(
     name="Slider",
     accepts_children=False,
     props=(
-        PropSpec(key="min", kind="FLOAT", required=True),
-        PropSpec(key="max", kind="FLOAT", required=False),
-        PropSpec(key="onChange", kind="CALLBACK", required=False),
+        PropSpec(key="min", port=scalar("FLOAT"), required=True),
+        PropSpec(key="max", port=scalar("FLOAT"), required=False),
+        PropSpec(key="onChange", port=CatalogPort(kind="CALLBACK"), required=False),
     ),
 )
 BOX = ComponentSpec(name="Box", accepts_children=True, props=())
@@ -31,8 +32,15 @@ FOREACH = ComponentSpec(
     name="foreach",
     accepts_children=True,
     props=(
-        PropSpec(key="items", kind="LIST", required=True),
-        PropSpec(key="let", kind="STRING", required=True),
+        PropSpec(
+            key="items",
+            port=CatalogPort(
+                kind="LIST",
+                children=(CatalogChildPort(key="...", port=CatalogPort(kind=None)),),
+            ),
+            required=True,
+        ),
+        PropSpec(key="let", port=scalar("STRING"), required=True),
     ),
 )
 """BSX's own loop node. The server has no concept of it, so it must be registered
@@ -40,10 +48,10 @@ like any other component -- see ``test_foreach_is_an_ordinary_component_to_a_cat
 
 CLAMP = OperationSpec(
     name="clamp",
-    returns="FLOAT",
+    returns=scalar("FLOAT"),
     arguments=(
-        ArgumentSpec(key="value", kind="FLOAT", required=True),
-        ArgumentSpec(key="min", kind="FLOAT", required=False),
+        ArgumentSpec(key="value", port=scalar("FLOAT"), required=True),
+        ArgumentSpec(key="min", port=scalar("FLOAT"), required=False),
     ),
 )
 

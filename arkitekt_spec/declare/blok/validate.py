@@ -123,6 +123,17 @@ from arkitekt_spec.declare.catalogs import (
     CALLBACK_KIND,
     BlokCheckMode,
     ComponentSpec,
+    PropSpec,
+)
+from arkitekt_spec.declare.catalogs.fit import binding_fits, fits, literal_port
+from arkitekt_spec.declare.catalogs.ports import (
+    BINDING,
+    ITEM_KEY,
+    OPEN,
+    CatalogChildPort,
+    CatalogPort,
+    Choice,
+    summary,
 )
 from arkitekt_spec.declare.definition.match import build_port_match, build_port_matches
 from arkitekt_spec.rules import (
@@ -171,6 +182,69 @@ def local_arg_port(local: BlokLocalInput) -> ArgPortInput | None:
     if kind_name(local.kind) == LOCAL_ANY:
         return None
     return ArgPortInput.model_validate(local.model_dump(exclude={"persist"}))
+
+
+def match_port(match: Match) -> CatalogPort:
+    """What a resolved path holds, as a catalog port: open where its shape is not known."""
+    if match is None or is_open(match) or match.kind is None:
+        return OPEN
+    return CatalogPort(
+        kind=kind_name(match.kind),
+        identifier=match.identifier,
+        nullable=bool(match.nullable),
+        children=tuple(
+            CatalogChildPort(key=child.key or ITEM_KEY, port=match_port(child))
+            for child in match.children or ()
+        ),
+    )
+
+
+def arg_port(port: "ArgPortInput | None") -> CatalogPort:
+    """A local's (or a field's) port as a catalog port; open for ``ANY`` or none."""
+    if port is None or kind_name(port.kind) == LOCAL_ANY:
+        return OPEN
+    return CatalogPort(
+        kind=kind_name(port.kind),
+        identifier=port.identifier,
+        nullable=port.nullable,
+        choices=tuple(Choice(value=choice.value) for choice in port.choices)
+        if port.choices
+        else None,
+        children=tuple(
+            CatalogChildPort(key=child.key, port=arg_port(child))
+            for child in port.children or ()
+        ),
+    )
+
+
+def catalog_match(key: str, port: CatalogPort) -> PortMatchInput:
+    """A catalog port as what a path below it may read (an event's payload field)."""
+    if (
+        port.is_open
+        or port.kind not in _KINDS
+        or port.kind in ("CALLBACK", "ASSET", "BINDING")
+    ):
+        return open_match(key)
+    if port.kind in _OPAQUE_KINDS - {"UNION"}:
+        return PortMatchInput(
+            key=key,
+            kind=_KINDS[port.kind],
+            identifier=port.identifier,
+            nullable=port.nullable or None,
+        )
+    return PortMatchInput(
+        key=key,
+        kind=_KINDS[port.kind],
+        nullable=port.nullable or None,
+        children=tuple(catalog_match(child.key, child.port) for child in port.children)
+        or None,
+    )
+
+
+def binding_writes(prop: PropSpec) -> CatalogPort:
+    """What a bind prop writes: its BINDING's one child."""
+    port = prop.port
+    return port.children[0].port if port.kind == BINDING and port.children else port
 
 
 def record_match(
@@ -1287,12 +1361,13 @@ class _Checker:
                 prop.agent_call,
             )
         )
+        kind = prop_spec.port.kind if prop_spec is not None else None
         if prop_spec is not None:
-            if prop_spec.kind == CALLBACK_KIND and has_value and not holds:
+            if kind == CALLBACK_KIND and has_value and not holds:
                 self.add(
                     "callback.unbound", node.id, key=prop.key, component=node.component
                 )
-            elif prop_spec.kind != CALLBACK_KIND and holds:
+            elif kind != CALLBACK_KIND and holds:
                 self.add(
                     "callback.not_callback",
                     node.id,
@@ -1302,34 +1377,12 @@ class _Checker:
                 )
         if (
             prop_spec is not None
-            and prop_spec.kind in LITERAL_KINDS
-            and isinstance(prop.static_value, str)
+            and prop.static_value is not None
             and prop.key != BIND_PROP
+            and kind not in (CALLBACK_KIND, ASSET_KIND, BINDING)
         ):
-            self.add(
-                "props.literal_type",
-                node.id,
-                component=node.component,
-                key=prop.key,
-                value=prop.static_value,
-                kind=prop_spec.kind,
-                hint=literal_hint(prop.key, prop.static_value, prop_spec.kind),
-            )
-        if (
-            prop_spec is not None
-            and prop_spec.values is not None
-            and isinstance(prop.static_value, str)
-            and prop.static_value not in prop_spec.values
-        ):
-            self.add(
-                "catalog.value",
-                node.id,
-                component=node.component,
-                key=prop.key,
-                value=prop.static_value,
-                values=", ".join(prop_spec.values),
-            )
-        if prop_spec is not None and prop_spec.kind == ASSET_KIND:
+            self.check_literal(node, prop, prop_spec)
+        if prop_spec is not None and kind == ASSET_KIND:
             path = prop.dynamic_value.path if prop.dynamic_value is not None else None
             parts = (path or "").split(".")
             agent = (
@@ -1398,7 +1451,9 @@ class _Checker:
                 else:
                     self.bound_locals.add(binding.node)
                     if prop_spec is not None:
-                        self.check_bind_kind(node, prop_spec.kind, binding, path)
+                        self.check_bind_kind(
+                            node, binding_writes(prop_spec), binding, path
+                        )
         if (
             prop.util_call is not None
             and prop.util_call.operation == START_EFFECT
@@ -1433,24 +1488,103 @@ class _Checker:
                 self.check_classes(literal, node.id)
 
     def check_bind_kind(
-        self, node: ComponentNodeInput, prop_kind: str, binding: LocalBinding, path: str
+        self,
+        node: ComponentNodeInput,
+        writes: CatalogPort,
+        binding: LocalBinding,
+        path: str,
     ) -> None:
-        """The local a control writes is of a kind the control writes (``Slider``: FLOAT or INT)."""
-        allowed = self.vocabulary.bind_kinds.get(prop_kind)
-        port = self.local_port(binding, path)
-        if allowed is None or port is None:
+        """The local a control writes takes what the control writes (``Slider``: FLOAT or INT)."""
+        local = arg_port(self.local_port(binding, path))
+        if binding_fits(local, writes, self.vocabulary.bind_kinds).ok:
             return
-        kind = kind_name(port.kind)
-        if kind not in allowed:
+        allowed = self.vocabulary.bind_kinds.get(writes.kind or "")
+        self.add(
+            "local.bind_kind",
+            node.id,
+            key=BIND_PROP,
+            component=node.component,
+            prop_kind=summary(writes),
+            path=path,
+            kind=summary(local),
+            kinds=", ".join(sorted(allowed)) if allowed else summary(writes),
+        )
+
+    def check_literal(
+        self, node: ComponentNodeInput, prop: ComponentPropInput, spec: PropSpec
+    ) -> None:
+        """A literal fits the prop's port: its kind (``fullWidth="true"`` is a string), then its choices."""
+        value = prop.static_value
+        target = spec.port
+        kind_only = literal_port(value)
+        kind_only = CatalogPort(kind=kind_only.kind, nullable=kind_only.nullable)
+        if fits(kind_only, target).ok:
+            fit = fits(literal_port(value), target)
+            if not fit.ok and target.choices:
+                self.add(
+                    "catalog.value",
+                    node.id,
+                    component=node.component,
+                    key=prop.key,
+                    value=value,
+                    values=", ".join(str(choice.value) for choice in target.choices),
+                )
+            return
+        if isinstance(value, str) and target.kind in LITERAL_KINDS:
             self.add(
-                "local.bind_kind",
+                "props.literal_type",
                 node.id,
-                key=BIND_PROP,
                 component=node.component,
-                prop_kind=prop_kind,
-                path=path,
-                kind=kind,
-                kinds=", ".join(sorted(allowed)),
+                key=prop.key,
+                value=value,
+                kind=target.kind,
+                hint=literal_hint(prop.key, value, target.kind),
+            )
+            return
+        self.add(
+            "props.type",
+            node.id,
+            component=node.component,
+            key=prop.key,
+            value=repr(value),
+            expected=summary(target),
+            reason=fits(kind_only, target).reason or "",
+        )
+
+    def check_value_type(self, where: Where, path: str, match: Match) -> None:
+        """A path that is a prop's whole value holds what the prop takes."""
+        spec = (
+            self.view.component(where.node.component) if self.view is not None else None
+        )
+        prop_spec = spec.prop(where.key) if spec is not None else None
+        if prop_spec is None or match is None or where.key == BIND_PROP:
+            return
+        if prop_spec.port.kind in (CALLBACK_KIND, ASSET_KIND, BINDING):
+            return
+        prop = next(
+            (
+                candidate
+                for candidate in where.node.props or ()
+                if candidate.key == where.key
+            ),
+            None,
+        )
+        if (
+            prop is None
+            or prop.dynamic_value is None
+            or prop.dynamic_value.path != path
+        ):
+            return
+        fit = fits(match_port(match), prop_spec.port)
+        if fit.status == "mismatch":
+            self.add(
+                "props.type",
+                where.node.id,
+                component=where.node.component,
+                key=where.key,
+                value=path,
+                expected=summary(prop_spec.port),
+                reason=fit.reason or "",
             )
 
     def check_classes(self, classes: str, owner: str) -> None:
@@ -1513,7 +1647,8 @@ class _Checker:
         )
 
     def visit_path(self, path: str, where: Where, scope: Mapping[str, Binding]) -> None:
-        self.resolve(path, where, scope, owner=where.text)
+        match = self.resolve(path, where, scope, owner=where.text)
+        self.check_value_type(where, path, match)
 
     def visit_agent_call(
         self,
@@ -2088,9 +2223,9 @@ class _Checker:
             self.view.component(where.node.component) if self.view is not None else None
         )
         prop = spec.prop(where.key) if spec is not None else None
-        if prop is None or prop.event is None or not rest:
+        if prop is None or prop.port.kind != CALLBACK_KIND or not rest:
             return open_match("event")
-        fields = {event_field.key: event_field for event_field in prop.event}
+        fields = {child.key: child for child in prop.port.children}
         if rest[0] not in fields:
             self.add(
                 "callback.event_field",
@@ -2101,7 +2236,9 @@ class _Checker:
                 fields=", ".join(fields) or "none",
             )
             return None
-        return open_match(rest[0])
+        return self.descend(
+            catalog_match(rest[0], fields[rest[0]].port), rest[1:], path, where.node.id
+        )
 
     def agent(
         self,

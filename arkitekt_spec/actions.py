@@ -192,7 +192,30 @@ class PortKind(str, Enum):
     "A reference to any object implementing an interface, typed by `identifier` (required). No children."
     QUANTITY = "QUANTITY"
     "A physical quantity with a unit; `reference_unit` required, `dimension` derived. No children."
+    CALLBACK = "CALLBACK"
+    "A catalog prop that holds a call (onClick); its children are the payload it is called with. Never an agent's port."
+    ASSET = "ASSET"
+    "A catalog prop that names a file an app registered (`self.assets.<name>`). No children. Never an agent's port."
+    BINDING = "BINDING"
+    "A catalog prop that reads and writes a local (`bind`); its one child, keyed '...', is what it writes. Never an agent's port."
     __str__ = str.__str__
+
+
+CATALOG_ONLY_KINDS = frozenset({"CALLBACK", "ASSET", "BINDING"})
+"""Kinds a catalog types a prop by and no agent declares (an action's, a state's, a local's port)."""
+
+
+def reject_catalog_only_kind(kind: object) -> None:
+    """Refuse a kind only a catalog types by, on a port an agent declares.
+
+    Raises:
+        ValueError: If ``kind`` is CALLBACK, ASSET or BINDING.
+    """
+    name = getattr(kind, "value", kind)
+    if name in CATALOG_ONLY_KINDS:
+        raise ValueError(
+            f"a {name} port: CALLBACK, ASSET and BINDING type a catalog's props, never an action's, a state's or a local's (port.catalog_only)"
+        )
 
 
 class ChoiceAssignWidgetInput(ActionModel):
@@ -1822,6 +1845,11 @@ class PortMatchInput(ActionModel):
     model_config = ConfigDict(
         frozen=True, extra="forbid", populate_by_name=True, use_enum_values=True
     )
+
+    @model_validator(mode="after")
+    def _no_catalog_only_kind(self) -> "PortMatchInput":
+        reject_catalog_only_kind(self.kind)
+        return self
 
 
 class ProvidesInput(ActionModel):

@@ -88,7 +88,7 @@ def test_a_borrowed_list_keeps_its_item_port(registry: AppRegistry) -> None:
     quietly(
         registry,
         PANEL
-        + '<local name="flags" like="self.deconvolve.flags" /><Text text={flags} /><Button onClick={self.deconvolve(flags: flags)} /></Blok>',
+        + '<local name="flags" like="self.deconvolve.flags" /><Text text={list.len(value: flags)} /><Button onClick={self.deconvolve(flags: flags)} /></Blok>',
     )
 
     local = built_local(registry)

@@ -21,6 +21,7 @@ from arkitekt_spec.declare.blok.validate import (
     dependency_hint,
 )
 from arkitekt_spec.declare.catalogs import ComponentSpec, PropSpec
+from arkitekt_spec.declare.catalogs.ports import scalar
 from arkitekt_spec.declare.traits.blok import CreateBlokInputTrait
 
 CUSTOM = '<Blok kind="custom" context="panel">'
@@ -134,7 +135,9 @@ def test_a_catalog_that_redefines_a_base_component_is_refused() -> None:
             components=[
                 ComponentSpec(
                     name="Slider",
-                    props=(PropSpec(key="bind", kind="STRING", required=False),),
+                    props=(
+                        PropSpec(key="bind", port=scalar("STRING"), required=False),
+                    ),
                 )
             ],
         )

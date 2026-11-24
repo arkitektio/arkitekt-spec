@@ -3613,7 +3613,10 @@
         "MODEL",
         "MEMORY_STRUCTURE",
         "INTERFACE",
-        "QUANTITY"
+        "QUANTITY",
+        "CALLBACK",
+        "ASSET",
+        "BINDING"
       ],
       "title": "PortKind",
       "type": "string"

@@ -23,11 +23,10 @@ from arkitekt_spec.blok.catalogs import (
 )
 from arkitekt_spec.blok.vocabulary import BlokError, load_vocabulary
 from arkitekt_spec.declare.catalogs import (
-    CALLBACK_KIND,
-    VALUE_KINDS,
     Catalog,
     ComponentSpec,
 )
+from arkitekt_spec.declare.catalogs.ports import PORT_KINDS, kinds_in, summary
 
 BASE_ID = "https://arkitekt.live/catalogs/base/v4"
 ACME_ID = "https://acme.example/catalogs/lab/v1"
@@ -52,8 +51,21 @@ def _acme(**overrides: object) -> str:
                 "name": "Spectrum",
                 "context": "PANEL",
                 "props": [
-                    {"key": "trace", "kind": "LIST"},
-                    {"key": "bands", "kind": "LIST", "since": 2},
+                    {
+                        "key": "trace",
+                        "port": {
+                            "kind": "LIST",
+                            "children": [{"key": "...", "kind": "FLOAT"}],
+                        },
+                    },
+                    {
+                        "key": "bands",
+                        "port": {
+                            "kind": "LIST",
+                            "children": [{"key": "...", "kind": "FLOAT"}],
+                        },
+                        "since": 2,
+                    },
                 ],
             },
             {"name": "Plate", "context": "PANEL", "since": 1, "props": []},
@@ -180,21 +192,23 @@ def test_the_host_parts_take_what_narrows_them() -> None:
 
     def props(name: str) -> dict[str, tuple[str, bool]]:
         return {
-            prop.key: (prop.kind, prop.required) for prop in view.components[name].props
+            prop.key: (summary(prop.port), prop.required)
+            for prop in view.components[name].props
         }
 
     assert props("args") == {
-        "only": ("ANY", False),
-        "omit": ("ANY", False),
-        "given": ("STRING", False),
+        "only": ("STRING | LIST<STRING>", False),
+        "omit": ("STRING | LIST<STRING>", False),
+        "given": ("'hide' | 'show'", False),
     }
     assert props("arg") == props("dep") == {"key": ("STRING", True)}
-    assert props("returns") == {"only": ("ANY", False), "omit": ("ANY", False)}
+    assert props("returns") == {
+        "only": ("STRING | LIST<STRING>", False),
+        "omit": ("STRING | LIST<STRING>", False),
+    }
     assert props("deps") == props("status") == props("timeline") == props("ask") == {}
     chrome = view.components["Blok"].prop("chrome")
-    assert chrome is not None and chrome.values == ("auto", "none")
-    given = view.components["args"].prop("given")
-    assert given is not None and given.values == ("hide", "show")
+    assert chrome is not None and summary(chrome.port) == "'auto' | 'none'"
 
 
 def test_what_needs_a_pointer_says_how_it_is_drawn_without_one() -> None:
@@ -269,10 +283,8 @@ def test_the_renames_of_the_design() -> None:
 
 def test_every_entry_declares_its_events_and_text() -> None:
     for name, component in orkestrator_view().components.items():
-        assert {prop.kind for prop in component.props} <= set(VALUE_KINDS), name
         for prop in component.props:
-            if prop.kind == CALLBACK_KIND:
-                assert prop.event is not None, f"{name}.{prop.key} declares no event"
+            assert kinds_in(prop.port) <= {*PORT_KINDS, None}, f"{name}.{prop.key}"
         if component.text_prop is not None:
             assert component.prop(component.text_prop) is not None, name
     button = default_view().component("Button")
@@ -296,29 +308,40 @@ def test_no_entry_declares_persist_or_data_attributes() -> None:
 def test_a_bind_prop_says_what_the_control_writes() -> None:
     view = default_view()
     kinds = {
-        name: view.component(name).prop("bind").kind  # type: ignore[union-attr]
-        for name in ("Slider", "Switch", "Checkbox", "Input", "Select", "ToggleGroup")
+        name: summary(view.component(name).prop("bind").port)  # type: ignore[union-attr]
+        for name in ("Slider", "Switch", "Checkbox", "Input", "Select")
     }
 
     assert kinds == {
-        "Slider": "FLOAT",
-        "Switch": "BOOL",
-        "Checkbox": "BOOL",
-        "Input": "STRING",
-        "Select": "STRING",
-        "ToggleGroup": "ANY",
+        "Slider": "BINDING<FLOAT>",
+        "Switch": "BINDING<BOOL>",
+        "Checkbox": "BINDING<BOOL>",
+        "Input": "BINDING<STRING>",
+        "Select": "BINDING<STRING>",
     }
+
+
+def test_every_drawn_prop_is_typed() -> None:
+    """Only what the spec owns (the language's and run's props) may be open, anywhere in its port."""
+    open_props = [
+        f"{component.name}.{prop.key}"
+        for component in base_catalog().components
+        if component.group not in ("language", "run")
+        for prop in component.props
+        if None in kinds_in(prop.port)
+    ]
+    assert open_props == []
 
 
 def test_the_base_has_a_time_that_ticks_inside() -> None:
     time = default_view().component("Time")
 
     assert time is not None and time.catalog == "base@4" and not time.accepts_children
-    assert {prop.key: (prop.kind, prop.required) for prop in time.props} == {
+    assert {prop.key: (summary(prop.port), prop.required) for prop in time.props} == {
         "className": ("STRING", False),
-        "format": ("STRING", False),
+        "format": ("STRING?", False),
         "relative": ("BOOL", False),
-        "value": ("STRING", True),
+        "value": ("STRING?", True),
     }
 
 
@@ -357,15 +380,15 @@ def test_enum_props_hold_their_values() -> None:
 
     assert (
         variant is not None
-        and variant.values is not None
-        and "outline" in variant.values
+        and variant.port.choices is not None
+        and "outline" in {choice.value for choice in variant.port.choices}
     )
-    assert label is not None and label.values is None
+    assert label is not None and label.port.choices is None
     for component in orkestrator_view().components.values():
         for prop in component.props:
-            assert prop.values is None or (prop.kind == "STRING" and prop.values), (
-                f"{component.name}.{prop.key}"
-            )
+            assert prop.port.choices is None or (
+                prop.port.kind == "STRING" and prop.port.choices
+            ), f"{component.name}.{prop.key}"
 
 
 # --------------------------------------------------------------------------- an app catalog
@@ -390,7 +413,11 @@ def test_the_orkestrators_catalog_extends_the_base() -> None:
         and scene.service == "mikro"
         and scene.catalog == "orkestrator@1"
     )
-    assert {component.service for component in orkestrator.components} == {"mikro"}
+    assert {component.service for component in orkestrator.components} == {
+        "mikro",
+        "lovekit",
+        None,
+    }
 
 
 def test_a_view_is_of_one_catalog_and_knows_what_is_anothers() -> None:
@@ -480,7 +507,25 @@ def test_a_shipped_catalog_is_never_replaced() -> None:
         json.dumps(
             {
                 "name": "lab",
-                "components": [{"name": "X", "props": [{"key": "a", "kind": "NOPE"}]}],
+                "components": [
+                    {"name": "X", "props": [{"key": "a", "kind": "STRING"}]}
+                ],
+            }
+        ),
+        json.dumps(
+            {
+                "name": "lab",
+                "components": [
+                    {"name": "X", "props": [{"key": "a", "port": {"kind": "NOPE"}}]}
+                ],
+            }
+        ),
+        json.dumps(
+            {
+                "name": "lab",
+                "components": [
+                    {"name": "X", "props": [{"key": "a", "port": {"kind": "LIST"}}]}
+                ],
             }
         ),
     ],

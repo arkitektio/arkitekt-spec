@@ -1048,9 +1048,19 @@ CHECKS: Sequence[Check] = (
         ("local.bind_kind",),
     ),
     Check(
-        "an ANY control binds any local",
-        '<Blok kind="agent" context="panel"><local name="iterations" kind="INT" default={15} /><ToggleGroup bind={iterations} /></Blok>',
+        "a toggle group binds a string local",
+        '<Blok kind="agent" context="panel"><local name="choice" kind="STRING" default={"a"} /><ToggleGroup bind={choice} /></Blok>',
         (),
+    ),
+    Check(
+        "a toggle group binds a list local",
+        '<Blok kind="agent" context="panel"><local name="choices" kind="LIST" children={[{"key": "...", "kind": "STRING"}]} /><ToggleGroup multiple bind={choices} /></Blok>',
+        (),
+    ),
+    Check(
+        "a LIST control binds no INT local",
+        '<Blok kind="agent" context="panel"><local name="iterations" kind="INT" default={15} /><ToggleGroup bind={iterations} /></Blok>',
+        ("local.bind_kind",),
     ),
     Check(
         "a local passed to its port's kind",
@@ -1419,6 +1429,22 @@ CHECKS: Sequence[Check] = (
         'a "@..." string is a literal',
         '<Blok kind="agent" context="panel"><Text text="@self.arm.mode" /></Blok>',
         (),
+    ),
+    Check(
+        "a local of the wrong type on a typed prop",
+        '<Blok kind="agent" context="panel"><local name="label" kind="STRING" default={"x"} /><Button disabled={label} /></Blok>',
+        ("props.type",),
+    ),
+    Check(
+        "an int local on a float prop, and on a text prop",
+        '<Blok kind="agent" context="panel"><local name="n" kind="INT" default={3} /><Card><Progress value={n} /><Text text={n} /></Card></Blok>',
+        (),
+    ),
+    Check(
+        "a callback's payload is typed by its port",
+        '<Blok kind="agent" context="panel"><Switch onChange={self.toggle(on: event.value)} /><Button onClick={self.toggle(on: event.nothing)} /></Blok>',
+        ("callback.event_field",),
+        dependencies=None,
     ),
     Check(
         "a string on a bool prop",
@@ -1846,6 +1872,168 @@ CHECKS: Sequence[Check] = (
 # --------------------------------------------------------------------------- building
 
 
+# --------------------------------------------------------------------------- v2: fits
+
+_TEXT: Mapping[str, JSON] = {
+    "kind": "UNION",
+    "children": [
+        {"key": str(i), "kind": k}
+        for i, k in enumerate(("STRING", "INT", "FLOAT", "BOOL"))
+    ],
+}
+
+
+def _list(item: Mapping[str, JSON]) -> Mapping[str, JSON]:
+    return {"kind": "LIST", "children": [{"key": "...", **item}]}
+
+
+FITS: Sequence[tuple[str, Mapping[str, JSON], Mapping[str, JSON], str]] = (
+    ("the same kind", {"kind": "STRING"}, {"kind": "STRING"}, "ok"),
+    ("an int is a float", {"kind": "INT"}, {"kind": "FLOAT"}, "ok"),
+    ("a float is no int", {"kind": "FLOAT"}, {"kind": "INT"}, "mismatch"),
+    (
+        "a quantity is a float",
+        {"kind": "QUANTITY", "reference_unit": "V"},
+        {"kind": "FLOAT"},
+        "ok",
+    ),
+    (
+        "an enum is a string",
+        {"kind": "ENUM", "choices": [{"value": "a"}]},
+        {"kind": "STRING"},
+        "ok",
+    ),
+    ("a date is a string", {"kind": "DATE"}, {"kind": "STRING"}, "ok"),
+    (
+        "a model is a dict",
+        {"kind": "MODEL", "children": [{"key": "x", "kind": "INT"}]},
+        {"kind": "DICT", "children": [{"key": "...", "kind": "FLOAT"}]},
+        "ok",
+    ),
+    (
+        "a structure is read as a dict",
+        {"kind": "STRUCTURE", "identifier": "@mikro/image"},
+        {"kind": "DICT", "children": [{"key": "...", "kind": None}]},
+        "open",
+    ),
+    ("an open side says nothing", {"kind": None}, {"kind": "BOOL"}, "open"),
+    ("anything is text", {"kind": "INT"}, _TEXT, "ok"),
+    ("a list is no text", _list({"kind": "STRING"}), _TEXT, "mismatch"),
+    (
+        "a union fits when each variant does",
+        {
+            "kind": "UNION",
+            "children": [{"key": "0", "kind": "INT"}, {"key": "1", "kind": "FLOAT"}],
+        },
+        {"kind": "FLOAT"},
+        "ok",
+    ),
+    (
+        "a union fits not when one variant does not",
+        {
+            "kind": "UNION",
+            "children": [{"key": "0", "kind": "INT"}, {"key": "1", "kind": "STRING"}],
+        },
+        {"kind": "FLOAT"},
+        "mismatch",
+    ),
+    ("lists by their items", _list({"kind": "INT"}), _list({"kind": "FLOAT"}), "ok"),
+    (
+        "lists of the wrong item",
+        _list({"kind": "STRING"}),
+        _list({"kind": "FLOAT"}),
+        "mismatch",
+    ),
+    ("an open item", _list({"kind": None}), _list({"kind": "FLOAT"}), "open"),
+    (
+        "a structure by its identifier",
+        {"kind": "STRUCTURE", "identifier": "@lovekit/stream"},
+        {"kind": "STRUCTURE", "identifier": "@lovekit/stream"},
+        "ok",
+    ),
+    (
+        "any structure",
+        {"kind": "STRUCTURE", "identifier": "@lovekit/stream"},
+        {"kind": "STRUCTURE", "identifier": "*"},
+        "ok",
+    ),
+    (
+        "another structure",
+        {"kind": "STRUCTURE", "identifier": "@mikro/image"},
+        {"kind": "STRUCTURE", "identifier": "@lovekit/stream"},
+        "mismatch",
+    ),
+    (
+        "a model by its fields",
+        {
+            "kind": "MODEL",
+            "children": [
+                {"key": "kind", "kind": "STRING"},
+                {"key": "scale", **_list({"kind": "FLOAT"})},
+            ],
+        },
+        {
+            "kind": "MODEL",
+            "children": [
+                {"key": "kind", "kind": "STRING"},
+                {"key": "scale", **_list({"kind": "FLOAT"})},
+            ],
+        },
+        "ok",
+    ),
+    (
+        "a model lacking a field",
+        {"kind": "MODEL", "children": [{"key": "kind", "kind": "STRING"}]},
+        {
+            "kind": "MODEL",
+            "children": [
+                {"key": "kind", "kind": "STRING"},
+                {"key": "scale", **_list({"kind": "FLOAT"})},
+            ],
+        },
+        "mismatch",
+    ),
+    (
+        "choices within choices",
+        {"kind": "STRING", "choices": [{"value": "a"}]},
+        {"kind": "STRING", "choices": [{"value": "a"}, {"value": "b"}]},
+        "ok",
+    ),
+    (
+        "a choice outside",
+        {"kind": "STRING", "choices": [{"value": "c"}]},
+        {"kind": "STRING", "choices": [{"value": "a"}, {"value": "b"}]},
+        "mismatch",
+    ),
+)
+"""``(name, source, target, status)``: whether a value of ``source`` fits where ``target`` is taken."""
+
+
+def build_fits() -> list[JSON]:
+    """The ``fits`` cases, each checked against :func:`~arkitekt_spec.declare.catalogs.fit.fits`.
+
+    Raises:
+        ValueError: If a case does not fit as listed.
+    """
+    from arkitekt_spec.declare.catalogs.fit import fits
+    from arkitekt_spec.declare.catalogs.ports import parse_port
+
+    cases: list[JSON] = []
+    for name, source, target, status in FITS:
+        found = fits(parse_port(source, name), parse_port(target, name)).status
+        if found != status:
+            raise ValueError(f"fits: {name}: {found}, listed as {status}")
+        cases.append(
+            {
+                "name": name,
+                "source": dict(source),
+                "target": dict(target),
+                "status": status,
+            }
+        )
+    return cases
+
+
 def _tree(node: ComponentNodeInput) -> JSON:
     dumped: JSON = node.model_dump(mode="json", exclude_none=True)
     return dumped
@@ -2023,6 +2211,7 @@ def build_v2() -> dict[str, JSON]:
             "bundled": dict(vocabulary.bundled_catalogs),
         },
         "cases": cases,
+        "fits": build_fits(),
     }
 
 

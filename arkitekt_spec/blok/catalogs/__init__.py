@@ -267,10 +267,14 @@ def _operation_function(name: str, catalog: Catalog) -> Function | None:
     return Function(
         name=name,
         params=tuple(
-            Param(key=argument.key, kind=argument.kind, required=argument.required)
+            Param(
+                key=argument.key,
+                kind=argument.port.kind or "ANY",
+                required=argument.required,
+            )
             for argument in operation.arguments
         ),
-        returns=operation.returns,
+        returns=operation.returns.kind or "ANY",
         description=operation.description or "",
     )
 

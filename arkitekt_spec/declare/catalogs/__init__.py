@@ -28,26 +28,21 @@ from dataclasses import field as dataclass_field
 from importlib import resources
 from typing import TYPE_CHECKING, Literal
 
+from arkitekt_spec.declare.catalogs.ports import (
+    ASSET,
+    CALLBACK,
+    CatalogPort,
+    parse_port,
+)
+
 if TYPE_CHECKING:
     from arkitekt_spec.blok.vocabulary import Finding
 
 BASE_CATALOG_NAME = "base"
 BASE_CATALOG_VERSION = 1
 BASE_CATALOG_ID = f"{BASE_CATALOG_NAME}@{BASE_CATALOG_VERSION}"
-VALUE_KINDS = (
-    "STRING",
-    "INT",
-    "FLOAT",
-    "BOOL",
-    "DICT",
-    "LIST",
-    "ANY",
-    "CALLBACK",
-    "ASSET",
-)
-
-ASSET_KIND = "ASSET"
-"""The prop kind that names a file an app registered: bound to ``<dependency>.assets.<name>``."""
+ASSET_KIND = ASSET
+"""The port kind of a prop that names a file an app registered: bound to ``<dependency>.assets.<name>``."""
 ASSETS_SEGMENT = "assets"
 """What follows a dependency's key in the path of one of its assets. No state can be called this."""
 MODEL_REF_PATTERN = re.compile(r"sha256:[0-9a-f]{64}")
@@ -97,10 +92,8 @@ Orkestrator draws each from its brand hue (``var(--logo-<token>)``), so a logo p
 with them follows the viewer's brand and dark mode. A logo may use them beside any SVG
 colour; an action logo paints with nothing else, but a ``url(#id)`` to a gradient or
 clip path, whose stops are held to the same tokens."""
-"""The ``CatalogValueKind`` names, hard-coded so this module never imports the generated schema."""
-
-CALLBACK_KIND = "CALLBACK"
-"""The prop kind that must be bound via an agent call or a util call rather than a value."""
+CALLBACK_KIND = CALLBACK
+"""The port kind of a prop that must be bound via an agent call or a util call rather than a value."""
 
 
 # --------------------------------------------------------------------------- specs
@@ -111,7 +104,8 @@ class ArgumentSpec:
     """A parameter of an operation."""
 
     key: str
-    kind: str
+    port: CatalogPort
+    """What it takes; open for a generic one (``eq``'s operands)."""
     required: bool
     description: str | None = None
 
@@ -121,7 +115,7 @@ class OperationSpec:
     """A pure operation a UI can evaluate; ``arguments`` order is positional order."""
 
     name: str
-    returns: str
+    returns: CatalogPort
     arguments: tuple[ArgumentSpec, ...]
     description: str | None = None
 
@@ -137,26 +131,13 @@ class OperationSpec:
 
 
 @dataclass(frozen=True)
-class EventFieldSpec:
-    """A field of the payload a component hands a callback prop (``event.<key>``)."""
-
-    key: str
-    kind: str
-    description: str | None = None
-
-
-@dataclass(frozen=True)
 class PropSpec:
-    """A prop a component accepts."""
+    """A prop a component accepts, typed by a port (open for the language's own)."""
 
     key: str
-    kind: str
+    port: CatalogPort
     required: bool
     description: str | None = None
-    event: tuple[EventFieldSpec, ...] | None = None
-    """For a ``CALLBACK`` prop of a v2 catalog, the payload it is called with; ``()`` when none."""
-    values: tuple[str, ...] | None = None
-    """For a ``STRING`` prop, the closed set of literals the component draws; None: any string."""
     since: int = 0
     """The minor version of its catalog that added the prop; 0: there from the start."""
 
@@ -235,10 +216,6 @@ def _parse(raw: dict) -> Catalog:  # type: ignore[type-arg]
                 f"base catalog: duplicate or empty operation name {name!r}"
             )
         seen.add(name)
-        if entry["returns"] not in VALUE_KINDS:
-            raise ValueError(
-                f"base catalog: {name} returns unknown kind {entry['returns']!r}"
-            )
         arguments: list[ArgumentSpec] = []
         keys: set[str] = set()
         for argument in entry.get("arguments", []):
@@ -246,15 +223,13 @@ def _parse(raw: dict) -> Catalog:  # type: ignore[type-arg]
                 raise ValueError(
                     f"base catalog: {name} has a duplicate or empty argument key {argument['key']!r}"
                 )
-            if argument["kind"] not in VALUE_KINDS:
-                raise ValueError(
-                    f"base catalog: {name}.{argument['key']} has unknown kind {argument['kind']!r}"
-                )
             keys.add(argument["key"])
             arguments.append(
                 ArgumentSpec(
                     key=argument["key"],
-                    kind=argument["kind"],
+                    port=parse_port(
+                        argument.get("port"), f"base catalog: {name}.{argument['key']}"
+                    ),
                     required=bool(argument.get("required", True)),
                     description=argument.get("description"),
                 )
@@ -262,7 +237,9 @@ def _parse(raw: dict) -> Catalog:  # type: ignore[type-arg]
         operations.append(
             OperationSpec(
                 name=name,
-                returns=entry["returns"],
+                returns=parse_port(
+                    entry.get("returns"), f"base catalog: {name} returns"
+                ),
                 arguments=tuple(arguments),
                 description=entry.get("description"),
             )
@@ -358,39 +335,22 @@ def _parse_components(
                 raise ValueError(
                     f"catalog {raw.get('name')!r}: {name} repeats the prop {prop['key']!r}"
                 )
-            if prop["kind"] not in VALUE_KINDS:
+            if "kind" in prop and "port" not in prop:
                 raise ValueError(
-                    f"catalog {raw.get('name')!r}: {name}.{prop['key']} has unknown kind {prop['kind']!r}"
+                    f"catalog {raw.get('name')!r}: {name}.{prop['key']} is typed by a kind, not a port: "
+                    "a catalog written before vocabulary 3; export it again"
                 )
             keys.add(prop["key"])
-            event = prop.get("event")
-            values = prop.get("values")
-            if values is not None and (
-                not isinstance(values, list)
-                or not all(isinstance(value, str) for value in values)
-            ):
-                raise ValueError(
-                    f"catalog {raw.get('name')!r}: {name}.{prop['key']} has values that are not a list of strings"
-                )
             props.append(
                 PropSpec(
                     key=prop["key"],
-                    kind=prop["kind"],
+                    port=parse_port(
+                        prop.get("port"),
+                        f"catalog {raw.get('name')!r}: {name}.{prop['key']}",
+                        camel=camel,
+                    ),
                     required=bool(prop.get("required", False)),
                     description=prop.get("description"),
-                    event=(
-                        tuple(
-                            EventFieldSpec(
-                                key=field["key"],
-                                kind=field["kind"],
-                                description=field.get("description"),
-                            )
-                            for field in event
-                        )
-                        if isinstance(event, list)
-                        else None
-                    ),
-                    values=tuple(values) if values is not None else None,  # pyright: ignore[reportUnknownArgumentType]
                     since=int(prop.get("since") or 0),
                 )
             )
@@ -461,11 +421,17 @@ def _parse_ui_catalog(raw: dict) -> Catalog:  # type: ignore[type-arg]
         operations.append(
             OperationSpec(
                 name=entry["name"],
-                returns=entry["returns"],
+                returns=parse_port(
+                    entry.get("returns"), f"{entry['name']} returns", camel=True
+                ),
                 arguments=tuple(
                     ArgumentSpec(
                         key=argument["key"],
-                        kind=argument["kind"],
+                        port=parse_port(
+                            argument.get("port"),
+                            f"{entry['name']}.{argument['key']}",
+                            camel=True,
+                        ),
                         required=bool(argument.get("required", False)),
                         description=argument.get("description"),
                     )
@@ -799,10 +765,12 @@ def check_component(
 
     for key in sorted(present & set(prop_specs)):
         prop_spec = prop_specs[key]
-        if prop_spec.kind == CALLBACK_KIND and not callback_bindings.get(key, False):
+        if prop_spec.port.kind == CALLBACK_KIND and not callback_bindings.get(
+            key, False
+        ):
             message = f"prop {key!r} of {owner} is a CALLBACK prop and must be bound via agent_call or util_call"
             _finding(findings, CALLBACK_PROP_UNBOUND, message, owner)
-        if prop_spec.kind == ASSET_KIND:
+        if prop_spec.port.kind == ASSET_KIND:
             path = (bound_paths or {}).get(key)
             try:
                 named = asset_path_parts(path) if path is not None else None
