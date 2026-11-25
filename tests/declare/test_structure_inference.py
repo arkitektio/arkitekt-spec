@@ -35,8 +35,9 @@ def test_class_is_inferred_from_the_return_annotation() -> None:
 
     declared = structure_of(Thing)
     assert declared is not None and declared.identifier == "@things/thing"
-    assert declared.owner is client_of(ThingClient)
-    assert declared in client_of(ThingClient).structures
+    owner = client_of(ThingClient)
+    assert owner is not None and declared.owner is owner
+    assert declared in owner.structures
 
 
 def test_explicit_class_covers_an_untyped_expander() -> None:

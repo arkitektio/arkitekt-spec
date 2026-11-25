@@ -18,9 +18,9 @@ def segment(path: str, tolerance: float = 0.35) -> str:
     return path
 
 
-def definition(**options: object) -> DefinitionInput:
+def definition(protocols: list[str] | None = None) -> DefinitionInput:
     registry = AppRegistry()
-    registry.register_action(segment, **options)
+    registry.register_action(segment, protocols=protocols)
     return registry.implementations["segment"].definition
 
 
