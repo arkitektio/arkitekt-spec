@@ -80,7 +80,12 @@ class _Walk:
         """Follow an annotation to the classes it names."""
         origin = get_origin(annotation)
         if origin is Annotated:
-            self.visit(get_args(annotation)[0])
+            inner, *metadata = get_args(annotation)
+            self.visit(inner)
+            # `Annotated[str, Flow]`: a value passed by reference to a structure.
+            for item in metadata:
+                if structure_of(item) is not None:
+                    self.visit_class(item)
         elif origin is Literal:
             return
         elif origin is not None:

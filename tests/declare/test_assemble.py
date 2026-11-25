@@ -1,6 +1,6 @@
 """An app is assembled from what its annotations reach, when it is snapshotted."""
 
-from typing import Self
+from typing import Annotated, Self
 
 import pytest
 
@@ -66,6 +66,19 @@ def test_a_structure_in_a_model_field_brings_its_client() -> None:
     }
     picture = registry.structure_registry.get_fullfilled_structure("@pictures/picture")
     assert picture.client == "pictures"
+
+
+def test_a_structure_named_in_annotated_metadata_is_taken_in() -> None:
+    app = Bundle()
+
+    def by_id(picture: Annotated[str, Picture]) -> str:
+        return picture
+
+    app.register_action(by_id)
+
+    assert "@pictures/picture" in (
+        assemble(app).structure_registry.identifier_structure_map
+    )
 
 
 def test_one_model_gets_each_apps_own_identifier() -> None:
