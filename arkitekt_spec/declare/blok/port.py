@@ -24,7 +24,12 @@ from arkitekt_spec.actions import (
 )
 from arkitekt_spec.blok.bsx import parse_bsx, source_catalog
 from arkitekt_spec.blok.vocabulary import BlokError
-from arkitekt_spec.declare.blok.origin import declared_at, finding_key, warn_at
+from arkitekt_spec.declare.blok.origin import (
+    DeclaredAt,
+    declared_at,
+    finding_key,
+    warn_at,
+)
 from arkitekt_spec.declare.blok.registry import (
     check_catalog_target,
     checked_view,
@@ -80,6 +85,7 @@ def check_port_bloks(
     owner: str,
     mode: BlokCheckMode = "warning",
     interface: str | None = None,
+    at: DeclaredAt | None = None,
 ) -> None:
     """Check every port blok of an action where it is mounted.
 
@@ -89,7 +95,7 @@ def check_port_bloks(
             anything but ``port.value``.
     """
     arg_keys = tuple(port.key for port in ports)
-    at = declared_at()
+    at = at or declared_at()
     for port, widget in port_bloks(ports):
         label = f"{owner} (widget of port {port.key!r}"
         try:

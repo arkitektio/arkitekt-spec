@@ -7,13 +7,14 @@ version (:func:`tested_against`)::
 
     TESTED = tested_against("mikro")
 
-    def mikro(mikro: Annotated[Alias, Require("live.arkitekt.mikro", version=TESTED)]): ...
+    @classmethod
+    def from_fakts(cls, mikro: Annotated[Alias, Require("live.arkitekt.mikro", version=TESTED)]) -> Self: ...
 
 A checkout or an editable install has no stamp, and wants no version.
 
 A release job checks the stamp before it builds (``python -m arkitekt_spec.declare.tested
-mikro mikro.arkitekt:mikro_service``): there is one, and it is of the server major the
-service declares its image for.
+mikro mikro:Mikro``): there is one, and it is of the server major the client declares
+its image for.
 """
 
 import importlib
@@ -80,20 +81,23 @@ def stamped(package: str) -> str | None:
         return None
 
 
-def refusal(package: str, service: str | None = None) -> str | None:
+def refusal(package: str, client: str | None = None) -> str | None:
     """Why ``package`` may not be released as it is; ``None`` when it may.
 
-    ``service`` (``"module:attribute"``) is its declared service: when that names an image
+    ``client`` (``"module:Class"``) is its ``@client`` class: when that names an image
     (``jhnnsrs/mikro:12``), the stamp has to be of that major.
     """
     version = stamped(package)
     if version is None or tested_against(package) is None:
         return f"{package} carries no server version it was tested against: its integration tests have to run, against a released server, before it is built."
-    if service is not None:
-        module, _, attribute = service.partition(":")
-        image = getattr(
-            getattr(importlib.import_module(module), attribute), "image", None
-        )
+    if client is not None:
+        from arkitekt_spec.declare.client import client_of
+
+        module, _, attribute = client.partition(":")
+        declared_client = client_of(getattr(importlib.import_module(module), attribute))
+        if declared_client is None:
+            return f"{client} is not a @client class."
+        image = declared_client.image
         declared = str(image).rpartition(":")[2] if image else None
         if declared is not None and declared != version.split(".")[0]:
             return f"{package} declares {image}, and was tested against {version}: say the image it is written for."

@@ -6,7 +6,6 @@ types ``queries.<name>.value`` by the query's selection, and refuses a mutation.
 
 import warnings
 from pathlib import Path
-from typing import Annotated
 
 import pytest
 
@@ -21,7 +20,8 @@ from arkitekt_spec.declare.blok.graphql import (
     schema_hash,
 )
 from arkitekt_spec.declare.catalogs import CatalogWarning
-from arkitekt_spec.declare.wiring import Alias, Require
+from arkitekt_spec.declare.client import client, client_of
+from arkitekt_spec.declare.wiring import Require
 
 pytest.importorskip("graphql")
 
@@ -39,20 +39,23 @@ type Subscription { events(dataset: ID!): Event! }
 READ = "query { datasets { id name } }"
 
 
-class Client:
-    pass
-
-
 def _registry(tmp_path: Path, schema: bool = True) -> AppRegistry:
     registry = AppRegistry()
     sdl = tmp_path / "schema.graphql"
     sdl.write_text(SDL)
 
-    @registry.service(schema=str(sdl) if schema else None, image="example/mikro:8")
-    def mikro(mikro: Annotated[Alias, Require("live.arkitekt.mikro")]) -> Client:
+    @client(
+        name="mikro",
+        requires={"mikro": Require("live.arkitekt.mikro")},
+        schema=str(sdl) if schema else None,
+        image="example/mikro:8",
+    )
+    class Client:
         """Images."""
-        return Client()
 
+    declared = client_of(Client)
+    assert declared is not None
+    registry.use_client(declared)
     return registry
 
 

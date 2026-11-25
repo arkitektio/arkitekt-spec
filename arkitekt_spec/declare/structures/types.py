@@ -132,17 +132,6 @@ def is_valid_identifier(identifier: str) -> bool:
     return bool(IDENTIFIER_PATTERN.match(identifier))
 
 
-def service_from_identifier(identifier: str) -> str | None:
-    """The service a structure identifier belongs to: ``@mikro/arraydataset`` -> ``mikro``.
-
-    The name is the one the service is built under in an app's ``services`` map.
-    Identifiers without the ``@<service>/`` prefix belong to no service.
-    """
-    if not identifier.startswith("@") or "/" not in identifier:
-        return None
-    return identifier[1:].split("/", 1)[0] or None
-
-
 class FullFilledStructure(BaseModel):
     """A structure registered for (de)serialization: what travels by id, and how.
 
@@ -191,29 +180,18 @@ class FullFilledStructure(BaseModel):
     (``expand(id, mikro: Mikro)`` gives ``{"mikro": Mikro}``), and applied to the
     functions by :meth:`StructureRegistry.bind` when a run starts.
     """
-    service: str | None = None
-    """The service that owns this structure, and whose client expands it.
-
-    Stamped by :meth:`AppRegistry.merge` when a service's registry is taken in
-    (``declared`` is then true). Only a structure registered outside a service
-    falls back to the identifier's ``@<service>/`` prefix, which is a guess --
-    unlok's structure is ``@lok/service`` under the service ``unlok``.
-    """
-    declared: bool = False
-    """Whether ``service`` was stamped by the service that brought this structure
-    in, rather than guessed from the identifier. Only a declared structure names
-    a service an app can actually be built with."""
+    client: str | None = None
+    """The client that owns this structure, by the name a run keeps it under:
+    the one its expander asks for. ``None`` for a structure that needs no client."""
     model_config = ConfigDict(arbitrary_types_allowed=True, extra="forbid")
 
     @model_validator(mode="after")
-    def _derive_service(self) -> "FullFilledStructure":
+    def _check(self) -> "FullFilledStructure":
         if not is_valid_identifier(self.identifier):
             raise StructureDefinitionError(
                 f"'{self.identifier}' is not a structure identifier. The rekuest "
                 f"server only accepts the form '@package/key' (for {self.cls!r})."
             )
-        if self.service is None:
-            self.service = service_from_identifier(self.identifier)
         if self.aexpand is None and self.aexpand_many is None:
             raise StructureDefinitionError(
                 f"'{self.identifier}' has no way to expand an id. Give it an "

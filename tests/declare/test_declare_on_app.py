@@ -1,7 +1,7 @@
 """A protocol is declared on an app, and its demands' ports are built against that app.
 
-Nothing is written on the class: the app's structure registry keeps the declared
-protocol under it, so one class can be declared on any number of apps.
+The app's structure registry keeps the declared protocol under it, so one class can
+be declared on any number of apps, each with its own ports.
 """
 
 from typing import Protocol
@@ -33,7 +33,9 @@ class Lab(Protocol):
 
 def app_knowing_sample_as(identifier: str) -> AppRegistry:
     registry = AppRegistry()
-    registry.structure(identifier, cls=Sample)(expand_sample)
+    registry.structure_registry.register_as_structure(
+        Sample, identifier=identifier, aexpand=expand_sample
+    )
     return registry
 
 
@@ -118,19 +120,6 @@ def test_a_snapshot_carries_the_protocols_in_maps_of_its_own() -> None:
     )
     with pytest.raises(RegistryFrozenError):
         snapshot.declare(app="lab")(Lab)
-
-
-def test_a_merged_package_brings_its_protocols() -> None:
-    package = app_knowing_sample_as("@a/sample")
-    package.declare(app="lab")(Lab)
-    registry = AppRegistry()
-
-    registry.merge(package)
-
-    assert registry.structure_registry.is_protocol(Lab)
-    assert registry.structure_registry.protocol_for(
-        Lab
-    ) is package.structure_registry.protocol_for(Lab)
 
 
 # --------------------------------------------------------------------------- #

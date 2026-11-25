@@ -226,6 +226,8 @@ class RegisterConfig:
     """A formula for how long it runs, in seconds, that the action query filters and sorts by (:func:`~arkitekt_spec.declare.blok.parser.parse_estimated_runtime`)."""
     estimated_runtime_ui: str | None = None
     """A richer formula for the form only: any pure function, and the form's values too."""
+    declared_at: Any = None
+    """The app's line that declared the action (a ``DeclaredAt``): where its blok warnings point."""
 
 
 @runtime_checkable

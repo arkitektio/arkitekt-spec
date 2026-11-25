@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from arkitekt_spec.declare.agents.context import prepare_context_variables
 from arkitekt_spec.declare.agents.errors import StateRequirementsNotMet
-from arkitekt_spec.declare.agents.types import BoundApp, resolve_service_clients
+from arkitekt_spec.declare.agents.types import BoundApp, resolve_clients
 from arkitekt_spec.declare.protocol.types import AnyFunction
 from arkitekt_spec.declare.state.utils import (
     prepare_appcontext,
@@ -146,7 +146,7 @@ class WithVariables:
         # No task is passed: a hook runs for no assignment, so its calls are
         # attributed to whatever is ambient, which at startup is nothing.
         kwargs.update(
-            resolve_service_clients(
+            resolve_clients(
                 self.injected_variables.service_client_variables,
                 bound_app,
                 whose=f"{self.hook_kind} function {self.func.__name__}",

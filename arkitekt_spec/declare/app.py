@@ -8,7 +8,7 @@ and structure registries.
 import hashlib
 import inspect
 import os
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace as dataclass_replace
 from pathlib import Path, PurePosixPath
 from typing import (
@@ -44,7 +44,6 @@ from arkitekt_spec.actions import (
     PortGroupInput,
     PortKind,
     ReturnPortInput,
-    ReturnWidgetInput,
     StateImplementationInput,
     TestTargetInput,
     ValidatorInput,
@@ -90,6 +89,7 @@ from arkitekt_spec.declare.catalogs import (
     check_extension_does_not_shadow_base,
     resolve_catalogs,
 )
+from arkitekt_spec.declare.client import ClientDeclaration
 from arkitekt_spec.declare.coercible_types import OptimisticCoercible
 from arkitekt_spec.declare.definition.catalogs import (
     validate_definition_against_catalog,
@@ -99,17 +99,11 @@ from arkitekt_spec.declare.definition.define import convert_object_to_argport
 from arkitekt_spec.declare.errors import AppContextError, RegistryFrozenError
 from arkitekt_spec.declare.interactions import DeclaredInteractions
 from arkitekt_spec.declare.protocol.types import AnyState
-from arkitekt_spec.declare.provider import Provider, declare_provider
-from arkitekt_spec.declare.service import Service, declare_service
+from arkitekt_spec.declare.provider import Provider
 from arkitekt_spec.declare.structures.errors import StructureRegistryError
 from arkitekt_spec.declare.structures.model import model_field
 from arkitekt_spec.declare.structures.registry import StructureRegistry
 from arkitekt_spec.declare.structures.types import (
-    Describer,
-    ExpanderT,
-    FullFilledStructure,
-    ManyExpander,
-    Shrinker,
     StateDeclaration,
 )
 from arkitekt_spec.inspection import InspectedAsset
@@ -271,31 +265,6 @@ class AssetDeclaration(BaseModel):
         return AssetInput(name=self.name, kind=self.kind, ref=self.ref, **said)
 
 
-def _owner_among(
-    services: "Mapping[str, Service[Any]]",
-) -> "Callable[[FullFilledStructure], str | None]":
-    """Name, for a structure, the one of ``services`` whose client expands it.
-
-    The service whose function returns what the expander asks for owns the
-    structure. With a single service every structure is its; with none, no
-    structure is owned.
-    """
-    names = list(services)
-
-    def owner(structure: FullFilledStructure) -> str | None:
-        if len(names) == 1:
-            return names[0]
-        for name in names:
-            returned = services[name].returns
-            if any(
-                issubclass(returned, wanted) for wanted in structure.injects.values()
-            ):
-                return name
-        return None
-
-    return owner
-
-
 DYNAMIC_ASK_SCOPE = "rekuest_dynamic_ask"
 """The scope a task's agent needs to ask through a blok made at ask time (``dynamic_asks``)."""
 DYNAMIC_CALL_SCOPE = "rekuest_dynamic_call"
@@ -336,6 +305,34 @@ def _refuse_unpersistable(
         raise ValueError(
             f"The state '{state.interface}' cannot be persisted: {held} hold memory "
             "structures, which die with the process."
+        )
+
+
+def check_app_context(declared: type[Any] | None, value: object, *, whose: str) -> None:
+    """Refuse a run whose ``context=`` does not fit the app-context class ``declared``.
+
+    Raises:
+        AppContextError: If ``value`` is not an instance of ``declared``, or is given
+            when nothing is declared.
+    """
+    if declared is None:
+        if value is not None:
+            raise AppContextError(
+                f"{whose} declares no app context, but was given a "
+                f"{type(value).__name__}. Declare it (App(..., app_context="
+                f"{type(value).__name__}) or registry.app_context("
+                f"{type(value).__name__})) or pass no context."
+            )
+        return
+    if value is None:
+        raise AppContextError(
+            f"{whose} declares an app context of class {declared.__name__}, "
+            f"but none was given. Pass one: run(app, context={declared.__name__}(...))."
+        )
+    if not isinstance(value, declared):
+        raise AppContextError(
+            f"{whose} declares an app context of class {declared.__name__}, "
+            f"but was given a {type(value).__name__}."
         )
 
 
@@ -394,65 +391,51 @@ class AppRegistry(BaseModel):
     hooks_registry: HooksRegistry = Field(default_factory=HooksRegistry)
     structure_registry: StructureRegistry = Field(default_factory=StructureRegistry)
 
-    # --- services ---
-    services: dict[str, Service[Any]] = Field(default_factory=dict, exclude=True)
-    """The services this app uses, by name: what a run builds its clients from.
-
-    Declared here with :meth:`service`, or taken in from the registry a client
-    package ships (:meth:`register_service`, :meth:`merge`). There is no
-    process-wide catalog: a service reaches exactly the apps that take it in.
-    """
-    providers: dict[str, Provider[Any]] = Field(default_factory=dict, exclude=True)
-    """How this app's offerings are served, by name: what a run builds its agent from.
-
-    Declared with :meth:`provider` or taken in with :meth:`register_provider`.
-    An app is served by one agent, so there is at most one.
-    """
+    # --- clients ---
+    clients: dict[str, ClientDeclaration[Any]] = Field(
+        default_factory=dict, exclude=True
+    )
+    """The clients this app uses, by the name a run keeps each under: what a run
+    builds (or is handed) before anything else. Set when the app is assembled."""
+    provider: Provider[Any] | None = Field(default=None, exclude=True)
+    """What builds the agent serving this app's offerings, if anything does."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     # ------------------------------------------------------------------ #
-    # Services                                                           #
+    # Clients                                                            #
     # ------------------------------------------------------------------ #
 
-    def service(
-        self,
-        *,
-        schema: str | Path | None = None,
-        turms: str | Path | None = None,
-        image: str | None = None,
-    ) -> Callable[[Callable[..., T]], Service[T]]:
-        """Declare a service here: ``@registry.service()`` on its builder.
-
-        The function's name is the service's, its return annotation is the
-        client, and its parameters are what a run hands it (see
-        :mod:`rekuest.service`). From then on a parameter annotated with what it
-        returns -- on an action, a hook or a structure's expander declared here --
-        is handed the built client instead of becoming a port.
-
-        Args:
-            schema: Path to the service's GraphQL schema, for code generation.
-            turms: Path to the turms project that generates its client.
-            image: The image that hosts the server this client talks to, e.g.
-                ``"jhnnsrs/mikro:7"``: what a deployment made for this app's
-                tests runs. Not part of the manifest.
-
-        Returns:
-            A decorator returning the :class:`~rekuest.service.Service`.
+    def use_client(self, client: ClientDeclaration[Any]) -> None:
+        """Use ``client``: a parameter annotated with its class is handed the run's instance.
 
         Raises:
-            ServiceDefinitionError: If the signature does not say what a run needs.
-            ValueError: If a service of that name is declared here already.
+            ValueError: If another client is used under the same name.
         """
-
-        def declare(function: Callable[..., T]) -> Service[T]:
-            declared = declare_service(
-                self, function, schema=schema, turms=turms, image=image
+        self._refuse_if_frozen(f"the client '{client.name}'")
+        existing = self.clients.get(client.name)
+        if existing is not None and existing is not client:
+            raise ValueError(
+                f"Two clients are both called '{client.name}' ({existing.cls.__qualname__} "
+                f"and {client.cls.__qualname__}). A name is what a run keeps a client "
+                "under: give one its own with @client(name=...)."
             )
-            self._take_service(declared)
-            return declared
+        self.clients[client.name] = client
+        self.structure_registry.clients[client.name] = client.cls
 
-        return declare
+    def use_provider(self, provider: Provider[Any]) -> None:
+        """Serve this app through ``provider``: an app is served by one agent.
+
+        Raises:
+            ValueError: If a different provider is used already.
+        """
+        self._refuse_if_frozen(f"the provider '{provider.name}'")
+        if self.provider is not None and self.provider is not provider:
+            raise ValueError(
+                f"An app is served by one agent, and '{self.provider.name}' and "
+                f"'{provider.name}' both build one."
+            )
+        self.provider = provider
 
     def declare(
         self,
@@ -506,147 +489,16 @@ class AppRegistry(BaseModel):
         self.register_interactions(cls)
         return cls
 
-    def register_interactions(self, cls: type[Any]) -> None:
+    def register_interactions(
+        self, cls: type[Any], at: DeclaredAt | None = None
+    ) -> None:
         """Declare the interactions protocol ``cls`` here (the twin of :meth:`interactions`).
 
         Raises:
             DefinitionError: If a method is neither an ask nor an inform, or its blok breaks a rule.
         """
         self._refuse_if_frozen(f"the interactions protocol {cls.__qualname__}")
-        self.structure_registry.interactions[cls] = DeclaredInteractions(cls, self)
-
-    def provider(self) -> Callable[[Callable[..., T]], Provider[T]]:
-        """Declare a provider here: ``@registry.provider()`` on its builder.
-
-        The function's name is the provider's, its return annotation is the
-        agent's class, and its parameters are what a run hands it: the same
-        injections as a service, plus any client a service declared here
-        returns (see :mod:`rekuest.provider`). Declare the service first.
-
-        Returns:
-            A decorator returning the :class:`~rekuest.provider.Provider`.
-
-        Raises:
-            ProviderDefinitionError: If the signature does not say what a run needs.
-            ValueError: If a different provider is declared here already.
-        """
-
-        def declare(function: Callable[..., T]) -> Provider[T]:
-            declared = declare_provider(self, function)
-            self._take_provider(declared)
-            return declared
-
-        return declare
-
-    def _take_provider(self, provider: Provider[Any]) -> None:
-        """Record ``provider``. The same one twice does nothing; a second one is refused."""
-        self._refuse_if_frozen(f"the provider '{provider.name}'")
-        existing = next(iter(self.providers.values()), None)
-        if existing is not None:
-            if existing is provider:
-                return
-            raise ValueError(
-                f"An app is served by one agent, and '{existing.name}' and "
-                f"'{provider.name}' both declare one."
-            )
-        self.providers[provider.name] = provider
-
-    def register_provider(self, provider: Provider[Any]) -> None:
-        """Use a provider declared elsewhere: ``App(providers=[rekuest_provider])``.
-
-        Takes in the registry the provider was declared on -- the provider, the
-        service beside it and the structures its package brings.
-
-        Raises:
-            RegistryFrozenError: If this registry is a running snapshot.
-            ValueError: If a different provider is here already, or the
-                registries clash.
-        """
-        if provider.registry is self:
-            return
-        self.merge(provider.registry)
-
-    @property
-    def provider_declaration(self) -> Provider[Any] | None:
-        """The one provider this app declared, if any."""
-        return next(iter(self.providers.values()), None)
-
-    def _take_service(self, service: Service[Any]) -> None:
-        """Record ``service`` and what it returns.
-
-        The same service twice does nothing. A different service under a name
-        already taken is refused: a name is what a run builds a client under, and
-        what a declared structure is stamped with.
-        """
-        self._refuse_if_frozen(f"the service '{service.name}'")
-        name = service.name
-        if name in self.services:
-            if self.services[name] is service:
-                return
-            raise ValueError(
-                f"Two services are both named '{name}'. A name is what a client is "
-                "built under, so an app can use only one of them."
-            )
-        self.services[name] = service
-        self.structure_registry.clients[name] = service.returns
-
-    def register_service(self, service: Service[Any]) -> None:
-        """Use a service declared elsewhere: ``App(services=[mikro_service])``.
-
-        Takes in the registry the service was declared on -- the service itself,
-        and the structures and actions its package brings.
-
-        Args:
-            service: The service to use.
-
-        Raises:
-            RegistryFrozenError: If this registry is a running snapshot.
-            ValueError: If another service of that name is registered, or its
-                registry clashes with what is here already.
-        """
-        if service.registry is self:
-            return
-        self.merge(service.registry)
-
-    def required_services(self) -> dict[str, set[str]]:
-        """The services the registered implementations depend on, by structure ports.
-
-        Maps each service name to the interfaces that use one of its structures,
-        so a caller can say *which* function needs a service an app lacks. Only
-        structures a service registered count: those name a service an app can
-        actually be built with. A hand-registered structure's service is guessed
-        from its identifier, and ``@myapp/image`` names no service at all.
-        """
-        needed: dict[str, set[str]] = {}
-
-        def visit(
-            interface: str, ports: Iterable[ArgPortInput | ReturnPortInput] | None
-        ) -> None:
-            for port in ports or ():
-                if port.kind == PortKind.STRUCTURE and port.identifier:
-                    try:
-                        structure = self.structure_registry.get_fullfilled_structure(
-                            port.identifier
-                        )
-                    except (KeyError, StructureRegistryError):
-                        # Unknown here, or known only as another service's. Either
-                        # way the port was built, so nothing is owed to a warning.
-                        structure = None
-                    # Only a structure a *service* registered names a service that an
-                    # app could have. The service of a hand-registered one is guessed
-                    # from its identifier, and `@myapp/image` names no service at all.
-                    if (
-                        structure is not None
-                        and structure.declared
-                        and structure.service
-                    ):
-                        needed.setdefault(structure.service, set()).add(interface)
-                visit(interface, port.children)
-
-        for interface, implementation in self.implementations.items():
-            visit(interface, implementation.definition.args)
-            visit(interface, implementation.definition.returns)
-        return needed
+        self.structure_registry.interactions[cls] = DeclaredInteractions(cls, self, at)
 
     def is_empty(self) -> bool:
         """Whether nothing has been registered here: no implementation, state, hook or blok."""
@@ -821,6 +673,7 @@ class AppRegistry(BaseModel):
         for_node: str | None = None,
         args: "Mapping[str, Any] | None" = None,
         mode: BlokCheckMode = "warning",
+        at: DeclaredAt | None = None,
     ) -> None:
         """Register a blok of this app's agent (blok language v2).
 
@@ -859,7 +712,7 @@ class AppRegistry(BaseModel):
             raise ValueError("A blok name is required")
         if component is None:
             raise ValueError(f"Blok '{name}' must define a component")
-        at = declared_at()
+        at = at or declared_at()
         source: str | None = None
         try:
             catalog = (
@@ -1289,129 +1142,6 @@ class AppRegistry(BaseModel):
         )
 
     # ------------------------------------------------------------------ #
-    # Merging                                                            #
-    # ------------------------------------------------------------------ #
-
-    def merge(self, other: "AppRegistry", service: str | None = None) -> "AppRegistry":
-        """Take everything ``other`` holds into this registry, in place.
-
-        How a client package contributes to an app: the package owns a registry,
-        declares its structures and any actions it brings into it, and an app that
-        uses that service merges it. Nothing is process-wide -- a registry reaches
-        only the apps that ask for its service by name.
-
-        It takes what ``other`` holds now: what is declared on ``other`` afterwards
-        does not follow. What reaches this registry twice, through two registries that
-        both took a third, counts once; it is the same declaration, not a clash.
-
-        Args:
-            other: The registry to take. It is not changed.
-            service: The service ``other`` belongs to, stamped on every structure
-                it brings. Without it each structure is stamped with the service
-                of ``other`` whose client its expander asks for (the one that
-                returns it) -- the owner knows, where the identifier only hints:
-                unlok's structure is ``@lok/service`` under the service ``unlok``.
-
-        Returns:
-            This registry.
-
-        Raises:
-            RegistryFrozenError: If this registry is a running snapshot.
-            ValueError: If the two claim the same interface, state, blok or
-                service name. A structure clash is refused by the structure
-                registry itself, which already treats an identifier as a wire
-                contract.
-        """
-        self._refuse_if_frozen("a merged registry")
-        if other is self:
-            return self
-
-        # Services first: what they return is what the structures below inject.
-        for declared in other.services.values():
-            self._take_service(declared)
-        for declared_provider in other.providers.values():
-            self._take_provider(declared_provider)
-
-        for interface, implementation in other.implementations.items():
-            if interface in self.implementations:
-                if self.implementations[interface] is implementation:
-                    continue
-                raise ValueError(
-                    f"Two services both implement '{interface}'. An interface is "
-                    "what a caller assigns to, so it can only mean one thing."
-                )
-            self.implementations[interface] = implementation
-            self.declared_implementations[interface] = other.declared_implementations[
-                interface
-            ]
-
-        # States are four maps that move together -- three keyed by interface and
-        # one by class. Writing one and forgetting the others is the whole reason
-        # this is a method and not four updates at the call site.
-        for interface, state in other.states.items():
-            if interface in self.states:
-                if self.states[interface] is state:
-                    continue
-                raise ValueError(f"Two services both declare the state '{interface}'.")
-            self.states[interface] = state
-            if interface in other.state_registry_schemas:
-                self.state_registry_schemas[interface] = other.state_registry_schemas[
-                    interface
-                ]
-            if interface in other.state_interface_classes:
-                self.state_interface_classes[interface] = other.state_interface_classes[
-                    interface
-                ]
-
-        for name, blok in other.registered_bloks.items():
-            if name in self.registered_bloks:
-                if self.registered_bloks[name] is blok:
-                    continue
-                raise ValueError(f"Two services both declare the blok '{name}'.")
-            self.registered_bloks[name] = blok
-
-        for name, asset in other.registered_assets.items():
-            existing = self.registered_assets.get(name)
-            if existing is not None and existing.ref != asset.ref:
-                raise ValueError(
-                    f"Two services both declare the asset '{name}', differently."
-                )
-            self.registered_assets[name] = asset
-
-        for name, catalog in other.declared_catalogs.items():
-            existing = self.declared_catalogs.get(name)
-            if existing is not None and existing != catalog:
-                raise ValueError(
-                    f"Two services both declare the catalog '{name}', differently."
-                )
-            self.declared_catalogs[name] = catalog
-
-        # A nested registry of three dicts, not a dict.
-        for source, target in (
-            (other.hooks_registry.startup_hooks, self.hooks_registry.startup_hooks),
-            (other.hooks_registry.shutdown_hooks, self.hooks_registry.shutdown_hooks),
-            (
-                other.hooks_registry.background_worker,
-                self.hooks_registry.background_worker,
-            ),
-        ):
-            for key, hook in source.items():
-                if key in target:
-                    if target[key] is hook:
-                        continue
-                    raise ValueError(
-                        f"Two services both declare the hook '{key}'. A hook is kept under "
-                        "its name: give one its own, with name=."
-                    )
-                target[key] = hook
-
-        self.structure_registry.merge(
-            other.structure_registry,
-            service=service if service is not None else _owner_among(other.services),
-        )
-        return self
-
-    # ------------------------------------------------------------------ #
     # Snapshots                                                          #
     # ------------------------------------------------------------------ #
 
@@ -1423,8 +1153,8 @@ class AppRegistry(BaseModel):
         times, concurrently too, without the runs seeing each other's clients.
 
         Args:
-            clients: The run's clients, by service name; every declared structure
-                is bound to its service's client in the snapshot. Without them
+            clients: The run's clients, by name; every structure is bound to the
+                clients its expander asks for in the snapshot. Without them
                 nothing is bound yet: a runtime whose clients need the snapshot to
                 be built (rekuest's agent does) binds afterwards, with
                 ``snapshot.structure_registry.bind(clients)`` -- the snapshot owns
@@ -1432,12 +1162,12 @@ class AppRegistry(BaseModel):
 
         Returns:
             The snapshot: a frozen registry whose state schemas point at its own
-            structure registry, and which uses the same services. A runtime builds
+            structure registry, and which uses the same clients. A runtime builds
             its actors against that structure registry.
 
         Raises:
             StructureRegistryError: If a port names a structure nothing here holds.
-            StructureClientError: If a declared structure's service has no client.
+            StructureClientError: If a structure's client is missing.
         """
         self.validate()
         original = self.structure_registry
@@ -1469,8 +1199,8 @@ class AppRegistry(BaseModel):
                 shutdown_hooks=dict(self.hooks_registry.shutdown_hooks),
             ),
             structure_registry=structures,
-            services=dict(self.services),
-            providers=dict(self.providers),
+            clients=dict(self.clients),
+            provider=self.provider,
         )
         snapshot.freeze()
         return snapshot
@@ -1484,15 +1214,12 @@ class AppRegistry(BaseModel):
 
         Ports are built when a function is registered, so a class that was never
         registered fails there. What this catches is the other direction: a port
-        naming an identifier that *this* registry cannot resolve. That happens
-        when structures were declared into a different registry, or when a
-        service was dropped from ``services=[...]`` after functions had already
-        been registered against it -- both of which otherwise surface as a failed
-        expansion, mid-assignment, long after the cause.
+        naming an identifier that *this* registry cannot resolve, which would
+        otherwise surface as a failed expansion, mid-assignment, long after the
+        cause.
 
-        Called when the app is entered, before it connects. Nothing here needs a
-        connection. (An expander or an action asking for a client no registered
-        service returns is refused earlier, when it is registered.)
+        Called when the app is assembled, before it connects. Nothing here needs a
+        connection.
 
         What an action calls is checked against its catalogs here too, once all of them
         are declared. That only warns, as a :class:`CatalogWarning`.
@@ -1536,11 +1263,9 @@ class AppRegistry(BaseModel):
             raise StructureRegistryError(
                 "This app is not valid:\n"
                 + "\n".join(sorted(problems))
-                + "\nA structure is declared by the service that owns it, so the "
-                "usual cause is a service this app does not register "
-                "(`App(services=[mikro_service])`), or a registry filled by a "
-                "different app. Expanding one of these would fail mid-assignment "
-                "instead."
+                + "\nA structure comes with the client that owns it, so the usual "
+                "cause is a registry filled by a different app. Expanding one of "
+                "these would fail mid-assignment instead."
             )
 
         self._warn_definition_findings()
@@ -1695,61 +1420,6 @@ class AppRegistry(BaseModel):
 
         return decorator
 
-    def structure(
-        self,
-        identifier: str,
-        *,
-        cls: type[object] | None = None,
-        widget: AssignWidgetInput | None = None,
-        description: str | None = None,
-        expand_many: ManyExpander | None = None,
-        shrink: Shrinker | None = None,
-        returnwidget: ReturnWidgetInput | None = None,
-        describe: Describer | None = None,
-    ) -> Callable[[ExpanderT], ExpanderT]:
-        """Declare a type that travels by id: ``@registry.structure("@mikro/image")``.
-
-        The registry surface of
-        :meth:`~arkitekt_spec.declare.structures.registry.StructureRegistry.structure`, so a
-        client package declares its structures and its actions into one object.
-        The expander's return annotation is the class that travels::
-
-            @registry.structure("@mikro/tabledataset", shrink=shrink_table)
-            async def expand_table(id: str, mikro: Mikro) -> TableDataset:
-                return await mikro.aget_table_dataset(id)
-
-        Args:
-            identifier: What it travels as, ``@package/key``.
-            cls: The class that travels, when the expander's return annotation
-                is not it (``Any``, a union).
-            widget: The widget a user picks one with.
-            description: What it is, for the UI.
-            expand_many: Fetches several ids at once, when the client's own batch
-                call is not the right answer.
-            shrink: Turns the object into its id. Defaults to reading ``.id``.
-                It may ask for clients by annotation after the object, like the
-                expander.
-            returnwidget: The widget one is shown with.
-            describe: Says an object's descriptors (``{key: value}``). A run
-                tests them against a port's ``Requires`` and ``Provides``; a key
-                it does not return is not tested. It reads what the expander
-                already fetched and never asks the server itself: a second
-                round trip to describe an object is an antipattern.
-
-        Returns:
-            A decorator returning the expander unchanged, with its declared type.
-        """
-        return self.structure_registry.structure(
-            identifier,
-            cls=cls,
-            widget=widget,
-            description=description,
-            expand_many=expand_many,
-            shrink=shrink,
-            returnwidget=returnwidget,
-            describe=describe,
-        )
-
     def app_context(
         self,
         *args: type[T],
@@ -1799,26 +1469,7 @@ class AppRegistry(BaseModel):
             AppContextError: If the app declares a class and ``value`` is not an
                 instance of it, or declares none and ``value`` is not ``None``.
         """
-        declared = self.app_context_class
-        if declared is None:
-            if value is not None:
-                raise AppContextError(
-                    f"{whose} declares no app context, but was given a "
-                    f"{type(value).__name__}. Declare it (App(..., app_context="
-                    f"{type(value).__name__}) or registry.app_context("
-                    f"{type(value).__name__})) or pass no context."
-                )
-            return
-        if value is None:
-            raise AppContextError(
-                f"{whose} declares an app context of class {declared.__name__}, "
-                f"but none was given. Pass one: run(app, context={declared.__name__}(...))."
-            )
-        if not isinstance(value, declared):
-            raise AppContextError(
-                f"{whose} declares an app context of class {declared.__name__}, "
-                f"but was given a {type(value).__name__}."
-            )
+        check_app_context(self.app_context_class, value, whose=whose)
 
     @overload
     def model(
@@ -1941,6 +1592,7 @@ class AppRegistry(BaseModel):
         dynamic_informs: bool = False,
         estimated_runtime: str | None = None,
         estimated_runtime_ui: str | None = None,
+        declared_at: DeclaredAt | None = None,
     ) -> "WrappedFunction[P, R]":
         """Register a function as an action, as a plain call rather than a decorator.
 
@@ -2004,6 +1656,8 @@ class AppRegistry(BaseModel):
                 unless the server can compute it.
             estimated_runtime_ui: A richer formula for the form only, which needs
                 ``estimated_runtime``: any pure function, and the form's values too.
+            declared_at: The app's line that declared it, where its blok warnings point.
+                Defaults to the caller's.
 
         Returns:
             The function, still callable as itself.
@@ -2042,6 +1696,7 @@ class AppRegistry(BaseModel):
             dynamic_informs=dynamic_informs,
             estimated_runtime=estimated_runtime,
             estimated_runtime_ui=estimated_runtime_ui,
+            declared_at=declared_at,
         )
 
     def register_workflow(
@@ -2088,4 +1743,5 @@ __all__ = [
     "DYNAMIC_CALL_SCOPE",
     "DYNAMIC_INFORM_SCOPE",
     "AppRegistry",
+    "check_app_context",
 ]

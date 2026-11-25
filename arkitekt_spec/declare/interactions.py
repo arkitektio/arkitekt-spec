@@ -66,7 +66,12 @@ from arkitekt_spec.blok.bsx import parse_bsx, source_catalog
 from arkitekt_spec.blok.declared import blok_catalog, blok_header
 from arkitekt_spec.blok.vocabulary import BlokError, load_vocabulary
 from arkitekt_spec.declare.blok.declarations import demo_input
-from arkitekt_spec.declare.blok.origin import declared_at, finding_key, warn_at
+from arkitekt_spec.declare.blok.origin import (
+    DeclaredAt,
+    declared_at,
+    finding_key,
+    warn_at,
+)
 from arkitekt_spec.declare.blok.registry import check_catalog_target, checked_view
 from arkitekt_spec.declare.blok.validate import BlokScope, check_blok_tree
 from arkitekt_spec.declare.catalogs import BlokCheckMode
@@ -279,7 +284,11 @@ class DeclaredInteraction:
     its blok checked."""
 
     def __init__(
-        self, method: InteractionMethod[Any, Any], owner: str, registry: "AppRegistry"
+        self,
+        method: InteractionMethod[Any, Any],
+        owner: str,
+        registry: "AppRegistry",
+        at: DeclaredAt | None = None,
     ) -> None:
         self.method = method
         self.role: Role = method.role
@@ -333,7 +342,7 @@ class DeclaredInteraction:
             args=tuple(port.key for port in self.definition.args or ()),
             demo=demo,
         )
-        at = declared_at()
+        at = at or declared_at()
         reported: set[str] = set()
         for finding in check_catalog_target(catalog, registry):
             if options.mode == "strict":
@@ -403,14 +412,16 @@ class DeclaredInteractions:
     with it is told apart from a port, and its asks and informs registered with the action.
     """
 
-    def __init__(self, cls: type[Any], registry: "AppRegistry") -> None:
+    def __init__(
+        self, cls: type[Any], registry: "AppRegistry", at: DeclaredAt | None = None
+    ) -> None:
         self.cls = cls
         self.interface = interface_name(cls)
         self.interactions: dict[str, DeclaredInteraction] = {}
         for name, member in inspect.getmembers(cls):
             if isinstance(member, InteractionMethod):
                 self.interactions[name] = DeclaredInteraction(
-                    member, cls.__qualname__, registry
+                    member, cls.__qualname__, registry, at
                 )
             elif not name.startswith("_") and callable(member):
                 raise DefinitionError(

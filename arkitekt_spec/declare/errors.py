@@ -195,3 +195,11 @@ class RegistryFrozenError(RekuestError):
     connects, because that is what it told the server; registering afterwards would
     add something the server never heard about and no caller can reach.
     """
+
+
+class AppDeclarationError(ExceptionGroup):  # noqa: N818 -- an error, and a group of them
+    """An app cannot be assembled: every problem found, each with where it was declared.
+
+    Each member is the original exception, noted with the line that declared what
+    failed (``file:line: what``) and carrying it as ``declared_at``.
+    """

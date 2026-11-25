@@ -30,20 +30,6 @@ def test_an_app_declares_one_app_context_class() -> None:
         registry.app_context(OtherConfig)
 
 
-def test_merging_two_different_declarations_is_refused() -> None:
-    app, package = AppRegistry(), AppRegistry()
-    app.app_context(Config)
-    package.app_context(OtherConfig)
-
-    with pytest.raises(ValueError, match="already declares Config"):
-        app.merge(package)
-
-    same = AppRegistry()
-    same.app_context(Config)
-    app.merge(same)
-    assert app.app_context_class is Config
-
-
 def test_require_app_context_checks_what_the_run_passed() -> None:
     registry = AppRegistry()
     registry.require_app_context(None, whose="App 'x'")

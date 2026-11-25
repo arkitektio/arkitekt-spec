@@ -26,11 +26,3 @@ class StateRequirementsNotMet(AgentException):
     """
     Raised when the state requirements are not met
     """
-
-
-class MissingServiceWarning(UserWarning):
-    """A registered function uses a structure whose service the app does not have.
-
-    A warning rather than an error: the function only fails if such a value is
-    actually expanded, and an actor registered with ``bypass_expand`` never does.
-    """

@@ -308,8 +308,8 @@ def type_queries(
         *(("query", q) for q in queries),
         *(("subscription", s) for s in subscriptions),
     ):
-        service = app_registry.services.get(declared.service)
-        sdl = service.get_graphql_schema() if service is not None else None
+        client = app_registry.clients.get(declared.service)
+        sdl = client.get_graphql_schema() if client is not None else None
         if sdl is None:
             _report(
                 owner,
@@ -318,7 +318,7 @@ def type_queries(
                     f"{kind} {declared.key}",
                     kind=kind,
                     name=declared.key,
-                    problem=f"this app knows no schema for the {declared.service!r} service, so it is not checked; register the service with its schema to check it",
+                    problem=f"this app knows no schema for the {declared.service!r} client, so it is not checked; use the client (declared with its schema) to check it",
                 ),
                 mode,
                 at,

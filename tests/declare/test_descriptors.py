@@ -89,29 +89,28 @@ class Thing:
         self.id = id
 
 
-def test_a_structure_keeps_its_describer_through_merge_and_copy() -> None:
+async def expand_thing(id: str) -> Thing:
+    return Thing(id)
+
+
+def test_a_structure_keeps_its_describer_through_a_copy() -> None:
     registry = StructureRegistry()
 
     def describe(thing: Thing) -> dict[str, int]:
         return {"@t/length": len(thing.id)}
 
-    @registry.structure("@t/thing", describe=describe)
-    async def expand_thing(id: str) -> Thing:
-        return Thing(id)
+    registry.register_as_structure(
+        Thing, identifier="@t/thing", aexpand=expand_thing, describe=describe
+    )
 
     assert registry.get_fullfilled_structure("@t/thing").describe is describe
-
-    other = StructureRegistry()
-    other.merge(registry)
-    assert other.get_fullfilled_structure("@t/thing").describe is describe
+    copied = registry.copy_maps()
+    assert copied.get_fullfilled_structure("@t/thing").describe is describe
 
 
 def test_a_structure_without_a_describer_has_none() -> None:
     registry = StructureRegistry()
-
-    @registry.structure("@t/thing")
-    async def expand_thing(id: str) -> Thing:
-        return Thing(id)
+    registry.register_as_structure(Thing, identifier="@t/thing", aexpand=expand_thing)
 
     assert registry.get_fullfilled_structure("@t/thing").describe is None
 

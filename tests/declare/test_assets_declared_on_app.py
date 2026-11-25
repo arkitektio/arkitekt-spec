@@ -91,19 +91,13 @@ def test_a_name_is_one_file_and_a_missing_file_is_refused(
         registry.register_asset("absent", "absent.glb")
 
 
-def test_assets_travel_into_a_merge_and_a_frozen_registry_takes_no_new_one(
-    registry: AppRegistry,
-) -> None:
+def test_a_frozen_registry_takes_no_new_asset(registry: AppRegistry) -> None:
     registry.register_asset("scope", "models/scope.glb")
-    app = AppRegistry(root=registry.root)
 
-    app.merge(registry)
-    assert "scope" in app.registered_assets
-
-    app.freeze()
-    app.register_asset("scope", "models/scope.glb")
+    registry.freeze()
+    registry.register_asset("scope", "models/scope.glb")
     with pytest.raises(RegistryFrozenError):
-        app.register_asset("logo", "logo.png")
+        registry.register_asset("logo", "logo.png")
 
 
 def test_a_blok_names_an_asset_of_its_own_app(registry: AppRegistry) -> None:

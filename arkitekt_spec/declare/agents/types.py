@@ -15,30 +15,20 @@ T = TypeVar("T")
 class BoundApp(Protocol):
     """What an agent is bound to: the running app, answering for its clients.
 
-    Three ways to ask, because three things ask differently:
+    Two ways to ask:
 
     * ``get(Mikro)`` -- by class, which is how an action, a hook and a
       structure's expander name the client they want.
-    * ``clients`` -- by service name (``{"mikro": <Mikro>}``), which is how a
-      *declared* structure finds the client that expands it: its service is
-      recorded on it, not the class.
-    * ``services`` -- the service names the app declares, which is how the agent
-      reports a structure whose service the app lacks. Declared, not built, so a
-      service whose client was never constructed still counts.
+    * ``clients`` -- by the name a run keeps each under (``{"mikro": <Mikro>}``).
 
     arkitekt's Runtime is one; a test can pass anything that answers.
     """
 
     # Read-only: a mutable protocol attribute is invariant, so a runtime exposing
-    # these as properties (or as a plain dict) could never satisfy it.
-    @property
-    def services(self) -> Mapping[str, Any]:
-        """The service names the app declares, to what declares them."""
-        ...
-
+    # it as a property (or as a plain dict) could never satisfy it.
     @property
     def clients(self) -> Mapping[str, Any]:
-        """The app's built clients, by service name."""
+        """The app's built clients, by name."""
         ...
 
     def get(self, key: type[T], /) -> T | None:
@@ -53,6 +43,18 @@ Its class is declared with ``@app.app_context``; nothing is written on it.
 """
 
 
+@runtime_checkable
+class RunAware(Protocol):
+    """A client whose results remember the run it belongs to: a run attaches itself.
+
+    rekuest's clients are: the references their calls return expand through it.
+    """
+
+    def attach(self, app: BoundApp, /) -> None:
+        """Belong to ``app``, the run that built or was handed this client."""
+        ...
+
+
 def unwrap_injectable(annotation: object) -> object:
     """Strip ``Annotated[...]`` and ``Optional[...]`` from an injectable annotation.
 
@@ -60,7 +62,7 @@ def unwrap_injectable(annotation: object) -> object:
     guards for its absence. Any other union is returned as is and is not injectable.
     Whether the class *is* a client is the structure registry's to say
     (:meth:`~arkitekt_spec.declare.structures.registry.StructureRegistry.is_client`): it is one
-    when a registered service returns it.
+    when the app uses a client of that class.
     """
     import types
     import typing
@@ -78,7 +80,7 @@ def unwrap_injectable(annotation: object) -> object:
         return annotation
 
 
-def resolve_service_clients(
+def resolve_clients(
     variables: Mapping[str, type],
     bound_app: "BoundApp | None",
     *,
@@ -126,7 +128,7 @@ def resolve_service_clients(
         if client is None:
             raise StateRequirementsNotMet(
                 f"{whose} asks for a {cls.__name__} as '{key}', but the app was "
-                "built without one. Add its service to the app."
+                "built without one. Use its client in the app."
             )
         # The one shared client, not a per-task copy of it. What attributes its
         # requests to this task is `rath.task.current_task`, which the actor sets
@@ -137,9 +139,10 @@ def resolve_service_clients(
 
 
 __all__ = [
+    "RunAware",
     "AppContext",
     "BoundApp",
     "T",
-    "resolve_service_clients",
+    "resolve_clients",
     "unwrap_injectable",
 ]

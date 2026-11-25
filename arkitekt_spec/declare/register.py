@@ -26,7 +26,6 @@ import functools
 import logging
 
 from arkitekt_spec.actions import (
-    ActionDependencyInput,
     AgentDependencyInput,
     AskBlokInput,
     AssignWidgetInput,
@@ -43,7 +42,6 @@ from arkitekt_spec.actions import (
     PortGroupInput,
     TestTargetInput,
     ValidatorInput,
-    definition_hash,
 )
 from arkitekt_spec.blok.declared import blok_header
 from arkitekt_spec.declare.actors.actify import (
@@ -58,6 +56,7 @@ from arkitekt_spec.declare.actors.types import (
 )
 from arkitekt_spec.declare.annotations.markers import Fits
 from arkitekt_spec.declare.blok.action import ActionBloks, build_action_bloks
+from arkitekt_spec.declare.blok.origin import DeclaredAt
 from arkitekt_spec.declare.blok.parser import parse_estimated_runtime, parse_fits
 from arkitekt_spec.declare.blok.port import check_port_bloks, widgets_read_self
 from arkitekt_spec.declare.coercible_types import (
@@ -67,7 +66,6 @@ from arkitekt_spec.declare.definition.checks import check_implementation
 from arkitekt_spec.declare.definition.define import (
     dependency_to_dependency_input,
 )
-from arkitekt_spec.declare.definition.dependencies import build_action_dependency_input
 from arkitekt_spec.declare.definition.errors import DefinitionError
 from arkitekt_spec.declare.definition.utils import interface_name
 from arkitekt_spec.declare.protocol.types import AnyFunction
@@ -87,15 +85,11 @@ class WrappedFunction(Generic[P, R]):
     ``rekuest.call(fn, ...)`` finds its implementation there.
     """
 
-    def __init__(
-        self, func: Callable[P, R], interface: str, definition: DefinitionInput
-    ) -> None:
+    def __init__(self, func: Callable[P, R], interface: str) -> None:
         """Initialize the wrapped function."""
         functools.update_wrapper(self, func)  # name, doc, signature: still the function
         self.func = func
         self.interface = interface
-        self.definition = definition
-        self.hash = definition_hash(definition)
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         """Call the actor's implementation."""
@@ -112,14 +106,6 @@ class WrappedFunction(Generic[P, R]):
         """
         qualname: str = self.func.__qualname__
         return qualname
-
-    def to_dependency_input(self) -> ActionDependencyInput:
-        """Convert the wrapped function to a DependencyInput."""
-        return build_action_dependency_input(
-            key=self.interface,
-            definition=self.definition,
-            optional=False,
-        )
 
 
 def _warn_if_cancel_cannot_stop(function: AnyFunction, config: RegisterConfig) -> None:
@@ -175,7 +161,7 @@ def _logo_of(
             raise DefinitionError(
                 f'{interface}: an inline logo is a <Blok kind="action" context="logo">, not {article} {header.kind} blok in {header.context.lower()}'
             )
-        registry.register_blok(name, config.logo)
+        registry.register_blok(name, config.logo, at=config.declared_at)
         return {"logo": name}
     return {"logo": config.logo}
 
@@ -342,6 +328,7 @@ def register_func(
         implementation_registry,
         f"Action {interface!r}",
         interface=interface,
+        at=config.declared_at,
     )
     if not definition.stateful and widgets_read_self(
         definition.args or (), implementation_registry
@@ -445,6 +432,7 @@ def declare_implementation(
     dynamic_informs: bool = False,
     estimated_runtime: str | None = None,
     estimated_runtime_ui: str | None = None,
+    declared_at: DeclaredAt | None = None,
 ) -> WrappedFunction[P, R]:
     """Register a function directly: ``declare_implementation(fn, implementation_registry=...)``."""
 
@@ -484,6 +472,7 @@ def declare_implementation(
     dynamic_informs: bool = False,
     estimated_runtime: str | None = None,
     estimated_runtime_ui: str | None = None,
+    declared_at: DeclaredAt | None = None,
 ) -> Callable[[Callable[P, R]], WrappedFunction[P, R]]:
     """Build a configured decorator: ``declare_implementation(implementation_registry=..., name=...)``."""
 
@@ -522,6 +511,7 @@ def declare_implementation(
     dynamic_informs: bool = False,
     estimated_runtime: str | None = None,
     estimated_runtime_ui: str | None = None,
+    declared_at: DeclaredAt | None = None,
 ) -> WrappedFunction[P, R] | Callable[[Callable[P, R]], WrappedFunction[P, R]]:
     """Register a function or actor with an app registry.
 
@@ -642,13 +632,14 @@ def declare_implementation(
         dynamic_informs=dynamic_informs,
         estimated_runtime=estimated_runtime,
         estimated_runtime_ui=estimated_runtime_ui,
+        declared_at=declared_at,
     )
 
     def offer(function_or_actor: Callable[P, R]) -> WrappedFunction[P, R]:
         any_function = cast(AnyFunction, function_or_actor)
         iface = config.interface or config.key or interface_name(any_function)
 
-        definition = register_func(
+        register_func(
             any_function,
             structure_registry,
             implementation_registry,
@@ -656,6 +647,6 @@ def declare_implementation(
             actifier=actifier,
         )
 
-        return WrappedFunction(function_or_actor, iface, definition)
+        return WrappedFunction(function_or_actor, iface)
 
     return offer(func) if func is not None else offer

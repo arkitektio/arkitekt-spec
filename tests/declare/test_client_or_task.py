@@ -1,25 +1,25 @@
-"""A parameter is a service's client, the running task, or a port; asking must never raise.
+"""A parameter is a client, the running task, or a port; asking must never raise.
 
 ``Task`` is a runtime-checkable protocol with data members (``id``), which cannot be an
 ``issubclass`` target: asking whether it is a client used to raise, so no action taking
-``task: Task`` could register in an app that declares a service.
+``task: Task`` could register in an app that uses a client.
 """
 
 from arkitekt_spec.declare.app import AppRegistry
+from arkitekt_spec.declare.client import client, client_of
 from arkitekt_spec.declare.task import Task
 
 
+@client(requires={})
 class ThingClient:
-    """What the ``things`` service builds."""
+    """A client an app uses."""
 
 
 def registry_with_client() -> AppRegistry:
     registry = AppRegistry()
-
-    @registry.service()
-    def things() -> ThingClient:
-        return ThingClient()
-
+    declared = client_of(ThingClient)
+    assert declared is not None
+    registry.use_client(declared)
     return registry
 
 

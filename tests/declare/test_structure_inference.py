@@ -4,7 +4,8 @@ from typing import Any
 
 import pytest
 
-from arkitekt_spec.declare.app import AppRegistry
+from arkitekt_spec.declare.client import client, client_of
+from arkitekt_spec.declare.structures.declare import structure, structure_of
 from arkitekt_spec.declare.structures.errors import StructureDefinitionError
 
 
@@ -19,72 +20,53 @@ class Other:
     """Another class altogether."""
 
 
+@client(requires={})
 class ThingClient:
-    """The client a service returns."""
+    """The client the structure's expander asks for."""
 
     async def aget_thing(self, id: str) -> Thing:
         return Thing(id)
 
 
-def registry_with_client() -> AppRegistry:
-    registry = AppRegistry()
-
-    @registry.service()
-    def things() -> ThingClient:
-        return ThingClient()
-
-    return registry
-
-
 def test_class_is_inferred_from_the_return_annotation() -> None:
-    registry = registry_with_client()
-
-    @registry.structure("@things/thing")
+    @structure("@things/thing")
     async def expand_thing(id: str, things: ThingClient) -> Thing:
         return await things.aget_thing(id)
 
-    assert (
-        registry.structure_registry.get_fullfilled_structure("@things/thing").cls
-        is Thing
-    )
-    assert registry.structure_registry.find_for_cls(Thing) is not None
+    declared = structure_of(Thing)
+    assert declared is not None and declared.identifier == "@things/thing"
+    assert declared.owner is client_of(ThingClient)
+    assert declared in client_of(ThingClient).structures
 
 
 def test_explicit_class_covers_an_untyped_expander() -> None:
-    registry = registry_with_client()
+    @structure("@things/other", cls=Other)
+    async def expand_other(id: str, things: ThingClient) -> Any:  # noqa: ANN401 -- what this test is about: an expander annotated Any
+        return Other()
 
-    @registry.structure("@things/thing", cls=Thing)
-    async def expand_thing(id: str, things: ThingClient) -> Any:  # noqa: ANN401 -- what this test is about: an expander annotated Any
-        return await things.aget_thing(id)
-
-    assert (
-        registry.structure_registry.get_fullfilled_structure("@things/thing").cls
-        is Thing
-    )
+    declared = structure_of(Other)
+    assert declared is not None and declared.cls is Other
 
 
 def test_no_class_anywhere_is_refused() -> None:
-    registry = registry_with_client()
     with pytest.raises(StructureDefinitionError, match="does not say what it returns"):
 
-        @registry.structure("@things/thing")
+        @structure("@things/thing")
         async def expand_thing(id: str, things: ThingClient):  # noqa: ANN202 -- what this test is about: an expander that does not say what it returns
             return await things.aget_thing(id)
 
 
 def test_a_non_class_annotation_needs_cls() -> None:
-    registry = registry_with_client()
     with pytest.raises(StructureDefinitionError, match="is not a class"):
 
-        @registry.structure("@things/thing")
+        @structure("@things/thing")
         async def expand_thing(id: str, things: ThingClient) -> Thing | None:
             return await things.aget_thing(id)
 
 
 def test_class_and_annotation_must_agree() -> None:
-    registry = registry_with_client()
     with pytest.raises(StructureDefinitionError, match="One structure, one class"):
 
-        @registry.structure("@things/thing", cls=Other)
+        @structure("@things/thing", cls=Other)
         async def expand_thing(id: str, things: ThingClient) -> Thing:
             return await things.aget_thing(id)

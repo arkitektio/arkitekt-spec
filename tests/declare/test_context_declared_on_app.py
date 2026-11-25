@@ -2,8 +2,7 @@
 
 Declaring a class as a context writes nothing on it: the app's registry records
 the name the agent keeps it under and the locks its use requires. So one class
-can be a context of two apps under different names and locks, and an app that
-merges another app's registry takes its contexts with it.
+can be a context of two apps under different names and locks.
 """
 
 import pytest
@@ -75,15 +74,6 @@ def test_a_functions_context_parameters_carry_the_apps_locks() -> None:
     assert details.locks == ["camera", "stage"]
 
 
-def test_a_merged_registry_brings_its_contexts() -> None:
-    package, app = AppRegistry(), AppRegistry()
-    package.context(Session, locks=["x"])
-
-    app.merge(package)
-
-    assert app.structure_registry.context_for(Session).locks == ("x",)
-
-
 def test_an_unknown_class_is_named_in_the_error() -> None:
     with pytest.raises(KeyError, match="Session.*@app.context"):
         AppRegistry().structure_registry.context_for(Session)
@@ -139,9 +129,8 @@ def test_a_hook_is_handed_the_app_context_and_checks_its_kind() -> None:
         variables.get_kwargs({}, {}, None)
 
 
-def test_a_snapshot_and_a_merge_carry_the_app_context() -> None:
-    package, app = AppRegistry(), AppRegistry()
-    package.app_context(UserContext)
-    app.merge(package)
+def test_a_snapshot_carries_the_app_context() -> None:
+    app = AppRegistry()
+    app.app_context(UserContext)
 
     assert app.snapshot().structure_registry.is_app_context(UserContext)

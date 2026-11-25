@@ -39,7 +39,7 @@ from arkitekt_spec.actions import (
 )
 from arkitekt_spec.declare.agents.errors import StateRequirementsNotMet
 from arkitekt_spec.declare.agents.types import (
-    resolve_service_clients,
+    resolve_clients,
     unwrap_injectable,
 )
 from arkitekt_spec.declare.structures.convert import (
@@ -65,7 +65,6 @@ from .types import (
     ContextDeclaration,
     Describer,
     Expander,
-    ExpanderT,
     FullFilledEnum,
     FullFilledMemoryStructure,
     FullFilledModel,
@@ -156,7 +155,7 @@ def _same_class(one: type[Any], other: type[Any]) -> bool:
 
 
 def _declared_by(structure: FullFilledStructure) -> str:
-    return f" (service '{structure.service}')" if structure.service else ""
+    return f" (client '{structure.client}')" if structure.client else ""
 
 
 def _package_of(cls: type[Any]) -> str:
@@ -180,8 +179,8 @@ def _refuse_undeclared_structure(cls: type[Any]) -> None:
         f"{_qualified(cls)} can expand and shrink itself, but nothing declared it "
         f"as a structure, and its own name for itself, '{identifier}', is not one "
         "it can travel under: the rekuest server only accepts '@package/key'. "
-        f"If it comes from a service package, that service declares it: is "
-        f"'{package}' one of this app's services (`app.service(...)`)? "
+        f"If it comes from a client package, that package declares it with "
+        f"@structure: is '{package}' imported, and its client used by this app? "
         "If it is your own class, return '@yourapp/name' from `get_identifier`, or "
         "declare it with `structure_registry.register_as_structure`."
     )
@@ -209,7 +208,7 @@ def _refuse_undeclared_fragment(cls: type[Any]) -> None:
 
 
 class _ClientsAsApp:
-    """A :class:`~arkitekt_spec.declare.agents.types.BoundApp` over a plain ``{service: client}`` map.
+    """A :class:`~arkitekt_spec.declare.agents.types.BoundApp` over a plain ``{name: client}`` map.
 
     Binding a registry on its own -- in a test, or anywhere outside a run -- is a
     supported thing to do, and a bare mapping is the natural way to say it. This
@@ -220,7 +219,6 @@ class _ClientsAsApp:
 
     def __init__(self, clients: Mapping[str, Any]) -> None:
         self.clients = clients
-        self.services = clients
 
     def get(self, key: type[T]) -> T | None:
         """The client of class ``key``, or ``None``."""
@@ -231,7 +229,7 @@ class _ClientsAsApp:
 
 
 def _as_bound_app(app: "BoundApp | Mapping[str, Any]") -> "BoundApp":
-    """Take a run, or a bare ``{service: client}`` mapping, as something to bind from."""
+    """Take a run, or a bare ``{name: client}`` mapping, as something to bind from."""
     if isinstance(app, Mapping):
         return cast("BoundApp", _ClientsAsApp(app))
     return app
@@ -254,10 +252,8 @@ def injected_clients_of(
     -- ``expand(id, mikro: Mikro)``. The first parameter is the id; every one
     after it is a client.
 
-    Only the *shape* is checked here. Whether a declared service actually builds
-    each class is settled later, by :meth:`AppRegistry.validate`, because a
-    structure is declared when its package is imported -- before any service
-    exists to be asked.
+    Only the *shape* is checked here: whether the app uses each client is settled
+    when it is assembled.
 
     Args:
         function: The expander or shrinker.
@@ -318,7 +314,7 @@ class StructureRegistry(BaseModel):
 
     **Nothing is registered automatically.** Anything that carries an object --
     a structure fetched by id, or a memory structure kept on the agent's shelve --
-    must be registered before a port can name it, either by the service that
+    must be registered before a port can name it, either by the client that
     declares it or by hand (:meth:`register_as_structure`,
     :meth:`register_as_memory_structure`, :meth:`register_as_model`). A class that
     was never registered raises rather than being invented on the spot, which is
@@ -363,9 +359,9 @@ class StructureRegistry(BaseModel):
         return self.namespace.of(cls) if self.namespace is not None else None
 
     clients: dict[str, type] = Field(default_factory=dict, exclude=True)
-    """What each registered service returns, by service name: the client classes.
+    """The client classes this app uses, by the name a run keeps each under.
 
-    Written by the app registry when a service is declared or taken in. A
+    Written when the app is assembled. A
     parameter annotated with one of these (``mikro: Mikro``), on an action, a
     hook or an expander, is handed the built client instead of becoming a port.
     """
@@ -424,7 +420,7 @@ class StructureRegistry(BaseModel):
         """Look an identifier up in one of the identifier maps.
 
         There is no chain to fall back to: a registry holds exactly what its own
-        app's services declared, and nothing else.
+        app's clients declared, and nothing else.
         """
         if identifier in own:
             return own[identifier]
@@ -516,13 +512,13 @@ class StructureRegistry(BaseModel):
         """
         if is_global_structure(cls):
             # It can fetch itself, so it *looks* ready. What is missing is the
-            # declaration that says which service expands it.
+            # declaration that says which client expands it.
             _refuse_undeclared_structure(cls)
             raise StructureRegistryError(
                 f"{_qualified(cls)} can expand and shrink itself, but nothing "
-                f"declared it as a structure of this app. A service package "
-                f"declares its own ({_package_of(cls)} would declare this one) -- "
-                "is it one of this app's services? If it is your own class, "
+                f"declared it as a structure. A client package declares its own with "
+                f"@structure ({_package_of(cls)} would declare this one) -- is it "
+                "imported? If it is your own class, "
                 "register it with `app.register_structure(...)`."
             )
 
@@ -543,8 +539,8 @@ class StructureRegistry(BaseModel):
         raise StructureRegistryError(
             f"{_qualified(cls)} is not registered, and nothing is registered "
             "automatically any more.\n"
-            "  If it is a client (`mikro: Mikro`), register the service that "
-            "builds it first: `App(services=[mikro_service])`.\n"
+            "  If it is a client (`mikro: Mikro`), declare it with @client on its "
+            "class.\n"
             "  If it is an object this agent should keep to itself, say so:\n"
             f"      app.register_memory_structure({getattr(cls, '__name__', cls)})\n"
             "  If it should travel between apps, it needs an expander and a "
@@ -682,6 +678,7 @@ class StructureRegistry(BaseModel):
         default_widget: AssignWidgetInput | None = None,
         default_returnwidget: ReturnWidgetInput | None = None,
         describe: Describer | None = None,
+        client: str | None = None,
     ) -> FullFilledStructure:
         """Register a class as a structure.
 
@@ -701,6 +698,8 @@ class StructureRegistry(BaseModel):
             default_widget (Optional[AssignWidgetInput], optional): A widget that will be used as a default. Defaults to None.
             default_returnwidget (Optional[ReturnWidgetInput], optional): A return widget that will be used as a default. Defaults to None.
             describe (Describer | None, optional): Computes an object's descriptors, to test them against a port's requires and provides. Defaults to None.
+            client (str | None, optional): The client that owns it, by name. Defaults to the
+                client of this registry its expander asks for.
 
         Returns:
             FullFilledStructure: The fullfilled structure that was created
@@ -711,18 +710,15 @@ class StructureRegistry(BaseModel):
             injects.update(injected_clients_of(ashrink, identifier, "shrink"))
         if aexpand_many is not None:
             injects.update(injected_clients_of(aexpand_many, identifier, "expand_many"))
-        # A run can only hand out what a registered service returns, so the
-        # service comes first; refused here rather than mid-assignment. The
-        # service whose client the expander asks for is the one that owns the
-        # structure -- the annotation says so, the identifier only hints.
-        owner: str | None = None
+        # A run can only hand out the clients its app uses, so they come first;
+        # refused here rather than mid-assignment.
+        owner = client
         for key, wanted in sorted(injects.items()):
             if not self.is_client(wanted):
                 raise StructureDefinitionError(
                     f"'{identifier}': its expander wants a {wanted.__name__} as "
-                    f"'{key}', but no registered service returns one. Declare the "
-                    "service that builds it first (`@registry.service()` on "
-                    "`def mikro(...) -> Mikro`)."
+                    f"'{key}', but this app uses no such client. Declare it with "
+                    "@client on its class, and use it in the app."
                 )
             if owner is None:
                 owner = next(
@@ -738,8 +734,7 @@ class StructureRegistry(BaseModel):
             ashrink=ashrink,
             aexpand_many=aexpand_many,
             injects=injects,
-            service=owner,
-            declared=owner is not None,
+            client=owner,
             description=description,
             convert_default=convert_default,
             predicate=predicate or build_instance_predicate(cls),
@@ -749,55 +744,6 @@ class StructureRegistry(BaseModel):
         )
         self.fullfill_registration(fs)
         return fs
-
-    def merge(
-        self,
-        other: "StructureRegistry",
-        service: "str | Callable[[FullFilledStructure], str | None] | None" = None,
-    ) -> "StructureRegistry":
-        """Take everything ``other`` holds into this registry, in place.
-
-        Args:
-            other: The registry to take. It is not changed.
-            service: The service its structures belong to, stamped on each -- a
-                name, or a function naming the owner of each structure (``None``
-                for one no service owns). The identifier only hints at it, and
-                the hint is wrong where it matters -- unlok's structure is
-                ``@lok/service``.
-
-        Returns:
-            This registry.
-
-        Raises:
-            StructureDefinitionError: If the two claim one identifier for
-                different classes. An identifier is a wire contract.
-        """
-        for structure in other.identifier_structure_map.values():
-            owner = service(structure) if callable(service) else service
-            taken = (
-                structure
-                if owner is None
-                else structure.model_copy(update={"service": owner, "declared": True})
-            )
-            self.fullfill_registration(taken)
-        for memory in other.identifier_memory_structure_map.values():
-            self.fullfill_registration(memory)
-        for model in other.identifier_model_map.values():
-            self.fullfill_registration(model)
-        for enum in other.identifier_enum_map.values():
-            self.fullfill_registration(enum)
-        for cls, protocol in other.protocols.items():
-            self._take_protocol(cls, protocol)
-        for cls, interactions in other.interactions.items():
-            self.interactions.setdefault(cls, interactions)
-        for cls, declaration in other.states.items():
-            self.states.setdefault(cls, declaration)
-        for cls, context in other.contexts.items():
-            self.contexts.setdefault(cls, context)
-        for cls, name in other.app_contexts.items():
-            self._refuse_second_app_context(cls)
-            self.app_contexts.setdefault(cls, name)
-        return self
 
     def declare(
         self,
@@ -1139,82 +1085,11 @@ class StructureRegistry(BaseModel):
                 "`@app.context` before naming it."
             ) from None
 
-    def structure(
-        self,
-        identifier: str,
-        *,
-        cls: type[object] | None = None,
-        widget: AssignWidgetInput | None = None,
-        description: str | None = None,
-        expand_many: ManyExpander | None = None,
-        shrink: Shrinker | None = None,
-        returnwidget: ReturnWidgetInput | None = None,
-        describe: Describer | None = None,
-    ) -> Callable[[ExpanderT], ExpanderT]:
-        """Declare a type that travels by id: ``@registry.structure("@mikro/image")``.
-
-        The decorated function says how to fetch one back, and names the clients
-        it needs the same way an action does. What it returns is the class that
-        travels::
-
-            @registry.structure("@mikro/arraydataset")
-            async def expand_arraydataset(id: str, mikro: Mikro) -> ArrayDataset:
-                return await mikro.aget_array_dataset(id)
-
-        Fetching *many* is not declared here unless it differs: when the injected
-        client offers a batch call, binding routes through it.
-
-        Args:
-            identifier: What it travels as, ``@package/key``. A contract with
-                every app that handles this type.
-            cls: The class that travels. Read off the expander's return
-                annotation when not given; needed when that is not a class
-                (``Any``, a union).
-            widget: The widget a user picks one with.
-            description: What it is, for the UI.
-            expand_many: Fetches several ids at once, when the client's own batch
-                call is not the right answer.
-            shrink: Turns the object into its id. Defaults to reading ``.id``.
-                Like the expander, it may ask for clients by annotation after
-                the object (``shrink(dataset, mikro: Mikro)``).
-            returnwidget: The widget one is shown with.
-            describe: Computes an object's descriptors, as a flat ``{key: value}``
-                in the vocabulary the hosting service declares. A run tests them
-                against a port's ``Requires`` when one comes in and its
-                ``Provides`` when one goes out; a key it does not return is not
-                tested. Cheap and local: it runs on every value.
-
-        Returns:
-            A decorator returning the expander unchanged, so it stays callable
-            and keeps its declared type.
-
-        Raises:
-            StructureDefinitionError: If the identifier is malformed, the class
-                is neither given nor the expander's return annotation, or the
-                expander is a lambda or asks for something that is not a client.
-        """
-
-        def declare(expand: ExpanderT) -> ExpanderT:
-            self.register_as_structure(
-                _travelling_class(expand, identifier, cls),
-                identifier=identifier,
-                aexpand=expand,
-                ashrink=shrink,
-                aexpand_many=expand_many,
-                description=description,
-                default_widget=widget,
-                default_returnwidget=returnwidget,
-                describe=describe,
-            )
-            return expand
-
-        return declare
-
     def is_client(self, annotation: object) -> bool:
-        """Whether a parameter annotated ``annotation`` asks for a service's client.
+        """Whether a parameter annotated ``annotation`` asks for one of the app's clients.
 
         ``Optional[Mikro]`` and ``Annotated[Mikro, ...]`` still ask for it. True
-        when a registered service returns that class (or a subclass of it).
+        when the app uses a client of that class (or a subclass of it).
 
         Args:
             annotation: A parameter annotation.
@@ -1229,7 +1104,7 @@ class StructureRegistry(BaseModel):
             cls, "_is_runtime_protocol", False
         ):
             # A plain ``typing.Protocol`` (a declared dependency, typically) cannot
-            # be an ``issubclass`` target, and no service returns one.
+            # be an ``issubclass`` target, and no client is one.
             return False
         try:
             return any(issubclass(returned, cls) for returned in self.clients.values())
@@ -1269,14 +1144,14 @@ class StructureRegistry(BaseModel):
         number of runs. See :meth:`bind`.
 
         Args:
-            app: The run, or a bare ``{service: client}`` mapping when binding a
+            app: The run, or a bare ``{name: client}`` mapping when binding a
                 registry on its own.
 
         Returns:
             The bound copy.
 
         Raises:
-            StructureClientError: If a declared structure's service has no client,
+            StructureClientError: If a structure's client is missing,
                 its client cannot expand structures, or a hand-registered
                 structure's expander asks for a client the run has not got.
         """
@@ -1285,29 +1160,25 @@ class StructureRegistry(BaseModel):
     def bind(self, app: "BoundApp | Mapping[str, Any]") -> "StructureRegistry":
         """Hand every structure what it needs from ``app``, in place.
 
-        Two kinds of binding, because there are two kinds of structure:
-
-        * a **declared** one is expanded by its *service's* client, found by the
-          service name recorded on it (``app.clients``);
-        * a **hand-registered** one carries its own expander, which may ask for
-          clients by annotation (``expand(id, mikro: Mikro)``). Those are
-          resolved by class, the same way an action's are, and applied to the
-          function now -- so nothing is looked up per expansion and
-          :class:`~arkitekt_spec.declare.structures.types.Expander` never widens.
+        Every structure carries its own expander, which asks for clients by
+        annotation (``expand(id, mikro: Mikro)``). Those are resolved by class, the
+        same way an action's are, and applied to the function now -- so nothing is
+        looked up per expansion and
+        :class:`~arkitekt_spec.declare.structures.types.Expander` never widens.
 
         Only for a registry that one run owns -- a :meth:`copy_maps` copy, such as
         a snapshot's. The bound entries are copies, so a declaration sharing the
         original entries never sees the client.
 
         Args:
-            app: The run, or a bare ``{service: client}`` mapping when binding a
+            app: The run, or a bare ``{name: client}`` mapping when binding a
                 registry on its own.
 
         Returns:
             This registry, bound.
 
         Raises:
-            StructureClientError: If a declared structure's service has no client,
+            StructureClientError: If a structure's client is missing,
                 its client is not a
                 ``aexpand``/``ashrink``/``ashrink_many``-shaped client, or a
                 hand-registered structure's expander wants a client this run has
@@ -1336,7 +1207,7 @@ class StructureRegistry(BaseModel):
         if not wanted:
             return None
         try:
-            clients = resolve_service_clients(
+            clients = resolve_clients(
                 wanted, app, whose=f"the expander of '{identifier}'"
             )
         except StateRequirementsNotMet as e:
