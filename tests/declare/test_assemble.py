@@ -1,5 +1,6 @@
 """An app is assembled from what its annotations reach, when it is snapshotted."""
 
+from pathlib import Path
 from typing import Annotated, Self
 
 import pytest
@@ -138,3 +139,32 @@ def test_every_problem_is_reported_together_with_its_line() -> None:
         __file__ in " ".join(getattr(e, "__notes__", []))
         for e in raised.value.exceptions
     )
+
+
+def test_what_only_the_whole_app_answers_is_refused_when_assembled(
+    tmp_path: Path,
+) -> None:
+    """An own-state choice path and a .bsx blok's self read, each at its own line."""
+    from arkitekt_spec.declare.widgets import withStateChoices
+
+    (tmp_path / "panel.bsx").write_text(
+        '<Blok kind="agent" context="panel"><Text text={self.Missing.value} /></Blok>'
+    )
+    app = Bundle()
+    app._record("state", Counter, persist=None)
+
+    def pick(exposure: str) -> str:
+        return exposure
+
+    app.register_action(pick, widgets={"exposure": withStateChoices("self.Nope.value")})
+    app._record("register_blok", "panel", Path("panel.bsx"))
+
+    with pytest.raises(AppDeclarationError) as raised:
+        assemble(app, root=tmp_path)
+
+    errors = raised.value.exceptions
+    assert len(errors) == 2
+    assert any("no own state 'Nope'" in str(e) for e in errors)
+    assert [getattr(e, "bsx_file", None) for e in errors].count(
+        str((tmp_path / "panel.bsx").resolve())
+    ) == 1

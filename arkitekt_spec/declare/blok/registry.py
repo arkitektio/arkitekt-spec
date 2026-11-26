@@ -59,7 +59,7 @@ from arkitekt_spec.declare.definition.dependencies import (
 )
 
 if TYPE_CHECKING:
-    from arkitekt_spec.declare.app import AppRegistry
+    from arkitekt_spec.declare.app import AppRegistry, BlokDeclaration
 
 SELF_KEY = "self"
 """The dependency key a blok's own agent goes by."""
@@ -466,94 +466,106 @@ def build_declared_bloks(
         BlokError: If a blok reads what the app does not declare, or breaks a rule of the
             language (see :mod:`.validate`).
     """
-    declared: dict[str, BlokImplementationInput] = {}
-    for key, declaration in app_registry.registered_bloks.items():
-        owner = f"Blok {key!r}"
-        dependency = None
-        if declaration.kind == "agent":
-            dependency = self_dependency(
-                self_reads(declaration.component), app_registry
-            )
-        dependencies = (dependency,) if dependency is not None else ()
-        # What a `<dependencies like="self.<action>" />` declares: each action's own dependencies.
-        workflows = {
-            interface: tuple(implementation.dependencies or ())
-            for interface, implementation in app_registry.implementations.items()
-        }
-        query_values = type_queries(
+    return {
+        key: build_declared_blok(app_registry, key, declaration)
+        for key, declaration in app_registry.registered_bloks.items()
+    }
+
+
+def build_declared_blok(
+    app_registry: "AppRegistry", key: str, declaration: "BlokDeclaration"
+) -> BlokImplementationInput:
+    """One blok's input; an error for a blok read from a ``.bsx`` file carries it as ``bsx_file``."""
+    try:
+        return _build_declared_blok(app_registry, key, declaration)
+    except Exception as error:
+        if declaration.file is not None:
+            error.bsx_file = declaration.file  # type: ignore[attr-defined]
+        raise
+
+
+def _build_declared_blok(
+    app_registry: "AppRegistry", key: str, declaration: "BlokDeclaration"
+) -> BlokImplementationInput:
+    owner = f"Blok {key!r}"
+    dependency = None
+    if declaration.kind == "agent":
+        dependency = self_dependency(self_reads(declaration.component), app_registry)
+    dependencies = (dependency,) if dependency is not None else ()
+    # What a `<dependencies like="self.<action>" />` declares: each action's own dependencies.
+    workflows = {
+        interface: tuple(implementation.dependencies or ())
+        for interface, implementation in app_registry.implementations.items()
+    }
+    query_values = type_queries(
+        owner,
+        declared_queries(declaration.component),
+        declared_subscriptions(declaration.component),
+        app_registry,
+        declaration.mode,
+        declaration.declared_at,
+        blok=key,
+    )
+    view = app_registry.blok_view(declaration.catalog)
+    demo = (
+        declaration.demo
+        if declaration.demo is not None
+        else _demo(dependency, app_registry)
+    )
+    scope = BlokScope(
+        kinds=("agent", "action")
+        if declaration.context == ComponentContext.LOGO
+        else ("agent",),
+        mount="app.blok",
+        dependencies=dependencies,
+        args=tuple(port.key for port in declaration.args),
+        demo=demo,
+        query_values=query_values,
+        assets=frozenset(app_registry.registered_assets),
+        arg_ports=self_arg_ports(app_registry),
+        workflows=workflows,
+    )
+    # What the declaration already told (registering it) is not told again.
+    for finding in check_blok_tree(declaration.component, scope, checked_view(view)):
+        _report(
             owner,
-            declared_queries(declaration.component),
-            declared_subscriptions(declaration.component),
-            app_registry,
+            finding,
             declaration.mode,
             declaration.declared_at,
+            declaration.reported,
             blok=key,
         )
-        view = app_registry.blok_view(declaration.catalog)
-        demo = (
-            declaration.demo
-            if declaration.demo is not None
-            else _demo(dependency, app_registry)
+    # Empty declarations stay unset, so a dump with ``exclude_unset`` (what an agent sends)
+    # carries only what the blok declares; ``vocab`` is always there.
+    fields: dict[str, object] = {
+        "key": key,
+        "vocab": load_vocabulary().vocab,
+        "dependencies": dependencies,
+        "context": declaration.context,
+    }
+    optional: dict[str, object] = {
+        "description": declaration.description,
+        "catalog": declaration.catalog,
+        "catalog_minor": minor_needed(declaration.component, view) or None,
+        "default": declaration.default or None,
+        "for_model": declaration.for_model,
+        "for_node": declaration.for_node,
+        "args": declaration.args or None,
+        "demo": demo,
+    }
+    fields.update(
+        {name: value for name, value in optional.items() if value is not None}
+    )
+    checked = check_blok(
+        BlokImplementationInput.model_validate(
+            {**fields, "components": (declaration.component,)}
         )
-        scope = BlokScope(
-            kinds=("agent", "action")
-            if declaration.context == ComponentContext.LOGO
-            else ("agent",),
-            mount="app.blok",
-            dependencies=dependencies,
-            args=tuple(port.key for port in declaration.args),
-            demo=demo,
-            query_values=query_values,
-            assets=frozenset(app_registry.registered_assets),
-            arg_ports=self_arg_ports(app_registry),
-            workflows=workflows,
-        )
-        # What the declaration already told (registering it) is not told again.
-        for finding in check_blok_tree(
-            declaration.component, scope, checked_view(view)
-        ):
-            _report(
-                owner,
-                finding,
-                declaration.mode,
-                declaration.declared_at,
-                declaration.reported,
-                blok=key,
-            )
-        # Empty declarations stay unset, so a dump with ``exclude_unset`` (what an agent sends)
-        # carries only what the blok declares; ``vocab`` is always there.
-        fields: dict[str, object] = {
-            "key": key,
-            "vocab": load_vocabulary().vocab,
-            "dependencies": dependencies,
-            "context": declaration.context,
-        }
-        optional: dict[str, object] = {
-            "description": declaration.description,
-            "catalog": declaration.catalog,
-            "catalog_minor": minor_needed(declaration.component, view) or None,
-            "default": declaration.default or None,
-            "for_model": declaration.for_model,
-            "for_node": declaration.for_node,
-            "args": declaration.args or None,
-            "demo": demo,
-        }
-        fields.update(
-            {name: value for name, value in optional.items() if value is not None}
-        )
-        checked = check_blok(
-            BlokImplementationInput.model_validate(
-                {**fields, "components": (declaration.component,)}
-            )
-        )
-        declared[key] = (
-            BlokImplementationInput.model_validate(
-                {**fields, "source": declaration.source}
-            )
-            if declaration.source is not None
-            else checked
-        )
-    return declared
+    )
+    return (
+        BlokImplementationInput.model_validate({**fields, "source": declaration.source})
+        if declaration.source is not None
+        else checked
+    )
 
 
 def _printed(blok: BlokImplementationInput) -> str | None:
@@ -662,6 +674,7 @@ def _demo_value(port: ReturnPortInput) -> JSON:
 __all__ = [
     "SELF_KEY",
     "as_registered",
+    "build_declared_blok",
     "build_declared_bloks",
     "check_catalog_target",
     "checked_view",

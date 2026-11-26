@@ -191,21 +191,28 @@ def check_port_blok_reads(registry: "AppRegistry") -> None:
     Raises:
         BlokError: If one reads a state, or watches an action, the app does not declare.
     """
-    for interface, implementation in registry.implementations.items():
-        for port, widget in port_bloks(implementation.definition.args or ()):
-            tree = parse_bsx(
-                widget.source, view=registry.blok_view(source_catalog(widget.source))
-            )
-            try:
-                self_dependency(self_reads(tree), registry)
-            except BlokError as error:
-                raise error.within(
-                    f"Action {interface!r} (widget of port {port.key!r})"
-                ) from None
+    for interface in registry.implementations:
+        check_action_port_blok_reads(registry, interface)
+
+
+def check_action_port_blok_reads(registry: "AppRegistry", interface: str) -> None:
+    """:func:`check_port_blok_reads` for one action."""
+    implementation = registry.implementations[interface]
+    for port, widget in port_bloks(implementation.definition.args or ()):
+        tree = parse_bsx(
+            widget.source, view=registry.blok_view(source_catalog(widget.source))
+        )
+        try:
+            self_dependency(self_reads(tree), registry)
+        except BlokError as error:
+            raise error.within(
+                f"Action {interface!r} (widget of port {port.key!r})"
+            ) from None
 
 
 __all__ = [
     "PORT_KIND",
+    "check_action_port_blok_reads",
     "check_port_blok_reads",
     "check_port_bloks",
     "port_bloks",

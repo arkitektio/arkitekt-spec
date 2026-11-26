@@ -6,8 +6,8 @@ a search query against its widget's filters and dependencies (its full shape too
 when graphql-core is installed), a state reference against dependencies and the
 agent's own states, and blok components against their dependencies.
 
-They run once, on the assembled declaration (:meth:`AppRegistry.to_implement_agent_input`),
-walking down to every port, widget and blok -- the one place that sees all of it.
+They run on the assembled declaration (:meth:`AppRegistry.to_implement_agent_input`, and
+per action and blok when an app is assembled), walking down to every port, widget and blok.
 """
 
 from collections.abc import Iterable, Iterator

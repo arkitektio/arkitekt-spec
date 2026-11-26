@@ -151,6 +151,8 @@ class BlokDeclaration(BaseModel):
     """How a catalog finding, or a query its service's schema does not check, is reported."""
     declared_at: DeclaredAt | None = None
     """The app's line that declared it: where its warnings point."""
+    file: str | None = None
+    """The ``.bsx`` file it was read from, absolute."""
     reported: frozenset[str] = frozenset()
     """The warnings already told when it was declared (:func:`~arkitekt_spec.declare.blok.origin.finding_key`)."""
 
@@ -664,7 +666,7 @@ class AppRegistry(BaseModel):
     def register_blok(
         self,
         name: str,
-        component: str | ComponentNodeInput | None = None,
+        component: str | Path | ComponentNodeInput | None = None,
         description: str | None = None,
         *,
         demo: "BlokDemoInput | Mapping[str, JSONSerializable] | None" = None,
@@ -690,7 +692,9 @@ class AppRegistry(BaseModel):
 
         Args:
             name: The blok's name.
-            component: The tree, as v2 BSX or already parsed: a ``<Blok>``.
+            component: The tree, as v2 BSX or already parsed: a ``<Blok>``. A ``Path`` is a
+                ``.bsx`` file, relative to :attr:`root`; an error raised for it carries it as
+                ``bsx_file``.
             description: What the blok shows.
             demo: What a preview renders it with, mirroring the roots it reads:
                 ``{"deps": {"self": {...}}, "args": {...}, "queries": {...}}``. Placeholders
@@ -713,6 +717,54 @@ class AppRegistry(BaseModel):
         if component is None:
             raise ValueError(f"Blok '{name}' must define a component")
         at = at or declared_at()
+        if isinstance(component, Path):
+            file = ((self.root or Path.cwd()) / component).resolve()
+            try:
+                self._register_blok(
+                    name,
+                    file.read_text(encoding="utf-8"),
+                    description,
+                    demo=demo,
+                    default=default,
+                    for_model=for_model,
+                    for_node=for_node,
+                    args=args,
+                    mode=mode,
+                    at=at,
+                    file=str(file),
+                )
+            except Exception as error:
+                error.bsx_file = str(file)  # type: ignore[attr-defined]
+                raise
+            return
+        self._register_blok(
+            name,
+            component,
+            description,
+            demo=demo,
+            default=default,
+            for_model=for_model,
+            for_node=for_node,
+            args=args,
+            mode=mode,
+            at=at,
+        )
+
+    def _register_blok(
+        self,
+        name: str,
+        component: str | ComponentNodeInput,
+        description: str | None,
+        *,
+        demo: "BlokDemoInput | Mapping[str, JSONSerializable] | None",
+        default: bool,
+        for_model: str | None,
+        for_node: str | None,
+        args: "Mapping[str, Any] | None",
+        mode: BlokCheckMode,
+        at: DeclaredAt | None,
+        file: str | None = None,
+    ) -> None:
         source: str | None = None
         try:
             catalog = (
@@ -771,6 +823,7 @@ class AppRegistry(BaseModel):
             args=arg_ports,
             mode=mode,
             declared_at=at,
+            file=file,
         )
         # What the server checks of the declarations alone (one way sent, names, documents' kinds).
         BlokImplementationInput(

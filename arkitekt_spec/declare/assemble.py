@@ -397,9 +397,43 @@ def assemble(
     # 3. Validate what was built.
     if not problems:
         attempt("the app", None, registry.validate)
+    if not problems:
+        _check_reads(registry, interfaces, attempt)
     if problems:
         raise _error(problems)
     return registry
+
+
+def _check_reads(
+    registry: AppRegistry,
+    interfaces: dict[str, Entry],
+    attempt: Callable[[str, DeclaredAt | None, Callable[[], object]], None],
+) -> None:
+    """What only the whole app answers: what each blok and port blok reads of ``self``, and each
+    own-state ``withStateChoices`` path. Also run by ``to_implement_agent_input``."""
+    from arkitekt_spec.declare.blok.port import check_action_port_blok_reads
+    from arkitekt_spec.declare.blok.registry import build_declared_blok
+    from arkitekt_spec.declare.definition.checks import check_implementation
+
+    own_states = tuple(registry.states.values())
+    for interface, implementation in registry.implementations.items():
+        entry = interfaces.get(interface)
+        at = (entry.declared_at or _at(entry.target)) if entry is not None else None
+        what = entry.describe() if entry is not None else f"action '{interface}'"
+        attempt(
+            what,
+            at,
+            lambda i=interface, impl=implementation: (
+                check_action_port_blok_reads(registry, i),
+                check_implementation(impl, own_states),
+            ),
+        )
+    for key, declaration in registry.registered_bloks.items():
+        attempt(
+            f"blok '{key}'",
+            declaration.declared_at,
+            lambda k=key, d=declaration: build_declared_blok(registry, k, d),
+        )
 
 
 def _error(problems: list[_Problem]) -> AppDeclarationError:
